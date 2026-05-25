@@ -291,8 +291,8 @@ export function apartmentUnitContainingFeet(
  * Same as {@link apartmentUnitContainingFeet}, but with a slightly expanded hull around **feet only**.
  * Used for FP apartment lighting so thresholds do not flicker at walls/windows.
  *
- * Does **not** use the camera — peeking into a unit from the hallway keeps corridor/global lighting,
- * so interiors viewed through an open door are not switched into the in-unit rig.
+ * Does **not** use the camera — peeking into a unit from the hallway keeps the shared corridor
+ * interior rig until feet cross the unit hull (hallways now use the same dark lighting envelope).
  */
 export function apartmentUnitContainingFeetSlack(
   conn: DbConnection,

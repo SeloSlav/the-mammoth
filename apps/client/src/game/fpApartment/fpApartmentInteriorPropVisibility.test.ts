@@ -103,6 +103,26 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
     ).toBe(true);
   });
 
+  it("shows retained-unit props for hallway doorway peeks", () => {
+    const retainedUnitKey = "unit_a";
+    const doorwayBounds = new THREE.Box3(
+      new THREE.Vector3(-0.4, -1, -3),
+      new THREE.Vector3(0.4, 1, -2),
+    );
+
+    expect(
+      resolveApartmentInteriorPropGroupVisible({
+        allowDemand: true,
+        containingUnitKey: retainedUnitKey,
+        groupUnitKey: retainedUnitKey,
+        propWorldBounds: doorwayBounds,
+        viewFrustum: frustum,
+        cameraWorldPos: camPos,
+        cameraWorldDir: camDir,
+      }),
+    ).toBe(true);
+  });
+
   it("skips behind-camera cull for walls when skipInteriorForwardCone is set", () => {
     const behindBounds = new THREE.Box3(
       new THREE.Vector3(-1, -1, 1),

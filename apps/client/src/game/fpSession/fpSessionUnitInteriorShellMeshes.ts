@@ -15,6 +15,8 @@ export type FpSessionUnitInteriorMeshEntry = {
   apartmentSwingDoor: boolean;
   /** Hollow plaster shell (`shell_wall_*`, floors/ceilings) — occludes exterior cladding through glass. */
   isResidentialShellPlaster: boolean;
+  /** Owning floor plate level when this tagged mesh lives under a plate segment. */
+  plateLevelIndex: number | null;
 };
 
 /** Plaster hollow shell pieces for a `unit_*` placed object (not exterior cladding or glass). */
@@ -43,7 +45,11 @@ function resolveUnitInteriorMeshEntry(
   let residentialExteriorGlass = false;
   let genericInteriorVisibleInResidentialUnit = false;
   let apartmentSwingDoor = false;
+  let plateLevelIndex: number | null = null;
   for (let cur: THREE.Object3D | null = mesh; cur; cur = cur.parent) {
+    if (plateLevelIndex === null && typeof cur.userData.mammothPlateLevelIndex === "number") {
+      plateLevelIndex = cur.userData.mammothPlateLevelIndex;
+    }
     if (cur.userData.mammothApartmentSwingDoor === true) {
       apartmentSwingDoor = true;
     }
@@ -80,6 +86,7 @@ function resolveUnitInteriorMeshEntry(
     genericInteriorVisibleInResidentialUnit,
     apartmentSwingDoor,
     isResidentialShellPlaster: isResidentialUnitShellPlasterMesh(mesh),
+    plateLevelIndex,
   };
 }
 

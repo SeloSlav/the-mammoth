@@ -300,17 +300,12 @@ export function collectApartmentWindowLightSpecsFromRoot(
   });
 }
 
-export function syncApartmentInteriorPracticalLighting(args: {
-  lightParent: THREE.Object3D;
-  /** Omit or set `maxWindowLights: 0` to skip the building traverse entirely. */
+export function collectApartmentInteriorPracticalLightSpecs(args: {
   windowScanRoot?: THREE.Object3D | null;
   maxWindowLights?: number;
   unitBounds?: ApartmentUnitWorldBounds;
   decorGroups: readonly THREE.Object3D[];
-  previous?: ApartmentPracticalLightsMount | null;
-}): ApartmentPracticalLightsMount {
-  args.previous?.dispose();
-
+}): ApartmentPracticalLightSpec[] {
   const specs: ApartmentPracticalLightSpec[] = [];
   const maxWindow = args.maxWindowLights ?? 0;
   if (args.windowScanRoot && maxWindow > 0) {
@@ -326,6 +321,27 @@ export function syncApartmentInteriorPracticalLighting(args: {
     const spec = apartmentPracticalLightSpecFromDecorGroup(group, modelRelPath);
     if (spec) specs.push(spec);
   }
+
+  return specs;
+}
+
+export function syncApartmentInteriorPracticalLighting(args: {
+  lightParent: THREE.Object3D;
+  /** Omit or set `maxWindowLights: 0` to skip the building traverse entirely. */
+  windowScanRoot?: THREE.Object3D | null;
+  maxWindowLights?: number;
+  unitBounds?: ApartmentUnitWorldBounds;
+  decorGroups: readonly THREE.Object3D[];
+  previous?: ApartmentPracticalLightsMount | null;
+}): ApartmentPracticalLightsMount {
+  args.previous?.dispose();
+
+  const specs = collectApartmentInteriorPracticalLightSpecs({
+    windowScanRoot: args.windowScanRoot,
+    maxWindowLights: args.maxWindowLights,
+    unitBounds: args.unitBounds,
+    decorGroups: args.decorGroups,
+  });
 
   return mountApartmentPracticalLights(args.lightParent, specs);
 }
@@ -357,92 +373,88 @@ function worldSpecToLightParentLocal(
   return { position, direction };
 }
 
-export function mountApartmentPracticalLights(
+function addApartmentPracticalLightSpecToMount(
+  root: THREE.Group,
   parent: THREE.Object3D,
-  specs: readonly ApartmentPracticalLightSpec[],
-): ApartmentPracticalLightsMount {
-  const root = new THREE.Group();
-  root.name = "apartment_interior_practical_lights";
-
+  spec: ApartmentPracticalLightSpec,
+  specIndex: number,
+): void {
   const profile = APARTMENT_INTERIOR_VISUAL_PROFILE.practical;
   const lightDecay = APARTMENT_INTERIOR_VISUAL_PROFILE.practicalDecay;
-
-  for (let i = 0; i < specs.length; i++) {
-    const spec = specs[i]!;
-    const local = worldSpecToLightParentLocal(
-      parent,
-      spec.position,
-      spec.direction,
+  const local = worldSpecToLightParentLocal(parent, spec.position, spec.direction);
+  if (local.direction && isApartmentPracticalSpotKind(spec.kind)) {
+    const p = apartmentPracticalSpotParams(spec.kind);
+    const spot = new THREE.SpotLight(
+      p.color,
+      p.intensity,
+      p.distance,
+      p.angle,
+      p.penumbra,
+      p.decay ?? lightDecay,
     );
-    if (local.direction && isApartmentPracticalSpotKind(spec.kind)) {
-      const p = apartmentPracticalSpotParams(spec.kind);
-      const spot = new THREE.SpotLight(
-        p.color,
-        p.intensity,
-        p.distance,
-        p.angle,
-        p.penumbra,
-        p.decay ?? lightDecay,
-      );
-      spot.name = `apt_${spec.kind}_light_${i}`;
-      spot.position.copy(local.position);
-      spot.target.position.copy(local.position).addScaledVector(local.direction, 2.5);
-      spot.castShadow = false;
-      enableApartmentInteriorLightLayers(spot);
-      root.add(spot);
-      root.add(spot.target);
+    spot.name = `apt_${spec.kind}_light_${specIndex}`;
+    spot.position.copy(local.position);
+    spot.target.position.copy(local.position).addScaledVector(local.direction, 2.5);
+    spot.castShadow = false;
+    enableApartmentInteriorLightLayers(spot);
+    root.add(spot);
+    root.add(spot.target);
 
-      if (spec.kind === "ceiling" || spec.kind === "growOp") {
-        const washProfile = APARTMENT_INTERIOR_VISUAL_PROFILE.practical[spec.kind];
-        if (washProfile.washIntensity > 0) {
-          const wash = new THREE.PointLight(
-            washProfile.color,
-            washProfile.washIntensity,
-            washProfile.washDistance,
-            washProfile.washDecay ?? lightDecay,
-          );
-          wash.name = `apt_${spec.kind}_wash_${i}`;
-          wash.position.copy(local.position);
-          wash.castShadow = false;
-          enableApartmentInteriorLightLayers(wash);
-          root.add(wash);
-        }
+    if (spec.kind === "ceiling" || spec.kind === "growOp") {
+      const washProfile = APARTMENT_INTERIOR_VISUAL_PROFILE.practical[spec.kind];
+      if (washProfile.washIntensity > 0) {
+        const wash = new THREE.PointLight(
+          washProfile.color,
+          washProfile.washIntensity,
+          washProfile.washDistance,
+          washProfile.washDecay ?? lightDecay,
+        );
+        wash.name = `apt_${spec.kind}_wash_${specIndex}`;
+        wash.position.copy(local.position);
+        wash.castShadow = false;
+        enableApartmentInteriorLightLayers(wash);
+        root.add(wash);
       }
-      continue;
     }
+    return;
+  }
 
-    if (spec.kind === "standing" || spec.kind === "chandelier") {
-      const p = apartmentPracticalPointParams(spec.kind);
-      const point = new THREE.PointLight(
-        p.color,
-        p.intensity,
-        p.distance,
-        p.decay ?? lightDecay,
-      );
-      point.name = `apt_${spec.kind}_light_${i}`;
-      point.position.copy(local.position);
-      point.castShadow = false;
-      enableApartmentInteriorLightLayers(point);
-      root.add(point);
-      continue;
-    }
-
-    const params = profile.chandelier;
+  if (spec.kind === "standing" || spec.kind === "chandelier") {
+    const p = apartmentPracticalPointParams(spec.kind);
     const point = new THREE.PointLight(
-      params.color,
-      params.intensity,
-      params.distance,
-      lightDecay,
+      p.color,
+      p.intensity,
+      p.distance,
+      p.decay ?? lightDecay,
     );
-    point.name = `apt_${spec.kind}_light_${i}`;
+    point.name = `apt_${spec.kind}_light_${specIndex}`;
     point.position.copy(local.position);
     point.castShadow = false;
     enableApartmentInteriorLightLayers(point);
     root.add(point);
+    return;
   }
 
-  parent.add(root);
+  const params = profile.chandelier;
+  const point = new THREE.PointLight(
+    params.color,
+    params.intensity,
+    params.distance,
+    lightDecay,
+  );
+  point.name = `apt_${spec.kind}_light_${specIndex}`;
+  point.position.copy(local.position);
+  point.castShadow = false;
+  enableApartmentInteriorLightLayers(point);
+  root.add(point);
+}
 
+function createApartmentPracticalLightsMount(
+  parent: THREE.Object3D,
+): ApartmentPracticalLightsMount {
+  const root = new THREE.Group();
+  root.name = "apartment_interior_practical_lights";
+  parent.add(root);
   return {
     root,
     dispose: () => {
@@ -450,4 +462,28 @@ export function mountApartmentPracticalLights(
       root.clear();
     },
   };
+}
+
+function appendApartmentPracticalLightSpecs(
+  mount: ApartmentPracticalLightsMount,
+  parent: THREE.Object3D,
+  specs: readonly ApartmentPracticalLightSpec[],
+  startIndex: number,
+  maxSpecs: number,
+): { nextIndex: number; done: boolean } {
+  const end = Math.min(specs.length, startIndex + Math.max(0, maxSpecs));
+  for (let i = startIndex; i < end; i++) {
+    addApartmentPracticalLightSpecToMount(mount.root, parent, specs[i]!, i);
+  }
+  const nextIndex = end;
+  return { nextIndex, done: nextIndex >= specs.length };
+}
+
+export function mountApartmentPracticalLights(
+  parent: THREE.Object3D,
+  specs: readonly ApartmentPracticalLightSpec[],
+): ApartmentPracticalLightsMount {
+  const mount = createApartmentPracticalLightsMount(parent);
+  appendApartmentPracticalLightSpecs(mount, parent, specs, 0, specs.length);
+  return mount;
 }

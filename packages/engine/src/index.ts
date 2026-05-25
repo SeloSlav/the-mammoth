@@ -286,6 +286,7 @@ export {
   apartmentPracticalLightSpecFromDecor,
   apartmentPracticalLightSpecFromDecorGroup,
   apartmentPracticalLightSpecFromWindowGlassMesh,
+  collectApartmentInteriorPracticalLightSpecs,
   collectApartmentWindowLightSpecsFromRoot,
   mountApartmentPracticalLights,
   syncApartmentInteriorPracticalLighting,

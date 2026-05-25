@@ -66,6 +66,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
   const exteriorOff = {
     exteriorShellPlasterVisible: false,
     insideResidentialUnit: false,
+    insideApartmentInteriorLightingZone: false,
     containingResidentialUnitId: null as string | null,
     containingResidentialUnitKey: null as string | null,
   };
@@ -95,6 +96,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         unitInteriorVisible: true,
         apartmentDecorInteriorVisible: true,
         insideResidentialUnit: true,
+        insideApartmentInteriorLightingZone: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
         exteriorShellPlasterVisible: false,
@@ -119,6 +121,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         apartmentDecorInteriorVisible: false,
         exteriorShellPlasterVisible: true,
         insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: false,
         containingResidentialUnitId: null,
         containingResidentialUnitKey: null,
       }),
@@ -131,6 +134,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         apartmentDecorInteriorVisible: false,
         exteriorShellPlasterVisible: false,
         insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: false,
         containingResidentialUnitId: null,
         containingResidentialUnitKey: null,
       }),
@@ -151,6 +155,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         unitInteriorVisible: true,
         apartmentDecorInteriorVisible: true,
         insideResidentialUnit: true,
+        insideApartmentInteriorLightingZone: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
         exteriorShellPlasterVisible: false,
@@ -170,6 +175,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         unitInteriorVisible: true,
         apartmentDecorInteriorVisible: true,
         insideResidentialUnit: true,
+        insideApartmentInteriorLightingZone: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
         exteriorShellPlasterVisible: false,
@@ -191,6 +197,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         unitInteriorVisible: true,
         apartmentDecorInteriorVisible: true,
         insideResidentialUnit: true,
+        insideApartmentInteriorLightingZone: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
         exteriorShellPlasterVisible: false,
@@ -210,9 +217,99 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         unitInteriorVisible: true,
         apartmentDecorInteriorVisible: true,
         insideResidentialUnit: true,
+        insideApartmentInteriorLightingZone: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
         exteriorShellPlasterVisible: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("hides neighbor unit plaster and glass while walking the corridor lighting zone", () => {
+    const glassEntry = {
+      apartmentUnitKey: null,
+      residentialUnitId: "unit_e_004",
+      residentialExteriorGlass: true,
+      genericInteriorVisibleInResidentialUnit: false,
+      apartmentSwingDoor: false,
+      isResidentialShellPlaster: false,
+    };
+    const plasterEntry = {
+      apartmentUnitKey: null,
+      residentialUnitId: "unit_e_004",
+      residentialExteriorGlass: false,
+      genericInteriorVisibleInResidentialUnit: false,
+      apartmentSwingDoor: false,
+      isResidentialShellPlaster: true,
+    };
+
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: glassEntry,
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        exteriorShellPlasterVisible: true,
+        insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: true,
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
+      }),
+    ).toBe(false);
+
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: plasterEntry,
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        exteriorShellPlasterVisible: true,
+        insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: true,
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps retained owned-unit plaster visible while walking the corridor lighting zone", () => {
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: {
+          apartmentUnitKey: null,
+          residentialUnitId: "unit_e_003",
+          residentialExteriorGlass: false,
+          genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
+          isResidentialShellPlaster: true,
+        },
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        exteriorShellPlasterVisible: true,
+        insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: true,
+        retainedResidentialUnitId: "unit_e_003",
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
+      }),
+    ).toBe(true);
+
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: {
+          apartmentUnitKey: null,
+          residentialUnitId: "unit_e_004",
+          residentialExteriorGlass: false,
+          genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
+          isResidentialShellPlaster: true,
+        },
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        exteriorShellPlasterVisible: true,
+        insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: true,
+        retainedResidentialUnitId: "unit_e_003",
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
       }),
     ).toBe(false);
   });
@@ -233,6 +330,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         unitInteriorVisible: true,
         apartmentDecorInteriorVisible: true,
         insideResidentialUnit: true,
+        insideApartmentInteriorLightingZone: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
         exteriorShellPlasterVisible: false,
@@ -245,6 +343,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         unitInteriorVisible: false,
         apartmentDecorInteriorVisible: false,
         insideResidentialUnit: true,
+        insideApartmentInteriorLightingZone: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
         exteriorShellPlasterVisible: false,

@@ -25,6 +25,7 @@ import {
   applyMammothApartmentInteriorLightLayersToGlobalRig,
   applyMammothApartmentInteriorScene,
   createApartmentInteriorWarmEnvMap,
+  mammothApartmentInteriorBlend01,
   MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD,
   mountMammothApartmentInteriorBounceRig,
   syncMammothApartmentInteriorViewLayers,
@@ -195,8 +196,13 @@ export type FpSessionEnvironmentHandle = {
       maxY: number;
       maxZ: number;
     } | null;
-    /** 0 = normal exterior/interior balance; 1 = full abandoned-flat dimming while inside a unit. */
+    /** 0 = outdoor / true exterior; 1 = full abandoned-flat dimming (units, corridors, cores). */
     apartmentInteriorDark01?: number;
+    /**
+     * Atmosphere + render-layer gate — defaults to {@link apartmentInteriorDark01}. Pass a lower
+     * value in hallways so corridor dark rigs do not force the in-unit void background / layer flip.
+     */
+    apartmentInteriorAtmosphere01?: number;
     /**
      * When true, camera raycasts + renders residential shell (layer 3) and decor props (layer 5).
      * Needed for hallways / doorway peeks before {@link apartmentInteriorDark01} reaches atmosphere threshold.
@@ -643,6 +649,7 @@ export function attachFpSessionEnvironment(
       viewHeightPx,
       apartmentInteriorBounds: _apartmentInteriorBounds = null,
       apartmentInteriorDark01 = 0,
+      apartmentInteriorAtmosphere01,
       interiorRenderLayersEnabled = false,
       stairwellInteriorDark01 = 0,
     }) => {
@@ -651,6 +658,9 @@ export function attachFpSessionEnvironment(
       const renderIsoLighting = isFpDebugRenderIsolationEnabled("environmentLighting");
       const interiorBounds = outdoorCombatArena ? null : _apartmentInteriorBounds;
       const interiorDark01 = outdoorCombatArena ? 0 : apartmentInteriorDark01;
+      const atmosphereDark01 = outdoorCombatArena
+        ? 0
+        : (apartmentInteriorAtmosphere01 ?? apartmentInteriorDark01);
       applyApartmentInteriorClip(interiorBounds);
 
       sky.visible = renderIsoSky;
@@ -688,10 +698,25 @@ export function attachFpSessionEnvironment(
             exteriorLightScale: stairwellScale,
           })
         : 0;
+      const atmosphereInterior01 = renderIsoLighting
+        ? mammothApartmentInteriorBlend01(atmosphereDark01)
+        : 0;
+      const atmosphereActive =
+        atmosphereInterior01 >
+        APARTMENT_INTERIOR_VISUAL_PROFILE.scene.atmosphereActiveThreshold;
+      if (renderIsoLighting && atmosphereInterior01 !== interior01) {
+        if (atmosphereActive) {
+          scene.background = new THREE.Color(
+            APARTMENT_INTERIOR_VISUAL_PROFILE.scene.background,
+          );
+          scene.fog = null;
+        } else {
+          scene.background = null;
+        }
+      }
       syncMammothApartmentInteriorViewLayers(
         { camera },
-        interiorRenderLayersEnabled ||
-          interior01 > APARTMENT_INTERIOR_VISUAL_PROFILE.scene.atmosphereActiveThreshold,
+        interiorRenderLayersEnabled || atmosphereActive,
       );
       dir.position.copy(sunDir).multiplyScalar(120);
       const tEnd = performance.now();

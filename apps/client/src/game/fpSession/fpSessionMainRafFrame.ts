@@ -108,6 +108,7 @@ import {
   fpSampleStairwellInteriorDarkTarget,
   STAIRWELL_INTERIOR_DARK_HALF_LIFE_SEC,
 } from "./fpSessionStairwellInteriorDark.js";
+import { fpResolveApartmentInteriorDarkTarget01 } from "./fpApartmentInteriorLightingZone.js";
 import {
   hotbarDefIdSupportsMeleeAttack,
   hotbarDefIdSupportsRangedAttack,
@@ -272,7 +273,9 @@ export type FpSessionMainRafFrameDeps = {
   syncBuildingFloorPlateVisibility: (nowMs: number) => void;
   isInsideElevatorCabHudForJump: () => boolean;
   isInsideResidentialUnit: () => boolean;
+  isInsideApartmentInteriorLightingZone: () => boolean;
   getContainingResidentialUnitKey: () => string | null;
+  getActiveApartmentDecorUnitKey: (containingResidentialUnitKey: string | null) => string | null;
   getContainingResidentialUnitBounds: () => {
     minX: number;
     minY: number;
@@ -741,10 +744,13 @@ export function createFpSessionMainRafFrame(
     deps.syncBuildingFloorPlateVisibility(nowMs);
     publishFpSessionCompassHeadingFromForwardXZ(deps._floorVisCamDir.x, deps._floorVisCamDir.z);
     const containingResidentialUnitKey = deps.getContainingResidentialUnitKey();
+    const activeApartmentDecorUnitKey =
+      deps.getActiveApartmentDecorUnitKey(containingResidentialUnitKey);
     deps.fpApartmentDecorMeshes.syncVisibility(
       deps.camera,
       deps.isApartmentDecorInteriorVisible(),
-      containingResidentialUnitKey,
+      activeApartmentDecorUnitKey,
+      activeApartmentDecorUnitKey,
     );
     deps.fpApartmentDecorMeshes.updateFishTankFish(dt);
     deps.fpBalconyGrowSession?.updateFrame(
@@ -1180,7 +1186,9 @@ export function createFpSessionMainRafFrame(
       dt,
       STAIRWELL_INTERIOR_DARK_HALF_LIFE_SEC,
     );
-    const apartmentDarkTarget = deps.isInsideResidentialUnit() ? 1 : 0;
+    const apartmentDarkTarget = fpResolveApartmentInteriorDarkTarget01({
+      insideApartmentInteriorLightingZone: deps.isInsideApartmentInteriorLightingZone(),
+    });
     mainRaf.apartmentInteriorDarkSmoothed = fpExpSmoothToward(
       mainRaf.apartmentInteriorDarkSmoothed,
       apartmentDarkTarget,
@@ -1213,6 +1221,9 @@ export function createFpSessionMainRafFrame(
       viewHeightPx: deps.canvas.clientHeight,
       apartmentInteriorBounds: deps.getContainingResidentialUnitBounds(),
       apartmentInteriorDark01: mainRaf.apartmentInteriorDarkSmoothed,
+      apartmentInteriorAtmosphere01: deps.isInsideResidentialUnit()
+        ? mainRaf.apartmentInteriorDarkSmoothed
+        : 0,
       interiorRenderLayersEnabled:
         deps.isInsideResidentialUnit() || deps.isApartmentDecorInteriorVisible(),
       stairwellInteriorDark01: mainRaf.stairwellInteriorDarkSmoothed,

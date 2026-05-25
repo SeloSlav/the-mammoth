@@ -30,6 +30,7 @@ import type { ApartmentUnit } from "../../module_bindings/types";
 import {
   apartmentUnitOwnerEqual,
   clientMayUseApartmentStash,
+  residentInteriorPropsVisibleForViewer,
   type ApartmentStashPrompt,
 } from "./fpApartmentGameplay.js";
 import { resolveApartmentStashKeyFromPickUserData } from "./fpApartmentDecorStashKey.js";
@@ -137,6 +138,7 @@ export type MountFpApartmentDecorMeshesResult = {
     camera: THREE.PerspectiveCamera,
     allowDemand?: boolean,
     containingUnitKey?: string | null,
+    retainPracticalLightsUnitKey?: string | null,
   ) => void;
   getDecorObject: (decorId: bigint) => THREE.Object3D | undefined;
   getStashPrompt: (
@@ -251,6 +253,7 @@ export function mountFpApartmentDecorMeshes(opts: {
   let practicalLightsMasterEnabled: boolean | null = null;
   let practicalLightsDecorEnabled: boolean | null = null;
   let practicalLightsUnitPowerOn: boolean | null = null;
+  let practicalLightsIntensityScale: number | null = null;
 
   const metallicReadableEnv = (): THREE.Texture | null => {
     const env = opts.scene.userData.mammothFpMetallicReadableEnv;
@@ -322,6 +325,7 @@ export function mountFpApartmentDecorMeshes(opts: {
     practicalLightsMount?.dispose();
     practicalLightsMount = null;
     practicalLightsUnitKey = null;
+    practicalLightsIntensityScale = null;
     decorShadowRig?.dispose();
     decorShadowRig = null;
   };
@@ -359,6 +363,29 @@ export function mountFpApartmentDecorMeshes(opts: {
       if (g.userData.mammothApartmentUnitKey === unitKey) out.push(g);
     }
     return out;
+  };
+
+  const firstOwnedClaimedUnitKey = (): string | null => {
+    for (const row of opts.conn.db.apartment_unit) {
+      const u = row as ApartmentUnit;
+      if (residentInteriorPropsVisibleForViewer(opts.conn, u)) return u.unitKey;
+    }
+    return null;
+  };
+
+  const setPracticalLightsIntensityScale = (scale: number): void => {
+    if (practicalLightsMount === null || practicalLightsIntensityScale === scale) return;
+    practicalLightsMount.root.traverse((obj) => {
+      if (!(obj instanceof THREE.Light)) return;
+      const ud = obj.userData as {
+        mammothApartmentPracticalBaseIntensity?: number;
+      };
+      if (ud.mammothApartmentPracticalBaseIntensity === undefined) {
+        ud.mammothApartmentPracticalBaseIntensity = obj.intensity;
+      }
+      obj.intensity = ud.mammothApartmentPracticalBaseIntensity * scale;
+    });
+    practicalLightsIntensityScale = scale;
   };
 
   const resyncDecorShadowsForUnit = (containingUnitKey: string | null): void => {
@@ -405,6 +432,7 @@ export function mountFpApartmentDecorMeshes(opts: {
   const syncPracticalLightsForUnit = (
     containingUnitKey: string | null,
     force = false,
+    intensityScale = 1,
   ): void => {
     const masterEnabled = isFpDebugRenderIsolationEnabled("apartmentPracticalLights");
     const decorFixtureLightsEnabled = isFpDebugRenderIsolationEnabled(
@@ -425,6 +453,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       practicalLightsMasterEnabled = masterEnabled;
       practicalLightsDecorEnabled = decorFixtureLightsEnabled;
       practicalLightsUnitPowerOn = unitPowerOn;
+      practicalLightsIntensityScale = null;
       resyncDecorShadowsForUnit(containingUnitKey);
       return;
     }
@@ -436,6 +465,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       decorFixtureLightsEnabled === practicalLightsDecorEnabled &&
       unitPowerOn === practicalLightsUnitPowerOn
     ) {
+      setPracticalLightsIntensityScale(intensityScale);
       return;
     }
 
@@ -455,6 +485,8 @@ export function mountFpApartmentDecorMeshes(opts: {
         : [],
       previous: practicalLightsMount,
     });
+    practicalLightsIntensityScale = null;
+    setPracticalLightsIntensityScale(intensityScale);
     resyncDecorShadowsForUnit(containingUnitKey);
   };
 
@@ -508,6 +540,11 @@ export function mountFpApartmentDecorMeshes(opts: {
       },
       epoch,
     );
+    if (disposed || epoch !== buildEpoch || practicalLightsContextUnitKey !== null) return;
+    const prewarmUnitKey = firstOwnedClaimedUnitKey();
+    if (prewarmUnitKey !== null) {
+      syncPracticalLightsForUnit(prewarmUnitKey, false, 0);
+    }
   };
 
   const scheduleRebuild = () => {
@@ -558,7 +595,7 @@ export function mountFpApartmentDecorMeshes(opts: {
 
   return {
     getDecorObject: (decorId) => groupByDecorId.get(decorId),
-    syncVisibility: (camera, allowDemand = true, containingUnitKey = null) => {
+    syncVisibility: (camera, allowDemand = true, containingUnitKey = null, retainPracticalLightsUnitKey = null) => {
       if (!isFpDebugRenderIsolationEnabled("apartmentDecor")) {
         if (root.visible) root.visible = false;
         clearInteriorLighting();
@@ -566,7 +603,8 @@ export function mountFpApartmentDecorMeshes(opts: {
         return;
       }
       if (!root.visible) root.visible = true;
-      syncApartmentInteriorPropVisibilityUnit(propVisibilityState, containingUnitKey);
+      const visibilityUnitKey = containingUnitKey ?? retainPracticalLightsUnitKey;
+      syncApartmentInteriorPropVisibilityUnit(propVisibilityState, visibilityUnitKey);
       camera.updateMatrixWorld();
       camera.getWorldPosition(_furnitureVisibilityCamPos);
       camera.getWorldDirection(_furnitureVisibilityCamDir);
@@ -575,7 +613,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         camera.matrixWorldInverse,
       );
       _furnitureVisibilityFrustum.setFromProjectionMatrix(_furnitureVisibilityViewProjection);
-      const useInUnitVisibility = containingUnitKey !== null;
+      const useInUnitVisibility = visibilityUnitKey !== null;
       const budgetItems: ApartmentInteriorPropVisibilityApplyItem[] = [];
       for (const [renderKey, g] of groupByRenderKey.entries()) {
         const bb = g.userData.mammothApartmentDecorWorldBounds;
@@ -594,12 +632,12 @@ export function mountFpApartmentDecorMeshes(opts: {
         const desiredVisible = needsWarmUp
           ? resolveApartmentInteriorPropWarmUpVisible({
               allowDemand,
-              containingUnitKey,
+              containingUnitKey: visibilityUnitKey,
               groupUnitKey,
             })
           : resolveApartmentInteriorPropGroupVisible({
               allowDemand,
-              containingUnitKey,
+              containingUnitKey: visibilityUnitKey,
               groupUnitKey,
               propWorldBounds: bounds,
               viewFrustum: _furnitureVisibilityFrustum,
@@ -632,10 +670,15 @@ export function mountFpApartmentDecorMeshes(opts: {
       if (useInUnitVisibility) {
         applyApartmentInteriorPropVisibility(budgetItems, propVisibilityState);
       } else {
-        clearApartmentInteriorPropVisibilityState(propVisibilityState);
+        /** Keep per-unit decor warm-up cache — hallway hops should not replay GLB pipeline bursts. */
+        syncApartmentInteriorPropVisibilityUnit(propVisibilityState, null);
       }
-      practicalLightsContextUnitKey = containingUnitKey;
-      syncPracticalLightsForUnit(containingUnitKey);
+      practicalLightsContextUnitKey = visibilityUnitKey;
+      if (practicalLightsContextUnitKey !== null) {
+        syncPracticalLightsForUnit(practicalLightsContextUnitKey, false, 1);
+      } else {
+        setPracticalLightsIntensityScale(0);
+      }
     },
     getStashPrompt: (playerPos, camera) => {
       if (!opts.conn.identity || stashPickMeshes.length === 0) return null;

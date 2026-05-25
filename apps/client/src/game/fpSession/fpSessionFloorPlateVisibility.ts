@@ -13,6 +13,7 @@ import type { FpElevatorFloorVisibilityBand } from "../fpElevator/fpElevatorWorl
 import type { FpResidentialUnitShellMesh } from "./fpSessionUnitInteriorShellMeshes.js";
 import type { FpSessionUnitInteriorMeshEntry } from "./fpSessionUnitInteriorShellMeshes.js";
 import { expandObjectFrustumBoundsOnce } from "./fpMeshFrustumBounds.js";
+import { fpResolveApartmentInteriorLightingZone } from "./fpApartmentInteriorLightingZone.js";
 import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
 
 /**
@@ -152,6 +153,8 @@ export type FpSessionFloorPlateVisibilityOpts = {
    * That `level` matches `userData.mammothPlateLevelIndex` on plates (authoritative for storey clamps).
    */
   getContainingResidentialUnit: () => { unitId: string; unitKey: string; level: number } | null;
+  /** Owned/active apartment shell to keep visible from hallway doorway peeks. */
+  getRetainedResidentialUnitId?: () => string | null;
   /** Writable scratch filled each visibility pass; shared with downstream frame logic. */
   floorVisCamWorld: THREE.Vector3;
   floorVisCamDir: THREE.Vector3;
@@ -181,11 +184,14 @@ export function fpResolveUnitInteriorMeshVisible(input: {
     | "genericInteriorVisibleInResidentialUnit"
     | "apartmentSwingDoor"
     | "isResidentialShellPlaster"
-  >;
+  > & { plateLevelIndex?: number | null };
   unitInteriorVisible: boolean;
   apartmentDecorInteriorVisible: boolean;
   exteriorShellPlasterVisible: boolean;
   insideResidentialUnit: boolean;
+  /** Corridor / lobby dark-lighting envelope — hide neighbor unit shells like in-unit culling. */
+  insideApartmentInteriorLightingZone: boolean;
+  retainedResidentialUnitId?: string | null;
   containingResidentialUnitId: string | null;
   containingResidentialUnitKey: string | null;
 }): boolean {
@@ -208,6 +214,17 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   if (entry.residentialUnitId !== null) {
     if (input.insideResidentialUnit) {
       return entry.residentialUnitId === input.containingResidentialUnitId;
+    }
+    /**
+     * Hallway walks share the in-unit shell budget — only corridor anon geo stays live; neighbor
+     * plaster/glass would otherwise pop hundreds of meshes on every doorway crossing.
+     */
+    if (input.insideApartmentInteriorLightingZone) {
+      return (
+        input.retainedResidentialUnitId != null &&
+        entry.residentialUnitId === input.retainedResidentialUnitId &&
+        entry.isResidentialShellPlaster
+      );
     }
     /**
      * Exterior unit glass is part of the facade, so keep it available for outside/perimeter views.
@@ -287,7 +304,11 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   syncBuildingFloorPlateVisibility: (nowMs: number) => void;
   isInsideElevatorCabHudForJump: () => boolean;
   isInsideResidentialUnit: () => boolean;
+  /** Corridor / lobby / cab / stair — same dark interior rig as apartment units. */
+  isInsideApartmentInteriorLightingZone: () => boolean;
   getContainingResidentialUnitKey: () => string | null;
+  /** Last unit feet occupied — retained in corridor lighting zone for seamless practical-light remount. */
+  getLastVisitedResidentialUnitKey: () => string | null;
   isApartmentDecorInteriorVisible: () => boolean;
 } {
   const {
@@ -304,6 +325,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     stairShaftSpecs,
     feetPos,
     getContainingResidentialUnit,
+    getRetainedResidentialUnitId = () => null,
     floorVisCamWorld,
     floorVisCamDir,
   } = opts;
@@ -329,7 +351,10 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastTopFloorResidentialShellMeshCount = -1;
   let _lastContainingResidentialUnitId: string | null = null;
   let _lastContainingResidentialUnitKey: string | null = null;
+  let _lastVisitedResidentialUnitKey: string | null = null;
+  let _lastRetainedResidentialUnitId: string | null = null;
   let _lastInsideResidentialUnit = false;
+  let _lastInsideApartmentInteriorLightingZone = false;
   let _lastExteriorShellPlasterVisible = false;
   let _lastTrueExteriorView = false;
 
@@ -432,6 +457,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     const containingResidentialUnit = getContainingResidentialUnit();
     const containingResidentialUnitId = containingResidentialUnit?.unitId ?? null;
     const containingResidentialUnitKey = containingResidentialUnit?.unitKey ?? null;
+    const retainedResidentialUnitId = getRetainedResidentialUnitId();
     const insideResidentialUnit = containingResidentialUnit !== null;
     _lastInsideResidentialUnit = insideResidentialUnit;
     /** Plate / stair vertical anchor: replicated unit level in-hull, else feet-derived storey. */
@@ -490,6 +516,27 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         maxBuildingLevel,
         storeyPlateAnchor,
       );
+    }
+    const insideElevatorCab = fpElevators.isInsideAnyCabHud(
+      feetPos.x,
+      feetPos.y,
+      feetPos.z,
+      floorVisCamWorld.x,
+      floorVisCamWorld.y,
+      floorVisCamWorld.z,
+    );
+    const insideApartmentInteriorLightingZone = fpResolveApartmentInteriorLightingZone({
+      insideResidentialUnit,
+      trueExteriorView,
+      feetOnBuildingSlab,
+      insideElevatorCab,
+      insideStairShaft,
+    });
+    _lastInsideApartmentInteriorLightingZone = insideApartmentInteriorLightingZone;
+    if (containingResidentialUnitKey !== null) {
+      _lastVisitedResidentialUnitKey = containingResidentialUnitKey;
+    } else if (!insideApartmentInteriorLightingZone) {
+      _lastVisitedResidentialUnitKey = null;
     }
     /**
      * Residential units should not inherit a tall-stack reveal from adjacent elevator/cab/shaft probes.
@@ -627,7 +674,9 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       unitInteriorMeshEntries.length !== _lastUnitInteriorMeshCount ||
       apartmentDecorInteriorVisible !== _lastApartmentDecorInteriorVisible ||
       containingResidentialUnitId !== _lastContainingResidentialUnitId ||
-      containingResidentialUnitKey !== _lastContainingResidentialUnitKey;
+      containingResidentialUnitKey !== _lastContainingResidentialUnitKey ||
+      retainedResidentialUnitId !== _lastRetainedResidentialUnitId ||
+      insideApartmentInteriorLightingZone !== _lastInsideApartmentInteriorLightingZone;
     if (unitInteriorVisibilityChanged || insideResidentialUnit) {
       _lastUnitInteriorVisible = unitInteriorVisible;
       _lastExteriorShellPlasterVisible = exteriorShellPlasterVisible;
@@ -636,6 +685,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       _lastUnitInteriorMeshCount = unitInteriorMeshEntries.length;
       _lastContainingResidentialUnitId = containingResidentialUnitId;
       _lastContainingResidentialUnitKey = containingResidentialUnitKey;
+      _lastRetainedResidentialUnitId = retainedResidentialUnitId;
       for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
         const entry = unitInteriorMeshEntries[i]!;
         entry.mesh.visible =
@@ -646,6 +696,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
             apartmentDecorInteriorVisible,
             exteriorShellPlasterVisible,
             insideResidentialUnit,
+            insideApartmentInteriorLightingZone,
+            retainedResidentialUnitId,
             containingResidentialUnitId,
             containingResidentialUnitKey,
           });
@@ -773,7 +825,9 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     syncBuildingFloorPlateVisibility,
     isInsideElevatorCabHudForJump,
     isInsideResidentialUnit: () => _lastInsideResidentialUnit,
+    isInsideApartmentInteriorLightingZone: () => _lastInsideApartmentInteriorLightingZone,
     getContainingResidentialUnitKey: () => _lastContainingResidentialUnitKey,
+    getLastVisitedResidentialUnitKey: () => _lastVisitedResidentialUnitKey,
     isApartmentDecorInteriorVisible: () => _lastApartmentDecorInteriorVisible,
   };
 }

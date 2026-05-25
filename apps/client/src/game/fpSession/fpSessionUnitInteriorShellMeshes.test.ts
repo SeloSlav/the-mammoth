@@ -68,10 +68,12 @@ describe("collectFpSessionUnitInteriorMeshEntries", () => {
     expect(result[0]?.residentialExteriorGlass).toBe(false);
     expect(result[0]?.apartmentSwingDoor).toBe(false);
     expect(result[0]?.isResidentialShellPlaster).toBe(true);
+    expect(result[0]?.plateLevelIndex).toBe(7);
     expect(result[1]?.mesh).toBe(propMesh);
     expect(result[1]?.residentialUnitId).toBe(null);
     expect(result[1]?.apartmentUnitKey).toBe("floor-7:unit_w_004");
     expect(result[1]?.residentialExteriorGlass).toBe(false);
+    expect(result[1]?.plateLevelIndex).toBe(7);
   });
 
   it("recognizes generic unit ids and exterior unit glass", () => {
@@ -131,5 +133,6 @@ describe("collectFpSessionUnitInteriorMeshEntries", () => {
     expect(result[0]?.apartmentSwingDoor).toBe(true);
     expect(result[0]?.residentialUnitId).toBe(null);
     expect(result[0]?.apartmentUnitKey).toBe(null);
+    expect(result[0]?.plateLevelIndex).toBe(20);
   });
 });

@@ -190,8 +190,8 @@ export function resolveApartmentInteriorPropGroupVisible(input: {
 }): boolean {
   if (!input.allowDemand) return false;
   /**
-   * Furnished decor GLBs only while inside a residential unit hull (authoring / living in your
-   * claimed unit). Corridor views keep shells only.
+   * Furnished decor GLBs render for the active residential unit key. FP passes the containing
+   * unit while inside, and the retained/last-visited unit while peeking from a hallway doorway.
    */
   if (input.containingUnitKey === null) return false;
   const isContainingUnit = input.groupUnitKey === input.containingUnitKey;

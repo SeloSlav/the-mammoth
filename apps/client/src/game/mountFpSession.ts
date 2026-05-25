@@ -105,6 +105,7 @@ import { getLocalFirearmChamberView } from "./fpHotbar/fpFirearmChamber.js";
 import {
   apartmentClaimInteriorsPreferOverUnitDoor,
   apartmentUnitContainingFeetSlack,
+  clientOwnsClaimedApartmentUnit,
   getApartmentSystemPrompt,
 } from "./fpApartment/fpApartmentGameplay.js";
 import { APARTMENT_CLAIM_UI_ENABLED } from "../featureFlags";
@@ -893,11 +894,69 @@ export async function mountFpSession(
   const _displayOffset = new THREE.Vector3();
   const _rigViewScratch = new THREE.Vector3();
   const _aimShotWorldDir = new THREE.Vector3();
+  let activeOwnedApartmentDecorUnitKey: string | null = null;
+
+  const feetOnBuildingSlabForApartmentVisuals = (): boolean =>
+    pos.x >= buildingWorldBounds.min.x - 0.05 &&
+    pos.x <= buildingWorldBounds.max.x + 0.05 &&
+    pos.z >= buildingWorldBounds.min.z - 0.05 &&
+    pos.z <= buildingWorldBounds.max.z + 0.05;
+
+  const apartmentUnitSummaryForKey = (
+    unitKey: string | null,
+  ): { unitId: string; unitKey: string; level: number } | null => {
+    if (unitKey === null) return null;
+    for (const row of conn.db.apartment_unit) {
+      if (row.unitKey !== unitKey) continue;
+      return { unitId: row.unitId, unitKey: row.unitKey, level: row.level };
+    }
+    return null;
+  };
+
+  const apartmentUnitIdForKey = (unitKey: string | null): string | null =>
+    apartmentUnitSummaryForKey(unitKey)?.unitId ?? null;
+
+  const apartmentUnitBoundsForKey = (
+    unitKey: string | null,
+  ): {
+    minX: number;
+    minY: number;
+    minZ: number;
+    maxX: number;
+    maxY: number;
+    maxZ: number;
+  } | null => {
+    if (unitKey === null) return null;
+    for (const row of conn.db.apartment_unit) {
+      if (row.unitKey !== unitKey) continue;
+      return {
+        minX: row.boundMinX,
+        minY: row.boundMinY,
+        minZ: row.boundMinZ,
+        maxX: row.boundMaxX,
+        maxY: row.boundMaxY,
+        maxZ: row.boundMaxZ,
+      };
+    }
+    return null;
+  };
+
+  const updateActiveOwnedApartmentFromContainingUnit = (
+    unitKey: string | null,
+  ): void => {
+    if (
+      unitKey !== null &&
+      clientOwnsClaimedApartmentUnit(conn, conn.identity ?? undefined, unitKey)
+    ) {
+      activeOwnedApartmentDecorUnitKey = unitKey;
+    }
+  };
 
   const {
     syncBuildingFloorPlateVisibility: syncBuildingFloorPlateVisibilityBase,
     isInsideElevatorCabHudForJump,
     isInsideResidentialUnit,
+    isInsideApartmentInteriorLightingZone,
     getContainingResidentialUnitKey,
     isApartmentDecorInteriorVisible,
   } =
@@ -924,8 +983,22 @@ export async function mountFpSession(
           slackYBelow: 1.25,
           slackYAbove: 2.85,
         });
+        updateActiveOwnedApartmentFromContainingUnit(unit?.unitKey ?? null);
+        if (
+          unit &&
+          clientOwnsClaimedApartmentUnit(conn, conn.identity ?? undefined, unit.unitKey)
+        ) {
+          return { unitId: unit.unitId, unitKey: unit.unitKey, level: unit.level };
+        }
+        if (activeOwnedApartmentDecorUnitKey && feetOnBuildingSlabForApartmentVisuals()) {
+          return null;
+        }
         return unit ? { unitId: unit.unitId, unitKey: unit.unitKey, level: unit.level } : null;
       },
+      getRetainedResidentialUnitId: () =>
+        activeOwnedApartmentDecorUnitKey && feetOnBuildingSlabForApartmentVisuals()
+          ? apartmentUnitIdForKey(activeOwnedApartmentDecorUnitKey)
+          : null,
       floorVisCamWorld: _floorVisCamWorld,
       floorVisCamDir: _floorVisCamDir,
     });
@@ -947,6 +1020,10 @@ export async function mountFpSession(
   };
   const getContainingResidentialUnitBounds = () => {
     if (isCombatSim) return null;
+    if (activeOwnedApartmentDecorUnitKey && feetOnBuildingSlabForApartmentVisuals()) {
+      const activeBounds = apartmentUnitBoundsForKey(activeOwnedApartmentDecorUnitKey);
+      if (activeBounds) return activeBounds;
+    }
     const unit = apartmentUnitContainingFeetSlack(conn, pos.x, pos.y, pos.z, {
       slackXZ: FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M,
       slackYBelow: 1.25,
@@ -965,12 +1042,32 @@ export async function mountFpSession(
   const isInsideResidentialUnitForFrame = isCombatSim
     ? () => false
     : isInsideResidentialUnit;
+  const isInsideApartmentInteriorLightingZoneForFrame = isCombatSim
+    ? () => false
+    : isInsideApartmentInteriorLightingZone;
   const isApartmentDecorInteriorVisibleForFrame = isCombatSim
     ? () => false
     : isApartmentDecorInteriorVisible;
   const getContainingResidentialUnitBoundsForFrame = isCombatSim
     ? () => null
     : getContainingResidentialUnitBounds;
+  const getActiveApartmentDecorUnitKeyForFrame = (
+    containingResidentialUnitKey: string | null,
+  ): string | null => {
+    const id = conn.identity ?? undefined;
+    if (
+      !isCombatSim &&
+      containingResidentialUnitKey !== null &&
+      clientOwnsClaimedApartmentUnit(conn, id, containingResidentialUnitKey)
+    ) {
+      activeOwnedApartmentDecorUnitKey = containingResidentialUnitKey;
+      return containingResidentialUnitKey;
+    }
+    if (!isInsideApartmentInteriorLightingZoneForFrame()) {
+      return null;
+    }
+    return activeOwnedApartmentDecorUnitKey;
+  };
 
   const visibleSittablePickScratch: THREE.Mesh[] = [];
   const sitPointerNdc = new THREE.Vector2();
@@ -2010,7 +2107,9 @@ export async function mountFpSession(
     syncBuildingFloorPlateVisibility,
     isInsideElevatorCabHudForJump,
     isInsideResidentialUnit: isInsideResidentialUnitForFrame,
+    isInsideApartmentInteriorLightingZone: isInsideApartmentInteriorLightingZoneForFrame,
     getContainingResidentialUnitKey,
+    getActiveApartmentDecorUnitKey: getActiveApartmentDecorUnitKeyForFrame,
     getContainingResidentialUnitBounds: getContainingResidentialUnitBoundsForFrame,
     isApartmentDecorInteriorVisible: isApartmentDecorInteriorVisibleForFrame,
     selectedHotbarRow,
