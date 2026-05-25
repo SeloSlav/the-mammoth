@@ -5,7 +5,10 @@ import {
 } from "./bindMammothApartmentDecorIndirectEnv.js";
 import { mammothSpecularReadabilityWeight } from "./bindMammothMetallicReadableEnv.js";
 import { upgradeApartmentDecorMaterialToStandard } from "./apartmentDecorMaterialUpgrade.js";
-import { applyGrowOpFixturePanelGlow } from "./apartmentCeilingFixtureLensGlow.js";
+import {
+  applyCeilingFixtureLensGlow,
+  applyGrowOpFixturePanelGlow,
+} from "./apartmentCeilingFixtureLensGlow.js";
 import {
   APARTMENT_INTERIOR_VISUAL_PROFILE,
   apartmentDecorEmitterKindFromModelPath,
@@ -85,7 +88,7 @@ export function moodGradeMammothApartmentDecorMaterial(
         m.emissiveIntensity *= 1.55;
         m.toneMapped = false;
       } else {
-        /** Flush mounts without emissive masks — practical lights carry the room read. */
+        /** Housing stays dark; lens-glow mesh or authored emissive carries the baked read. */
         m.emissive.setHex(0x000000);
         m.emissiveIntensity = 1;
         m.emissiveMap = null;
@@ -176,10 +179,9 @@ function decorRootHasAuthoredEmissiveMap(root: THREE.Object3D): boolean {
 }
 
 /**
- * Visible lit read for warm fixtures.
+ * Visible lit read for warm/baked fixtures and grow-op panels.
+ * Static ceiling/chandelier/standing fixtures without authored emissive get a generated lens glow.
  * Grow-op panels use authored emissive or a cool lower-panel split when unauthored.
- * Ceiling flush mounts rely on practical lights only (no emissive lens split).
- * Standing lamps rely on authored emissive maps and practical lights, not generated bulb orbs.
  * Call after mesh mood grading (and after FP material merge, if any).
  */
 export function attachApartmentWarmFixtureBulbGlow(
@@ -195,6 +197,14 @@ export function attachApartmentWarmFixtureBulbGlow(
       root.userData[MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_ATTACHED_UD] = true;
     }
     return;
+  }
+  if (kind === "ceiling" || kind === "chandelier" || kind === "standing") {
+    if (root.userData[MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_ATTACHED_UD] === true) return;
+    if (decorRootHasAuthoredEmissiveMap(root)) {
+      root.userData[MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_ATTACHED_UD] = true;
+      return;
+    }
+    applyCeilingFixtureLensGlow(root);
   }
 }
 

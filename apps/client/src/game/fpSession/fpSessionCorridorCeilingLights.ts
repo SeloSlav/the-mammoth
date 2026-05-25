@@ -9,7 +9,7 @@ import {
   type ApartmentPracticalLightsMount,
 } from "@the-mammoth/engine";
 import { resolveOwnedApartmentDecorRootScale } from "@the-mammoth/schemas";
-import { postProcessApartmentDecorGltfScene } from "@the-mammoth/world";
+import { postProcessApartmentDecorGltfScene, ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS, ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS } from "@the-mammoth/world";
 import { apartmentDecorFetchPath } from "../fpApartment/fpApartmentDecorAssets.js";
 import { disposeStaticWorldObjectTree } from "./fpSessionStaticWorldDispose.js";
 import {
@@ -124,6 +124,13 @@ function mountCorridorDecorPlacement(
 export function mountFpFloor19CorridorCeilingLights(args: {
   buildingRoot: THREE.Group;
 }): FpSessionCorridorCeilingLightsMount {
+  if (!ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS) {
+    return {
+      ready: Promise.resolve(),
+      dispose: () => {},
+    };
+  }
+
   const root = new THREE.Group();
   root.name = FP_FLOOR_19_CORRIDOR_DECOR_ROOT_NAME;
   args.buildingRoot.add(root);
@@ -161,12 +168,16 @@ export function mountFpFloor19CorridorCeilingLights(args: {
         decorRoot: root,
       });
       bindCorridorDecorReadableEnv(args.buildingRoot, root);
-      practicalLights = syncApartmentInteriorPracticalLighting({
-        lightParent: root,
-        maxWindowLights: 0,
-        decorGroups: corridorDecorPlacementGroups(root),
-        previous: practicalLights,
-      });
+      if (ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS) {
+        practicalLights = syncApartmentInteriorPracticalLighting({
+          lightParent: root,
+          maxWindowLights: 0,
+          decorGroups: corridorDecorPlacementGroups(root),
+          includeStaticFixturePracticalLights: true,
+          includeDynamicDecorPracticalLights: false,
+          previous: practicalLights,
+        });
+      }
     })
     .catch((error: unknown) => {
       console.warn("[fpSession] failed to mount floor 19 corridor decor", error);

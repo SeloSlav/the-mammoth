@@ -541,7 +541,6 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       insideElevatorCab,
       insideStairShaft,
     });
-    _lastInsideApartmentInteriorLightingZone = insideApartmentInteriorLightingZone;
     if (containingResidentialUnitKey !== null) {
       _lastVisitedResidentialUnitKey = containingResidentialUnitKey;
     } else if (!insideApartmentInteriorLightingZone) {
@@ -695,6 +694,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       _lastContainingResidentialUnitId = containingResidentialUnitId;
       _lastContainingResidentialUnitKey = containingResidentialUnitKey;
       _lastRetainedResidentialUnitId = retainedResidentialUnitId;
+      _lastInsideApartmentInteriorLightingZone = insideApartmentInteriorLightingZone;
       for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
         const entry = unitInteriorMeshEntries[i]!;
         entry.mesh.visible =

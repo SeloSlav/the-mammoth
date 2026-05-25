@@ -5,6 +5,7 @@ import {
   type ApartmentDecorEmitterKind,
   type ApartmentUnitWorldBounds,
   apartmentDecorEmitterKindFromModelPath,
+  apartmentDecorUsesRuntimePracticalLight,
 } from "./apartmentInteriorVisualProfile.js";
 
 export type ApartmentPracticalLightKind = "window" | ApartmentDecorEmitterKind;
@@ -305,8 +306,14 @@ export function collectApartmentInteriorPracticalLightSpecs(args: {
   maxWindowLights?: number;
   unitBounds?: ApartmentUnitWorldBounds;
   decorGroups: readonly THREE.Object3D[];
+  /** TV/computer screen washes — default on. */
+  includeDynamicDecorPracticalLights?: boolean;
+  /** Ceiling/chandelier/standing/grow-op pools — default off (emissive/baked). */
+  includeStaticFixturePracticalLights?: boolean;
 }): ApartmentPracticalLightSpec[] {
   const specs: ApartmentPracticalLightSpec[] = [];
+  const includeDynamic = args.includeDynamicDecorPracticalLights !== false;
+  const includeStatic = args.includeStaticFixturePracticalLights === true;
   const maxWindow = args.maxWindowLights ?? 0;
   if (args.windowScanRoot && maxWindow > 0) {
     collectApartmentWindowLightSpecsFromRoot(args.windowScanRoot, specs, {
@@ -318,6 +325,13 @@ export function collectApartmentInteriorPracticalLightSpecs(args: {
   for (const group of args.decorGroups) {
     const modelRelPath = group.userData.mammothApartmentDecorModelRelPath;
     if (typeof modelRelPath !== "string") continue;
+    const emitterKind = apartmentDecorEmitterKindFromModelPath(modelRelPath);
+    if (!emitterKind) continue;
+    if (apartmentDecorUsesRuntimePracticalLight(emitterKind)) {
+      if (!includeDynamic) continue;
+    } else if (!includeStatic) {
+      continue;
+    }
     const spec = apartmentPracticalLightSpecFromDecorGroup(group, modelRelPath);
     if (spec) specs.push(spec);
   }
@@ -332,8 +346,10 @@ export function syncApartmentInteriorPracticalLighting(args: {
   maxWindowLights?: number;
   unitBounds?: ApartmentUnitWorldBounds;
   decorGroups: readonly THREE.Object3D[];
+  includeDynamicDecorPracticalLights?: boolean;
+  includeStaticFixturePracticalLights?: boolean;
   previous?: ApartmentPracticalLightsMount | null;
-}): ApartmentPracticalLightsMount {
+}): ApartmentPracticalLightsMount | null {
   args.previous?.dispose();
 
   const specs = collectApartmentInteriorPracticalLightSpecs({
@@ -341,7 +357,13 @@ export function syncApartmentInteriorPracticalLighting(args: {
     maxWindowLights: args.maxWindowLights,
     unitBounds: args.unitBounds,
     decorGroups: args.decorGroups,
+    includeDynamicDecorPracticalLights: args.includeDynamicDecorPracticalLights,
+    includeStaticFixturePracticalLights: args.includeStaticFixturePracticalLights,
   });
+
+  if (specs.length === 0) {
+    return null;
+  }
 
   return mountApartmentPracticalLights(args.lightParent, specs);
 }

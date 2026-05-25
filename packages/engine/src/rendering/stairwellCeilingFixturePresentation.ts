@@ -87,8 +87,10 @@ export function syncMammothStairwellCeilingPracticalLights(args: {
   lightParent: THREE.Object3D;
   decorGroups: readonly THREE.Object3D[];
   previous?: ApartmentPracticalLightsMount | null;
+  /** When `false`, dispose prior lights and skip mounting (emissive-only fixtures). */
+  runtimeLightsEnabled?: boolean;
 }): ApartmentPracticalLightsMount | null {
-  if (args.decorGroups.length === 0) {
+  if (args.runtimeLightsEnabled === false || args.decorGroups.length === 0) {
     args.previous?.dispose();
     return null;
   }
@@ -97,8 +99,13 @@ export function syncMammothStairwellCeilingPracticalLights(args: {
     lightParent: args.lightParent,
     maxWindowLights: 0,
     decorGroups: args.decorGroups,
+    includeStaticFixturePracticalLights: true,
+    includeDynamicDecorPracticalLights: false,
     previous: args.previous,
   });
+  if (!mount) {
+    return null;
+  }
   brightenStairwellPracticalLights(mount);
   return mount;
 }
@@ -109,6 +116,7 @@ export function syncMammothStairwellCeilingFixturePresentation(args: {
   previous?: ApartmentPracticalLightsMount | null;
   /** When set, only these groups receive practical lights (FP uses visible shaft fixtures). */
   practicalDecorGroups?: readonly THREE.Object3D[];
+  runtimeLightsEnabled?: boolean;
 }): ApartmentPracticalLightsMount | null {
   ensureMammothStairwellCeilingFixtureVisuals(args.buildingRoot);
   const decorGroups =
@@ -117,5 +125,6 @@ export function syncMammothStairwellCeilingFixturePresentation(args: {
     lightParent: args.lightParent,
     decorGroups,
     previous: args.previous ?? null,
+    runtimeLightsEnabled: args.runtimeLightsEnabled,
   });
 }

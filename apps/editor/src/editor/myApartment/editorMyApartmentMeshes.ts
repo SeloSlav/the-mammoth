@@ -16,6 +16,9 @@ import {
 import { useEditorStore } from "../../state/editorStore.js";
 import {
   APARTMENT_FISH_TANK_SWIMMER_MODEL_REL_PATH,
+  ENABLE_RUNTIME_APARTMENT_STATIC_FIXTURE_LIGHTS,
+  ENABLE_RUNTIME_DYNAMIC_DECOR_LIGHTS,
+  ENABLE_RUNTIME_WINDOW_FILL_LIGHTS,
   finalizeStandardWindowShutterPlacedItemsForUnit,
 } from "@the-mammoth/world";
 import {
@@ -190,7 +193,14 @@ export function mountEditorMyApartmentFurnitureUnder(
     scanRoot: THREE.Object3D,
     _bounds?: ApartmentUnitWorldBounds,
   ): void => {
-    if (!useEditorStore.getState().apartmentPracticalLightsEnabled) {
+    const runtimeEnabled =
+      ENABLE_RUNTIME_DYNAMIC_DECOR_LIGHTS ||
+      ENABLE_RUNTIME_APARTMENT_STATIC_FIXTURE_LIGHTS ||
+      ENABLE_RUNTIME_WINDOW_FILL_LIGHTS;
+    if (
+      !runtimeEnabled ||
+      !useEditorStore.getState().apartmentPracticalLightsEnabled
+    ) {
       practicalLights?.dispose();
       practicalLights = null;
       return;
@@ -198,10 +208,14 @@ export function mountEditorMyApartmentFurnitureUnder(
     practicalLights = syncApartmentInteriorPracticalLighting({
       lightParent: root,
       windowScanRoot: scanRoot,
-      maxWindowLights: APARTMENT_INTERIOR_VISUAL_PROFILE.maxWindowPracticalLightsPerUnit,
+      maxWindowLights: ENABLE_RUNTIME_WINDOW_FILL_LIGHTS
+        ? APARTMENT_INTERIOR_VISUAL_PROFILE.maxWindowPracticalLightsPerUnit
+        : 0,
       /** Authoring shell is already one preview unit — skip megablock bounds cull from FP client. */
       unitBounds: undefined,
       decorGroups: editorMyApartmentDecorGroups(selectionGroups),
+      includeDynamicDecorPracticalLights: ENABLE_RUNTIME_DYNAMIC_DECOR_LIGHTS,
+      includeStaticFixturePracticalLights: ENABLE_RUNTIME_APARTMENT_STATIC_FIXTURE_LIGHTS,
       previous: practicalLights,
     });
   };

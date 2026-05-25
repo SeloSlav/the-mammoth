@@ -285,6 +285,8 @@ export {
   mammothApartmentInteriorBlend01,
   apartmentDecorContactShadowEligible,
   apartmentDecorEmitterKindFromModelPath,
+  apartmentDecorUsesBakedEmissiveFixture,
+  apartmentDecorUsesRuntimePracticalLight,
   apartmentDecorWarmLightFixtureKind,
   type ApartmentDecorEmitterKind,
   type ApartmentUnitWorldBounds,

@@ -454,7 +454,36 @@ export function apartmentDecorEmitterKindFromModelPath(
 
 }
 
+/** Fixed architecture fixtures — emissive / baked lightmaps, not runtime Three.js lights. */
+export const APARTMENT_BAKED_EMISSIVE_EMITTER_KINDS = [
+  "chandelier",
+  "ceiling",
+  "standing",
+  "growOp",
+] as const satisfies readonly ApartmentDecorEmitterKind[];
 
+/** Screen/interaction glow — small set of real dynamic lights near the player. */
+export const APARTMENT_RUNTIME_PRACTICAL_EMITTER_KINDS = [
+  "tv",
+  "computer",
+] as const satisfies readonly ApartmentDecorEmitterKind[];
+
+export function apartmentDecorUsesBakedEmissiveFixture(
+  kind: ApartmentDecorEmitterKind,
+): boolean {
+  return (
+    kind === "chandelier" ||
+    kind === "ceiling" ||
+    kind === "standing" ||
+    kind === "growOp"
+  );
+}
+
+export function apartmentDecorUsesRuntimePracticalLight(
+  kind: ApartmentDecorEmitterKind,
+): boolean {
+  return kind === "tv" || kind === "computer";
+}
 
 export function apartmentDecorWarmLightFixtureKind(
 

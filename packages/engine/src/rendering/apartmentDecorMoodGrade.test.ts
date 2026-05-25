@@ -148,7 +148,7 @@ describe("moodGradeMammothApartmentDecorMesh skip flag", () => {
 });
 
 describe("attachApartmentWarmFixtureBulbGlow", () => {
-  it("does not add emissive lens glow to ceiling fixtures", () => {
+  it("adds warm lens glow to ceiling fixtures without authored emissive", () => {
     const root = new THREE.Group();
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(0.35, 0.12, 0.35),
@@ -167,11 +167,10 @@ describe("attachApartmentWarmFixtureBulbGlow", () => {
       root.children.some(
         (c) => c.userData[MAMMOTH_CEILING_LENS_GLOW_MESH_UD] === true,
       ),
-    ).toBe(false);
-    expect(root.children).toHaveLength(1);
+    ).toBe(true);
   });
 
-  it("does not add a generated emissive orb for standing lamps", () => {
+  it("adds warm lens glow to standing lamps without authored emissive", () => {
     const root = new THREE.Group();
     const pole = new THREE.Mesh(
       new THREE.BoxGeometry(0.08, 1.0, 0.08),
@@ -191,11 +190,11 @@ describe("attachApartmentWarmFixtureBulbGlow", () => {
       "static/models/objects/lamp-standing.glb",
     );
 
-    const glow = root.children.find(
-      (c) => c.userData[MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_UD] === true,
-    ) as THREE.Mesh | undefined;
-    expect(glow).toBeUndefined();
-    expect(root.children).toHaveLength(2);
+    expect(
+      root.children.some(
+        (c) => c.userData[MAMMOTH_CEILING_LENS_GLOW_MESH_UD] === true,
+      ),
+    ).toBe(true);
   });
 
   it("adds cool lower-panel emissive for grow-op fixtures without authored emissive", () => {
@@ -220,7 +219,7 @@ describe("attachApartmentWarmFixtureBulbGlow", () => {
     ).toBe(true);
   });
 
-  it("no-ops for non-fixture decor", () => {
+  it("no-ops for empty chandelier root", () => {
     const root = new THREE.Group();
     attachApartmentWarmFixtureBulbGlow(
       root,

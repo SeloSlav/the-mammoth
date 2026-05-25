@@ -79,6 +79,11 @@ import {
   subscribeApartmentUnitUtilities,
 } from "./fpApartmentUnitUtilities.js";
 import { runFpApartmentDecorFullRebuild } from "./fpApartmentDecorRebuild.js";
+import {
+  ENABLE_RUNTIME_APARTMENT_STATIC_FIXTURE_LIGHTS,
+  ENABLE_RUNTIME_DYNAMIC_DECOR_LIGHTS,
+  ENABLE_RUNTIME_WINDOW_FILL_LIGHTS,
+} from "@the-mammoth/world";
 
 type FixtureEmissiveBackup = {
   emissive: THREE.Color;
@@ -87,12 +92,22 @@ type FixtureEmissiveBackup = {
 
 function applyDecorFixtureEmissiveDebugIsolation(
   groups: Iterable<THREE.Object3D>,
-  fixtureLightingEnabled: boolean,
+  opts: {
+    /** Chandelier, ceiling, standing, grow-op — baked emissive path. */
+    bakedFixturesEnabled: boolean;
+    /** TV/computer screen materials. */
+    screenGlowEnabled: boolean;
+  },
 ): void {
   for (const group of groups) {
     const modelRelPath = group.userData.mammothApartmentDecorModelRelPath;
     if (typeof modelRelPath !== "string") continue;
-    if (apartmentDecorEmitterKindFromModelPath(modelRelPath) === null) continue;
+    const emitterKind = apartmentDecorEmitterKindFromModelPath(modelRelPath);
+    if (emitterKind === null) continue;
+    const fixtureLightingEnabled =
+      emitterKind === "tv" || emitterKind === "computer"
+        ? opts.screenGlowEnabled
+        : opts.bakedFixturesEnabled;
 
     group.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh)) return;
@@ -365,14 +380,6 @@ export function mountFpApartmentDecorMeshes(opts: {
     return out;
   };
 
-  const firstOwnedClaimedUnitKey = (): string | null => {
-    for (const row of opts.conn.db.apartment_unit) {
-      const u = row as ApartmentUnit;
-      if (residentInteriorPropsVisibleForViewer(opts.conn, u)) return u.unitKey;
-    }
-    return null;
-  };
-
   const setPracticalLightsIntensityScale = (scale: number): void => {
     if (practicalLightsMount === null || practicalLightsIntensityScale === scale) return;
     practicalLightsMount.root.traverse((obj) => {
@@ -434,24 +441,35 @@ export function mountFpApartmentDecorMeshes(opts: {
     force = false,
     intensityScale = 1,
   ): void => {
-    const masterEnabled = isFpDebugRenderIsolationEnabled("apartmentPracticalLights");
-    const decorFixtureLightsEnabled = isFpDebugRenderIsolationEnabled(
-      "apartmentDecorPracticalLights",
-    );
+    const dynamicRuntimeEnabled =
+      ENABLE_RUNTIME_DYNAMIC_DECOR_LIGHTS &&
+      isFpDebugRenderIsolationEnabled("apartmentPracticalLights");
+    const staticRuntimeEnabled =
+      ENABLE_RUNTIME_APARTMENT_STATIC_FIXTURE_LIGHTS &&
+      isFpDebugRenderIsolationEnabled("apartmentPracticalLights") &&
+      isFpDebugRenderIsolationEnabled("apartmentDecorPracticalLights");
+    const windowRuntimeEnabled =
+      ENABLE_RUNTIME_WINDOW_FILL_LIGHTS &&
+      isFpDebugRenderIsolationEnabled("apartmentPracticalLights");
+    const runtimePracticalEnabled =
+      dynamicRuntimeEnabled || staticRuntimeEnabled || windowRuntimeEnabled;
     const unitPowerOn = containingUnitKey
       ? readApartmentUnitUtilities(opts.conn, containingUnitKey).powerOn
       : true;
-    const effectiveDecorEnabled = decorFixtureLightsEnabled && unitPowerOn;
+    const emissiveMaterialsEnabled = isFpDebugRenderIsolationEnabled("emissiveMaterials");
 
-    applyDecorFixtureEmissiveDebugIsolation(groupByRenderKey.values(), effectiveDecorEnabled);
+    applyDecorFixtureEmissiveDebugIsolation(groupByRenderKey.values(), {
+      bakedFixturesEnabled: unitPowerOn && emissiveMaterialsEnabled,
+      screenGlowEnabled: unitPowerOn && emissiveMaterialsEnabled,
+    });
 
-    if (!masterEnabled || !containingUnitKey || !unitPowerOn) {
+    if (!runtimePracticalEnabled || !containingUnitKey || !unitPowerOn) {
       if (practicalLightsMount !== null || practicalLightsUnitKey !== null) {
         clearPracticalLightsOnly();
       }
       practicalLightsUnitKey = containingUnitKey;
-      practicalLightsMasterEnabled = masterEnabled;
-      practicalLightsDecorEnabled = decorFixtureLightsEnabled;
+      practicalLightsMasterEnabled = runtimePracticalEnabled;
+      practicalLightsDecorEnabled = staticRuntimeEnabled;
       practicalLightsUnitPowerOn = unitPowerOn;
       practicalLightsIntensityScale = null;
       resyncDecorShadowsForUnit(containingUnitKey);
@@ -461,8 +479,8 @@ export function mountFpApartmentDecorMeshes(opts: {
     if (
       !force &&
       containingUnitKey === practicalLightsUnitKey &&
-      masterEnabled === practicalLightsMasterEnabled &&
-      decorFixtureLightsEnabled === practicalLightsDecorEnabled &&
+      runtimePracticalEnabled === practicalLightsMasterEnabled &&
+      staticRuntimeEnabled === practicalLightsDecorEnabled &&
       unitPowerOn === practicalLightsUnitPowerOn
     ) {
       setPracticalLightsIntensityScale(intensityScale);
@@ -470,19 +488,21 @@ export function mountFpApartmentDecorMeshes(opts: {
     }
 
     practicalLightsUnitKey = containingUnitKey;
-    practicalLightsMasterEnabled = masterEnabled;
-    practicalLightsDecorEnabled = decorFixtureLightsEnabled;
+    practicalLightsMasterEnabled = runtimePracticalEnabled;
+    practicalLightsDecorEnabled = staticRuntimeEnabled;
     practicalLightsUnitPowerOn = unitPowerOn;
 
     const bounds = unitBoundsForKey(containingUnitKey);
     practicalLightsMount = syncApartmentInteriorPracticalLighting({
       lightParent: root,
       windowScanRoot: opts.buildingRoot,
-      maxWindowLights: APARTMENT_INTERIOR_VISUAL_PROFILE.maxWindowPracticalLightsPerUnit,
+      maxWindowLights: windowRuntimeEnabled
+        ? APARTMENT_INTERIOR_VISUAL_PROFILE.maxWindowPracticalLightsPerUnit
+        : 0,
       unitBounds: bounds ?? undefined,
-      decorGroups: decorFixtureLightsEnabled
-        ? decorGroupsForUnit(containingUnitKey)
-        : [],
+      decorGroups: decorGroupsForUnit(containingUnitKey),
+      includeDynamicDecorPracticalLights: dynamicRuntimeEnabled,
+      includeStaticFixturePracticalLights: staticRuntimeEnabled,
       previous: practicalLightsMount,
     });
     practicalLightsIntensityScale = null;
@@ -540,11 +560,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       },
       epoch,
     );
-    if (disposed || epoch !== buildEpoch || practicalLightsContextUnitKey !== null) return;
-    const prewarmUnitKey = firstOwnedClaimedUnitKey();
-    if (prewarmUnitKey !== null) {
-      syncPracticalLightsForUnit(prewarmUnitKey, false, 0);
-    }
+    if (disposed || epoch !== buildEpoch) return;
   };
 
   const scheduleRebuild = () => {

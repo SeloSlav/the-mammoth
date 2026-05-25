@@ -4,6 +4,7 @@ import { apartmentDecorEmitterKindFromModelPath } from "./apartmentInteriorVisua
 import {
   apartmentPracticalLightSpecFromDecorGroup,
   apartmentPracticalLightSpecFromWindowGlassMesh,
+  collectApartmentInteriorPracticalLightSpecs,
   mountApartmentPracticalLights,
 } from "./apartmentInteriorPracticalLights.js";
 
@@ -141,6 +142,42 @@ describe("apartmentPracticalLightSpecFromDecorGroup", () => {
     expect(spec?.kind).toBe("computer");
     expect(spec?.direction).toBeDefined();
     expect(Math.abs(spec!.direction!.z)).toBeGreaterThan(0.9);
+  });
+});
+
+describe("collectApartmentInteriorPracticalLightSpecs", () => {
+  function decorGroup(modelRelPath: string): THREE.Group {
+    const group = new THREE.Group();
+    group.userData.mammothApartmentDecorModelRelPath = modelRelPath;
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4, 0.4, 0.4),
+      new THREE.MeshBasicMaterial(),
+    );
+    group.add(mesh);
+    group.updateMatrixWorld(true);
+    return group;
+  }
+
+  it("includes only TV/computer by default (static fixtures stay emissive/baked)", () => {
+    const specs = collectApartmentInteriorPracticalLightSpecs({
+      decorGroups: [
+        decorGroup("static/models/objects/light-ceiling.glb"),
+        decorGroup("static/models/objects/tv.glb"),
+        decorGroup("static/models/objects/lamp-standing.glb"),
+      ],
+    });
+    expect(specs.map((s) => s.kind)).toEqual(["tv"]);
+  });
+
+  it("includes static fixtures only when explicitly enabled for look-dev", () => {
+    const specs = collectApartmentInteriorPracticalLightSpecs({
+      decorGroups: [
+        decorGroup("static/models/objects/light-ceiling.glb"),
+        decorGroup("static/models/objects/computer.glb"),
+      ],
+      includeStaticFixturePracticalLights: true,
+    });
+    expect(specs.map((s) => s.kind).sort()).toEqual(["ceiling", "computer"]);
   });
 });
 

@@ -34,6 +34,8 @@ import {
 } from "@the-mammoth/engine";
 import {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
+  ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS,
+  ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS,
   ENABLE_STAIRWELL_GRAFFITI_DECALS,
   collectStairwellCeilingLightGroups,
   ensureStairwellCigaretteMeshReady,
@@ -379,9 +381,10 @@ export async function mountFpSession(
   scene.add(buildingRoot);
   scene.add(cellRoot);
   buildingRoot.updateMatrixWorld(true);
-  const floor19CorridorCeilingLights = isCombatSim
-    ? null
-    : mountFpFloor19CorridorCeilingLights({ buildingRoot });
+  const floor19CorridorCeilingLights =
+    isCombatSim || !ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS
+      ? null
+      : mountFpFloor19CorridorCeilingLights({ buildingRoot });
   if (!isCombatSim) {
     // Auth backdrop may hide unit shells on the shared megablock cache; FP visibility owns them again.
     restoreUnitInteriorMeshVisibilityAfterAuthView(buildingRoot);
@@ -582,7 +585,15 @@ export async function mountFpSession(
       .join("|");
 
   const syncStairwellCeilingPracticalLights = (): void => {
-    if (isCombatSim) return;
+    if (isCombatSim || !ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS) {
+      if (stairwellCeilingPracticalLightsActive) {
+        stairwellCeilingPracticalLights?.dispose();
+        stairwellCeilingPracticalLights = null;
+        stairwellCeilingPracticalLightsActive = false;
+        stairwellCeilingPracticalLightsSignature = "";
+      }
+      return;
+    }
     const insideShaft = getIsInsideStairwellShaft();
     if (!insideShaft) {
       if (stairwellCeilingPracticalLightsActive) {
@@ -610,12 +621,14 @@ export async function mountFpSession(
       lightParent: scene,
       previous: stairwellCeilingPracticalLights,
       practicalDecorGroups: decorGroups,
+      runtimeLightsEnabled: ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS,
     });
     stairwellCeilingPracticalLightsActive = true;
     stairwellCeilingPracticalLightsSignature = signature;
   };
 
   const scheduleStairwellCeilingVisualSync = (): void => {
+    if (!ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS) return;
     if (stairwellCeilingVisualSyncRaf !== 0) return;
     stairwellCeilingVisualSyncRaf = requestAnimationFrame(() => {
       stairwellCeilingVisualSyncRaf = 0;
@@ -626,9 +639,11 @@ export async function mountFpSession(
     });
   };
 
-  const unsubscribeStairwellCeilingPropReady = subscribeStairwellCeilingPropReady(() => {
-    scheduleStairwellCeilingVisualSync();
-  });
+  const unsubscribeStairwellCeilingPropReady = ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS
+    ? subscribeStairwellCeilingPropReady(() => {
+        scheduleStairwellCeilingVisualSync();
+      })
+    : () => {};
 
   const refreshApartmentInteriorMeshes = () => {
     const tex = scene.userData.mammothFpMetallicReadableEnv;
@@ -830,7 +845,9 @@ export async function mountFpSession(
       });
   if (!isCombatSim) {
     refreshApartmentInteriorMeshes();
-    scheduleStairwellCeilingVisualSync();
+    if (ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS) {
+      scheduleStairwellCeilingVisualSync();
+    }
     if (floor19CorridorCeilingLights) {
       void floor19CorridorCeilingLights.ready.then(() => {
         refreshApartmentInteriorMeshes();
@@ -1038,6 +1055,39 @@ export async function mountFpSession(
     return null;
   };
 
+  const pointInsideApartmentUnitBounds = (
+    b: NonNullable<ReturnType<typeof apartmentUnitBoundsForKey>>,
+    x: number,
+    y: number,
+    z: number,
+    opts: { slackXZ: number; slackYBelow: number; slackYAbove: number },
+  ): boolean =>
+    x >= b.minX - opts.slackXZ &&
+    x <= b.maxX + opts.slackXZ &&
+    y >= b.minY - opts.slackYBelow &&
+    y <= b.maxY + opts.slackYAbove &&
+    z >= b.minZ - opts.slackXZ &&
+    z <= b.maxZ + opts.slackXZ;
+
+  const activeOwnedApartmentContainingFeet = ():
+    | { unitId: string; unitKey: string; level: number }
+    | null => {
+    if (activeOwnedApartmentDecorUnitKey === null) return null;
+    const summary = apartmentUnitSummaryForKey(activeOwnedApartmentDecorUnitKey);
+    const bounds = apartmentUnitBoundsForKey(activeOwnedApartmentDecorUnitKey);
+    if (!summary || !bounds) return null;
+    if (
+      !pointInsideApartmentUnitBounds(bounds, pos.x, pos.y, pos.z, {
+        slackXZ: FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M,
+        slackYBelow: 1.25,
+        slackYAbove: 2.85,
+      })
+    ) {
+      return null;
+    }
+    return summary;
+  };
+
   const updateActiveOwnedApartmentFromContainingUnit = (
     unitKey: string | null,
   ): void => {
@@ -1082,16 +1132,8 @@ export async function mountFpSession(
           slackYAbove: 2.85,
         });
         updateActiveOwnedApartmentFromContainingUnit(unit?.unitKey ?? null);
-        if (
-          unit &&
-          clientOwnsClaimedApartmentUnit(conn, conn.identity ?? undefined, unit.unitKey)
-        ) {
-          return { unitId: unit.unitId, unitKey: unit.unitKey, level: unit.level };
-        }
-        if (activeOwnedApartmentDecorUnitKey && feetOnBuildingSlabForApartmentVisuals()) {
-          return null;
-        }
-        return unit ? { unitId: unit.unitId, unitKey: unit.unitKey, level: unit.level } : null;
+        if (unit) return { unitId: unit.unitId, unitKey: unit.unitKey, level: unit.level };
+        return activeOwnedApartmentContainingFeet();
       },
       getRetainedResidentialUnitId: () =>
         activeOwnedApartmentDecorUnitKey && feetOnBuildingSlabForApartmentVisuals()

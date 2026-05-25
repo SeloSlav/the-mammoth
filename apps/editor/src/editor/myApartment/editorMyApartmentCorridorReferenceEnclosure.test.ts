@@ -13,7 +13,7 @@ function readTypicalFloorDoc() {
     ),
   );
   return FloorDocSchema.parse(raw);
-}
+} 
 
 function collectMeshNames(root: THREE.Object3D): string[] {
   const names: string[] = [];

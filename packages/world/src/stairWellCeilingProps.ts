@@ -13,6 +13,7 @@ import {
   type StairWellAuthoringScope,
 } from "./stairWellEditorIds.js";
 import type { StairCornerLanding, StairSwitchbackLayout } from "./stairWellGeometry.js";
+import { ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS } from "./featureFlags.js";
 
 export const STAIRWELL_CEILING_LIGHT_MODEL_URL =
   "/static/models/objects/light-ceiling-2.glb";
@@ -213,6 +214,7 @@ export function attachStairWellCeilingProps(args: {
   L: StairSwitchbackLayout;
   omitOnlyLanding?: StairCornerLanding;
 }): void {
+  if (!ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS) return;
   const template = resolveStairWellCeilingPropTemplate(args.def, args.authoringScope);
   if (!template) return;
 

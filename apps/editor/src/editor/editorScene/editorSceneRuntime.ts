@@ -22,6 +22,8 @@ import {
   type ApartmentPracticalLightsMount,
 } from "@the-mammoth/engine";
 import {
+  ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS,
+  ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS,
   LANDING_DOOR_OPENING_PROXY_ID,
   collectStairwellCeilingLightGroups,
   isStairWellCeilingPropEditorId,
@@ -261,6 +263,10 @@ export async function mountEditorScene(
     editorStairwellCeilingPracticalLights = null;
   };
   const syncEditorStairwellCeilingFixturePresentation = (): void => {
+    if (!ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS) {
+      disposeEditorStairwellCeilingPracticalLights();
+      return;
+    }
     const st = useEditorStore.getState();
     if (st.mode !== "stairwell_preview" || !structuralState.buildingRoot) {
       disposeEditorStairwellCeilingPracticalLights();
@@ -270,6 +276,7 @@ export async function mountEditorScene(
       buildingRoot: structuralState.buildingRoot,
       lightParent: scene,
       previous: editorStairwellCeilingPracticalLights,
+      runtimeLightsEnabled: ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS,
     });
     const tex = scene.userData.mammothFpMetallicReadableEnv;
     const envTexture = tex instanceof THREE.Texture ? tex : null;
@@ -281,11 +288,14 @@ export async function mountEditorScene(
       bindMammothApartmentPropReadableEnv(group, envTexture);
     }
   };
-  const unsubscribeStairwellCeilingPropReady = subscribeStairwellCeilingPropReady(() => {
-    scheduleEditorStairwellCeilingSync();
-  });
+  const unsubscribeStairwellCeilingPropReady = ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS
+    ? subscribeStairwellCeilingPropReady(() => {
+        scheduleEditorStairwellCeilingSync();
+      })
+    : () => {};
   let editorStairwellCeilingSyncRaf = 0;
   const scheduleEditorStairwellCeilingSync = (): void => {
+    if (!ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS) return;
     if (editorStairwellCeilingSyncRaf !== 0) return;
     editorStairwellCeilingSyncRaf = requestAnimationFrame(() => {
       editorStairwellCeilingSyncRaf = 0;

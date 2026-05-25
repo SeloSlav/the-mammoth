@@ -1,4 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("./featureFlags.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./featureFlags.js")>();
+  return {
+    ...actual,
+    ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS: true,
+  };
+});
+
 import * as THREE from "three";
 import { parseStairWellDef } from "./index.js";
 import { addStairWellPlaceholder } from "./stairWellPlaceholder.js";
