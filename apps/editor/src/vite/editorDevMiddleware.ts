@@ -31,6 +31,7 @@ import {
   EDITOR_INTERIORS_DIR,
   EDITOR_PREFABS_DIR,
   EDITOR_APARTMENT_UNIT_LAYOUT_PROFILES_FILE,
+  EDITOR_FLOOR_19_CORRIDOR_BUILTINS_FILE,
   EDITOR_OWNED_APT_BUILTINS_FILE,
 } from "../editor/content/editorContentDiscovery.js";
 import {
@@ -335,6 +336,9 @@ export function editorDevMiddleware(
       if (path === "/__editor/save-owned-apartment-builtins" && req.method === "POST") {
         return void (await handleSaveOwnedApartmentBuiltins(repoRoot, req, res, next));
       }
+      if (path === "/__editor/save-floor-19-corridor-builtins" && req.method === "POST") {
+        return void (await handleSaveFloor19CorridorBuiltins(repoRoot, req, res, next));
+      }
       if (path === "/__editor/save-apartment-unit-layout-profiles" && req.method === "POST") {
         return void (await handleSaveApartmentUnitLayoutProfiles(repoRoot, req, res, next));
       }
@@ -553,6 +557,42 @@ async function handleSaveOwnedApartmentBuiltins(
         `Refusing save: would replace ${existingPlacedCount} placed items with ` +
           `${nextDoc.placedItems.length} (built-in default doc). Reload the editor from disk and retry.`,
       );
+      return;
+    }
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, body.json, "utf8");
+    sendJson(res, {
+      ok: true,
+      path: abs,
+      collisionArtifactsStatus: await computeCollisionArtifactsStatus(repoRoot),
+    });
+  } catch (e) {
+    res.statusCode = 500;
+    res.end(e instanceof Error ? e.message : "error");
+  }
+}
+
+async function handleSaveFloor19CorridorBuiltins(
+  repoRoot: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: Connect.NextFunction,
+) {
+  void next;
+  if (!ensureEditorSaveEnabled(res)) return;
+  try {
+    const raw = await readJsonBody(req);
+    const body = JSON.parse(raw) as { json?: string };
+    if (typeof body.json !== "string") {
+      res.statusCode = 400;
+      res.end("missing json string");
+      return;
+    }
+    OwnedApartmentBuiltinsDocSchema.parse(JSON.parse(body.json));
+    const abs = safeContentFile(repoRoot, EDITOR_FLOOR_19_CORRIDOR_BUILTINS_FILE);
+    if (!abs) {
+      res.statusCode = 403;
+      res.end("bad path");
       return;
     }
     await fs.mkdir(path.dirname(abs), { recursive: true });

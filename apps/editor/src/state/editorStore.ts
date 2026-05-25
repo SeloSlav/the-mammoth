@@ -57,6 +57,7 @@ import type {
   HistoryEntry,
   LandingDocKind,
   LandingKitVariant,
+  MyApartmentAuthoringTarget,
 } from "./editorStoreTypes.js";
 import {
   editorMyApartmentSelectedIdForDecor,
@@ -84,10 +85,14 @@ import {
 } from "../editor/myApartment/editorMyApartmentLayoutVisibility.js";
 import {
   HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
-  ownedDefaultApartmentUnitKey,
+  FLOOR_19_CORRIDOR_OBJECT_ID,
+  FLOOR_19_GAMEPLAY_LEVEL_INDEX,
   TYPICAL_FLOOR_DOC_ID,
+  authoringCorridorPreviewKey,
+  ownedDefaultApartmentUnitKey,
 } from "@the-mammoth/world";
 import {
+  isApartmentLayoutWorkspace,
   landingDocKindToMode,
   workspaceToInitialMode,
 } from "./editorWorkspaceMap.js";
@@ -100,6 +105,39 @@ function finalizeOwnedApartmentBuiltinsPreservingMounts(
     prev,
     finalizeOwnedApartmentBuiltinsDoc(OwnedApartmentBuiltinsDocSchema.parse(draft)),
   );
+}
+
+const EMPTY_CORRIDOR_LAYOUT_DRAFT: OwnedApartmentBuiltinsDoc = {
+  ...structuredClone(DEFAULT_OWNED_APARTMENT_BUILTINS_DOC),
+  previewSizeM: 80,
+  placedItems: [],
+  wallItems: [],
+  mirrorItems: [],
+  objectGroups: [],
+};
+
+function corridorLayoutDocForLevel(
+  s: EditorState,
+  levelIndex: number,
+): OwnedApartmentBuiltinsDoc {
+  if (levelIndex === FLOOR_19_GAMEPLAY_LEVEL_INDEX) {
+    return structuredClone(s.floor19CorridorBuiltins);
+  }
+  return structuredClone(EMPTY_CORRIDOR_LAYOUT_DRAFT);
+}
+
+function persistActiveCorridorBuiltinsIfFloor19(
+  s: EditorState,
+): Partial<EditorState> {
+  if (
+    s.workspace !== "corridor" ||
+    s.myApartmentCorridorLevelIndex !== FLOOR_19_GAMEPLAY_LEVEL_INDEX
+  ) {
+    return {};
+  }
+  return {
+    floor19CorridorBuiltins: structuredClone(s.ownedApartmentBuiltins),
+  };
 }
 
 export type {
@@ -200,10 +238,19 @@ function applyHistoryEntryFields(
     activeApartmentLayoutSource: entry.activeApartmentLayoutSource,
     activeApartmentLayoutProfileId: entry.activeApartmentLayoutProfileId,
     ownedApartmentBuiltins,
+    myApartmentAuthoringTarget: entry.myApartmentAuthoringTarget ?? before.myApartmentAuthoringTarget,
+    myApartmentCorridorLevelIndex:
+      entry.myApartmentCorridorLevelIndex ?? before.myApartmentCorridorLevelIndex,
+    myApartmentCorridorPreviewKey:
+      entry.myApartmentCorridorPreviewKey ?? before.myApartmentCorridorPreviewKey,
+    floor19CorridorBuiltins:
+      entry.floor19CorridorBuiltins ?? structuredClone(before.floor19CorridorBuiltins),
     selectedId: entry.selectedId,
     myApartmentMultiselectExtraIds: entry.myApartmentMultiselectExtraIds ?? [],
     dirty: entry.dirty,
     ownedApartmentBuiltinsNeedsDiskFlush: entry.ownedApartmentBuiltinsNeedsDiskFlush,
+    floor19CorridorBuiltinsNeedsDiskFlush:
+      entry.floor19CorridorBuiltinsNeedsDiskFlush ?? before.floor19CorridorBuiltinsNeedsDiskFlush,
     contentStructureEpoch: apartmentLayoutChanged
       ? before.contentStructureEpoch + 1
       : (entry.contentStructureEpoch ?? 0),
@@ -214,6 +261,18 @@ function patchActiveApartmentLayoutState(
   s: EditorState,
   next: OwnedApartmentBuiltinsDoc,
 ): Partial<EditorState> {
+  if (s.workspace === "corridor") {
+    const isPersistedFloor = s.myApartmentCorridorLevelIndex === FLOOR_19_GAMEPLAY_LEVEL_INDEX;
+    return {
+      ...(isPersistedFloor
+        ? {
+            floor19CorridorBuiltins: next,
+            floor19CorridorBuiltinsNeedsDiskFlush: true,
+          }
+        : {}),
+      ownedApartmentBuiltins: next,
+    };
+  }
   if (s.activeApartmentLayoutSource === "owned_default") {
     return {
       ownedApartmentDefaultBuiltins: next,
@@ -298,6 +357,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   activeApartmentLayoutProfileId: null,
   ownedApartmentBuiltins: DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
   ownedApartmentBuiltinsNeedsDiskFlush: false,
+  myApartmentAuthoringTarget: "unit" as MyApartmentAuthoringTarget,
+  myApartmentCorridorLevelIndex: FLOOR_19_GAMEPLAY_LEVEL_INDEX,
+  myApartmentCorridorPreviewKey: authoringCorridorPreviewKey(
+    TYPICAL_FLOOR_DOC_ID,
+    FLOOR_19_GAMEPLAY_LEVEL_INDEX,
+    FLOOR_19_CORRIDOR_OBJECT_ID,
+  ),
+  floor19CorridorBuiltins: DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+  floor19CorridorBuiltinsNeedsDiskFlush: false,
   historyPast: [],
   historyFuture: [],
   contentStructureEpoch: 0,
@@ -369,28 +437,100 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         m === "fp_viewmodel" || m === "fp_consumable";
       const touchesFp = isFpMode(s.mode) || isFpMode(mode);
       const exitFp = isFpMode(s.mode) && !isFpMode(mode);
-      const exitApartment =
-        s.workspace === "apartment" && workspace !== "apartment";
-      const enterApartment = workspace === "apartment" && s.workspace !== "apartment";
-      const bumpEpoch = !touchesFp || exitFp || enterApartment;
+
+      const wasApartmentLayout = isApartmentLayoutWorkspace(s.workspace);
+      const isApartmentLayout = isApartmentLayoutWorkspace(workspace);
+      const exitApartmentLayout = wasApartmentLayout && !isApartmentLayout;
+      const enterApartmentLayout = !wasApartmentLayout && isApartmentLayout;
+      const switchApartmentLayoutSurface =
+        wasApartmentLayout && isApartmentLayout && s.workspace !== workspace;
+
+      const myApartmentAuthoringTarget: MyApartmentAuthoringTarget =
+        workspace === "corridor" ? "floor_19_corridor" : "unit";
+
+      let layoutPatch: Partial<EditorState> = {};
+
+      if (switchApartmentLayoutSurface) {
+        const backingPatch =
+          s.workspace === "corridor"
+            ? persistActiveCorridorBuiltinsIfFloor19(s)
+            : patchActiveApartmentLayoutState(s, s.ownedApartmentBuiltins);
+
+        const floor19CorridorBuiltins =
+          backingPatch.floor19CorridorBuiltins ?? s.floor19CorridorBuiltins;
+        const ownedApartmentDefaultBuiltins =
+          backingPatch.ownedApartmentDefaultBuiltins ?? s.ownedApartmentDefaultBuiltins;
+        const apartmentUnitLayoutProfiles =
+          backingPatch.apartmentUnitLayoutProfiles ?? s.apartmentUnitLayoutProfiles;
+
+        const ownedApartmentBuiltins =
+          workspace === "corridor"
+            ? corridorLayoutDocForLevel(
+                { ...s, floor19CorridorBuiltins },
+                s.myApartmentCorridorLevelIndex,
+              )
+            : syncActiveApartmentLayoutDoc({
+                ownedDefault: ownedApartmentDefaultBuiltins,
+                profilesDoc: apartmentUnitLayoutProfiles,
+                source: s.activeApartmentLayoutSource,
+                activeProfileId: s.activeApartmentLayoutProfileId,
+              });
+
+        layoutPatch = {
+          ...backingPatch,
+          myApartmentAuthoringTarget,
+          ownedApartmentBuiltins,
+          selectedId: myApartmentLayoutInitialSelectedId(ownedApartmentBuiltins.placedItems),
+          myApartmentMultiselectExtraIds: [] as readonly string[],
+          myApartmentLayoutTransformArmed: false,
+        };
+      } else if (enterApartmentLayout) {
+        const ownedApartmentBuiltins =
+          workspace === "corridor"
+            ? corridorLayoutDocForLevel(s, s.myApartmentCorridorLevelIndex)
+            : syncActiveApartmentLayoutDoc({
+                ownedDefault: s.ownedApartmentDefaultBuiltins,
+                profilesDoc: s.apartmentUnitLayoutProfiles,
+                source: s.activeApartmentLayoutSource,
+                activeProfileId: s.activeApartmentLayoutProfileId,
+              });
+
+        layoutPatch = {
+          myApartmentAuthoringTarget,
+          ownedApartmentBuiltins,
+          selectedId: myApartmentLayoutInitialSelectedId(ownedApartmentBuiltins.placedItems),
+          myApartmentMultiselectExtraIds: [] as readonly string[],
+          myApartmentLayoutTransformArmed: false,
+          ...(s.transformMode === "scale" && workspace === "apartment"
+            ? { transformMode: "translate" as const }
+            : {}),
+        };
+      } else if (isApartmentLayout) {
+        layoutPatch = { myApartmentAuthoringTarget };
+      }
+
+      if (exitApartmentLayout && s.workspace === "corridor") {
+        layoutPatch = {
+          ...layoutPatch,
+          ...persistActiveCorridorBuiltinsIfFloor19(s),
+        };
+      }
+
+      const bumpEpoch =
+        !touchesFp ||
+        exitFp ||
+        enterApartmentLayout ||
+        switchApartmentLayoutSurface;
+
       return {
         workspace,
         mode,
-        ...(exitApartment
+        ...layoutPatch,
+        ...(exitApartmentLayout
           ? {
               myApartmentLayoutHidePickMode: false,
               myApartmentLayoutTransformArmed: false,
               myApartmentLayoutHiddenPlacementIds: [] as readonly string[],
-            }
-          : {}),
-        ...(enterApartment
-          ? {
-              selectedId: null,
-              myApartmentMultiselectExtraIds: [] as readonly string[],
-              myApartmentLayoutTransformArmed: false,
-              ...(s.transformMode === "scale"
-                ? { transformMode: "translate" as const }
-                : {}),
             }
           : {}),
         ...(bumpEpoch
@@ -878,6 +1018,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   clearOwnedApartmentBuiltinsDiskFlushFlag: () =>
     set({ ownedApartmentBuiltinsNeedsDiskFlush: false }),
+  clearFloor19CorridorBuiltinsDiskFlushFlag: () =>
+    set({ floor19CorridorBuiltinsNeedsDiskFlush: false }),
   clearApartmentUnitLayoutProfilesDiskFlushFlag: () =>
     set({ apartmentUnitLayoutProfilesNeedsDiskFlush: false }),
 
@@ -933,6 +1075,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setMyApartmentPreviewUnit: ({ unitKey, unitId }) =>
     set((s) => {
       if (!unitKey || !unitId) return {};
+      if (s.workspace !== "apartment") return {};
       const assignedProfileId =
         s.apartmentUnitLayoutProfiles.assignments.find((a) => a.unitKey === unitKey)
           ?.profileId ?? null;
@@ -956,11 +1099,42 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ownedApartmentBuiltins,
         selectedId: myApartmentLayoutInitialSelectedId(ownedApartmentBuiltins.placedItems),
         myApartmentMultiselectExtraIds: [] as readonly string[],
+        myApartmentLayoutTransformArmed: false,
         contentStructureEpoch: s.contentStructureEpoch + 1,
       };
     }),
+  setMyApartmentCorridorPreviewFloor: ({ levelIndex, floorDocId, corridorKey }) =>
+    set((s) => {
+      if (s.workspace !== "corridor") return {};
+      if (s.myApartmentCorridorLevelIndex === levelIndex) return {};
+
+      const backingPatch = persistActiveCorridorBuiltinsIfFloor19(s);
+      const floor19CorridorBuiltins =
+        backingPatch.floor19CorridorBuiltins ?? s.floor19CorridorBuiltins;
+      const ownedApartmentBuiltins = corridorLayoutDocForLevel(
+        { ...s, floor19CorridorBuiltins },
+        levelIndex,
+      );
+
+      return {
+        ...backingPatch,
+        myApartmentCorridorLevelIndex: levelIndex,
+        myApartmentCorridorPreviewKey: corridorKey,
+        ownedApartmentBuiltins,
+        selectedId: myApartmentLayoutInitialSelectedId(ownedApartmentBuiltins.placedItems),
+        myApartmentMultiselectExtraIds: [] as readonly string[],
+        myApartmentLayoutTransformArmed: false,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
+      };
+    }),
+  setMyApartmentAuthoringTarget: (myApartmentAuthoringTarget) => {
+    const workspace: EditorWorkspace =
+      myApartmentAuthoringTarget === "floor_19_corridor" ? "corridor" : "apartment";
+    get().setWorkspace(workspace);
+  },
   setActiveApartmentLayoutSource: (activeApartmentLayoutSource) =>
     set((s) => {
+      if (s.workspace !== "apartment") return {};
       const ownedDefaultUnitKey = ownedDefaultApartmentUnitKey(s.building);
       if (
         activeApartmentLayoutSource === "owned_default" &&
@@ -994,6 +1168,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }),
   setActiveApartmentLayoutProfileId: (activeApartmentLayoutProfileId) =>
     set((s) => {
+      if (s.workspace !== "apartment") return {};
       const normalized = activeApartmentLayoutProfileId || null;
       const ownedDefaultUnitKey = ownedDefaultApartmentUnitKey(s.building);
       const assignedProfileId =

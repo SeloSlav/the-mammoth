@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { publishMammothCompassHeadingFromForwardXZ } from "@the-mammoth/ui-theme";
 import type { TransformControls } from "three/addons/controls/TransformControls.js";
 import type { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { useEditorStore } from "../../state/editorStore.js";
@@ -55,6 +56,8 @@ export function startEditorSceneRenderLoop(deps: {
   let lastWeaponPresentationPollMs = 0;
   let lastRenderAspect = 0;
   let lastTransformControlsCamera: THREE.Camera | null = null;
+
+  const renderCamForward = new THREE.Vector3();
 
   let orbitPointerDown = false;
 
@@ -223,12 +226,12 @@ export function startEditorSceneRenderLoop(deps: {
     if (!tcDragging) {
       if (inFpMode && st.fpAuthorCamera === "orbit") {
         beforeOrbitControlsUpdate?.();
-        orbitControls.update();
         orbitKeyboardMove.update(dt);
+        orbitControls.update();
       } else if (!inFpMode) {
         beforeOrbitControlsUpdate?.();
-        orbitControls.update();
         orbitKeyboardMove.update(dt);
+        orbitControls.update();
       }
     }
 
@@ -236,6 +239,10 @@ export function startEditorSceneRenderLoop(deps: {
     if (attached && !objectLivesUnderScene(attached, scene)) {
       withProgrammaticTransformControls(() => transformControls.detach());
     }
+
+    renderCam.getWorldDirection(renderCamForward);
+    publishMammothCompassHeadingFromForwardXZ(renderCamForward.x, renderCamForward.z);
+
     renderer.render(scene, renderCam);
 
     const orbitMotionActive =

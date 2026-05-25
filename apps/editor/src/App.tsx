@@ -1,3 +1,4 @@
+import { MammothCompassHud } from "@the-mammoth/ui-theme";
 import { useEffect, useRef, useState } from "react";
 import { bootstrapEditorFromContent } from "./editor/bootstrap/editorBootstrap.js";
 import { mountEditorScene } from "./editor/editorScene/editorSceneRuntime.js";
@@ -110,6 +111,7 @@ export default function App() {
       ) : null}
       {ready ? (
         <>
+          <MammothCompassHud />
           <EditorApartmentLayoutLoadingOverlay />
           <EditorViewportStatsStack />
           <EditorChrome />

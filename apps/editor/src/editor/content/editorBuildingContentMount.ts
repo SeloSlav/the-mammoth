@@ -34,7 +34,8 @@ import {
 import { applyEditorMaterialsToFloorPlacement } from "./applyEditorMaterials.js";
 import type { EditorMode, EditorWorkspace } from "../../state/editorStore.js";
 import type { StairWellAuthoringScope } from "@the-mammoth/world";
-import { buildOwnedApartmentAuthoringShell } from "../myApartment/editorMyApartmentAuthoringShell.js";
+import { buildMyApartmentAuthoringShell } from "../myApartment/editorMyApartmentAuthoringShell.js";
+import type { MyApartmentAuthoringTarget } from "../../state/editorStoreTypes.js";
 
 function buildPrefabPreview(def: PrefabDef): THREE.Group {
   const root = new THREE.Group();
@@ -88,6 +89,8 @@ export function buildEditorStructuralRoot(args: {
   stairWellDef: StairWellDef;
   stairWellAuthorScope: StairWellAuthoringScope;
   myApartmentPreviewUnitId: string;
+  myApartmentAuthoringTarget: MyApartmentAuthoringTarget;
+  myApartmentCorridorLevelIndex: number;
   textureLoader: THREE.TextureLoader;
   emptyFloorDoc: (floorDocId: string) => FloorDoc;
 }): THREE.Group {
@@ -199,11 +202,13 @@ export function buildEditorStructuralRoot(args: {
   }
 
   if (args.mode === "my_apartment_layout") {
-    return buildOwnedApartmentAuthoringShell({
+    return buildMyApartmentAuthoringShell({
+      authoringTarget: args.myApartmentAuthoringTarget,
       ownedApartmentBuiltins: args.ownedApartmentBuiltins,
       typicalFloorDoc: args.floorDocs[TYPICAL_FLOOR_DOC_ID],
       building: args.building,
       previewUnitId: args.myApartmentPreviewUnitId,
+      corridorLevelIndex: args.myApartmentCorridorLevelIndex,
     });
   }
 

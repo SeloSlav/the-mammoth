@@ -95,6 +95,13 @@ export function describeEditorSaveTarget(args: {
   }
 
   if (mode === "my_apartment_layout") {
+    if (workspace === "corridor") {
+      return {
+        kind: "local",
+        title: "Local — Floor 19 corridor builtins",
+        detail: "content/apartment/floor_19_corridor_builtins.json (corridor décor and ceiling fixtures)",
+      };
+    }
     return {
       kind: "local",
       title: "Local — OwnedApartmentBuiltinsDoc",

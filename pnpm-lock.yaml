@@ -639,9 +639,15 @@ importers:
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
       eslint:
         specifier: ^9.39.4
         version: 9.39.4
+      react:
+        specifier: ^19.2.4
+        version: 19.2.5
       typescript:
         specifier: ~6.0.2
         version: 6.0.2

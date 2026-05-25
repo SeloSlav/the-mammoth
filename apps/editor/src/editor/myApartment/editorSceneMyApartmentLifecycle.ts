@@ -21,11 +21,12 @@ import {
 } from "./editorMyApartmentMountUpdate.js";
 
 import {
-
-  ownedApartmentFractionMappingForEditor,
-
+  resolveMyApartmentAuthoringFractionMappingForEditor,
+  resolveMyApartmentAuthoringInteriorHeightM,
+} from "./editorMyApartmentAuthoringContext.js";
+import {
   resolveOwnedApartmentAuthoringLayoutForEditor,
-
+  type OwnedApartmentFractionToPreviewXZ,
 } from "./editorMyApartmentAuthoringShell.js";
 
 import { TYPICAL_FLOOR_DOC_ID } from "@the-mammoth/world";
@@ -133,9 +134,12 @@ export function createEditorSceneMyApartmentLifecycle(
       building: st.building,
       previewUnitId: st.myApartmentPreviewUnitId,
     });
-    const authoringFractionMapping = ownedApartmentFractionMappingForEditor({
-      layout,
-      builtinsFallbackPreviewM: st.ownedApartmentBuiltins.previewSizeM,
+    const authoringFractionMapping = resolveMyApartmentAuthoringFractionMappingForEditor({
+      myApartmentAuthoringTarget: st.myApartmentAuthoringTarget,
+      floorDocs: st.floorDocs,
+      building: st.building,
+      myApartmentPreviewUnitId: st.myApartmentPreviewUnitId,
+      ownedApartmentBuiltins: st.ownedApartmentBuiltins,
     });
     const template = await reloadEditorMyApartmentDecorTemplate(decorTemplates, modelRelPath);
     if (!template || disposed) return;
@@ -247,16 +251,20 @@ export function createEditorSceneMyApartmentLifecycle(
 
       });
 
-      const authoringFractionMapping = ownedApartmentFractionMappingForEditor({
-
-        layout,
-
-        builtinsFallbackPreviewM: doc.previewSizeM,
-
+      const authoringFractionMapping = resolveMyApartmentAuthoringFractionMappingForEditor({
+        myApartmentAuthoringTarget: st.myApartmentAuthoringTarget,
+        floorDocs: st.floorDocs,
+        building: st.building,
+        myApartmentPreviewUnitId: st.myApartmentPreviewUnitId,
+        ownedApartmentBuiltins: doc,
       });
       const unitBounds = apartmentUnitBoundsFromAuthoringFractionMapping(
         authoringFractionMapping,
-        layout?.shellPlan.vh ?? 3,
+        resolveMyApartmentAuthoringInteriorHeightM({
+          myApartmentAuthoringTarget: st.myApartmentAuthoringTarget,
+          floorDocs: st.floorDocs,
+          layout,
+        }),
       );
 
       if (!mount) {
@@ -279,7 +287,9 @@ export function createEditorSceneMyApartmentLifecycle(
 
           unitBounds,
 
-          st.myApartmentPreviewUnitKey,
+          st.myApartmentAuthoringTarget === "floor_19_corridor"
+            ? ""
+            : st.myApartmentPreviewUnitKey,
 
         );
 
@@ -295,7 +305,9 @@ export function createEditorSceneMyApartmentLifecycle(
           authoringFractionMapping,
           syncKind === "none" ? "full" : syncKind,
           prevMountInputs.placedItems,
-          st.myApartmentPreviewUnitKey,
+          st.myApartmentAuthoringTarget === "floor_19_corridor"
+            ? ""
+            : st.myApartmentPreviewUnitKey,
         );
       }
 
@@ -348,15 +360,20 @@ export function createEditorSceneMyApartmentLifecycle(
 
   function resyncMountPresentationAfterMeshEdit(
     shellRoot: THREE.Object3D,
-    authoringFractionMapping: ReturnType<typeof ownedApartmentFractionMappingForEditor>,
+    authoringFractionMapping: OwnedApartmentFractionToPreviewXZ,
     layout: ReturnType<typeof resolveOwnedApartmentAuthoringLayoutForEditor>,
     kind: "decor-only" | "walls-only" | "mirrors-only",
     structuralDecorRebuild: boolean,
   ): void {
     if (!mount) return;
+    const st = useEditorStore.getState();
     const unitBounds = apartmentUnitBoundsFromAuthoringFractionMapping(
       authoringFractionMapping,
-      layout?.shellPlan.vh ?? 3,
+      resolveMyApartmentAuthoringInteriorHeightM({
+        myApartmentAuthoringTarget: st.myApartmentAuthoringTarget,
+        floorDocs: st.floorDocs,
+        layout,
+      }),
     );
     resyncEditorMyApartmentMountPresentationAfterEdit(kind, {
       mount,
@@ -389,9 +406,12 @@ export function createEditorSceneMyApartmentLifecycle(
       building: st.building,
       previewUnitId: st.myApartmentPreviewUnitId,
     });
-    const authoringFractionMapping = ownedApartmentFractionMappingForEditor({
-      layout,
-      builtinsFallbackPreviewM: st.ownedApartmentBuiltins.previewSizeM,
+    const authoringFractionMapping = resolveMyApartmentAuthoringFractionMappingForEditor({
+      myApartmentAuthoringTarget: st.myApartmentAuthoringTarget,
+      floorDocs: st.floorDocs,
+      building: st.building,
+      myApartmentPreviewUnitId: st.myApartmentPreviewUnitId,
+      ownedApartmentBuiltins: st.ownedApartmentBuiltins,
     });
     const doc = st.ownedApartmentBuiltins;
     let structuralDecorRebuild = false;
@@ -418,7 +438,9 @@ export function createEditorSceneMyApartmentLifecycle(
           doc,
           authoringFractionMapping,
           previousMountInputs.placedItems,
-          st.myApartmentPreviewUnitKey,
+          st.myApartmentAuthoringTarget === "floor_19_corridor"
+            ? ""
+            : st.myApartmentPreviewUnitKey,
         );
         structuralDecorRebuild = decorResult.structuralRebuild;
       }

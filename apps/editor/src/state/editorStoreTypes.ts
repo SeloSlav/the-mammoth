@@ -21,7 +21,7 @@ import type {
 } from "../editor/content/editorContentDiscovery.js";
 
 /** Top-level authoring surface (workspace buttons). */
-export type EditorWorkspace = "apartment" | "cab" | "landing" | "stairwell";
+export type EditorWorkspace = "apartment" | "corridor" | "cab" | "landing" | "stairwell";
 
 /** Landing workspace: shared door kit vs streamed documents. */
 export type LandingDocKind = "kit" | "interior" | "cell" | "prefab" | "floor_override";
@@ -59,6 +59,8 @@ export type FpAuthorSubjectKind = "weapon" | "consumable";
 export type TransformMode = "translate" | "rotate" | "scale";
 export type ApartmentLayoutSource = "owned_default" | "profile" | "unassigned";
 
+export type MyApartmentAuthoringTarget = "unit" | "floor_19_corridor";
+
 export type FpAuthorPickMeta = { id: string; label: string };
 
 export type EditorMaterialMeta = {
@@ -93,12 +95,17 @@ export type HistoryEntry = {
   activeApartmentLayoutSource: ApartmentLayoutSource;
   activeApartmentLayoutProfileId: string | null;
   ownedApartmentBuiltins: OwnedApartmentBuiltinsDoc;
+  myApartmentAuthoringTarget: MyApartmentAuthoringTarget;
+  myApartmentCorridorLevelIndex: number;
+  myApartmentCorridorPreviewKey: string;
+  floor19CorridorBuiltins: OwnedApartmentBuiltinsDoc;
   selectedId: string | null;
   /** {@link EditorMode.my_apartment_layout} only — additional décor/wall selection ids excluding {@link selectedId}. */
   myApartmentMultiselectExtraIds: readonly string[];
   dirty: boolean;
   /** True after in-memory edits to {@link ownedApartmentBuiltins} until successfully written to disk. */
   ownedApartmentBuiltinsNeedsDiskFlush: boolean;
+  floor19CorridorBuiltinsNeedsDiskFlush: boolean;
   contentStructureEpoch: number;
 };
 
@@ -157,6 +164,10 @@ export interface EditorState {
   /** Typical-floor residential slab shown in apartment workspace preview (`unit_e_003` = player spawn home). */
   myApartmentPreviewUnitId: string;
   myApartmentPreviewUnitKey: string;
+  /** Stack `levelIndex` for corridor layout authoring (`corridor_main`). */
+  myApartmentCorridorLevelIndex: number;
+  /** `{floorDocId}|{levelIndex}|corridor_main` — mirrors apartment unit keys. */
+  myApartmentCorridorPreviewKey: string;
   shadowsEnabled: boolean;
   useHdriEnvironment: boolean;
   flySpeedMps: number;
@@ -173,11 +184,17 @@ export interface EditorState {
   fpAuthorConsumableId: FpAuthorConsumableId;
   /** Bed / wardrobe / footlocker fractions plus imported decor — mirrored to `content/apartment/owned_apartment_builtins.json`. */
   ownedApartmentBuiltins: OwnedApartmentBuiltinsDoc;
+  /** Active apartment-layout authoring surface — unit hull vs floor 19 corridor. */
+  myApartmentAuthoringTarget: MyApartmentAuthoringTarget;
+  /** Backing store for {@link EDITOR_FLOOR_19_CORRIDOR_BUILTINS_FILE}. */
+  floor19CorridorBuiltins: OwnedApartmentBuiltinsDoc;
   /**
    * Set when `ownedApartmentBuiltins` changes in memory; cleared after a successful save of that JSON.
    * Lets "Save to disk" persist apartment decor even after leaving {@link EditorMode.my_apartment_layout}.
    */
   ownedApartmentBuiltinsNeedsDiskFlush: boolean;
+  /** Set when corridor builtins change until written to {@link EDITOR_FLOOR_19_CORRIDOR_BUILTINS_FILE}. */
+  floor19CorridorBuiltinsNeedsDiskFlush: boolean;
   contentStructureEpoch: number;
   historyPast: HistoryEntry[];
   historyFuture: HistoryEntry[];
@@ -242,6 +259,12 @@ export interface EditorState {
   setMyApartmentLayoutLoadingMessage: (message: string | null) => void;
   setMyApartmentPreviewUnitId: (unitId: string) => void;
   setMyApartmentPreviewUnit: (input: { unitKey: string; unitId: string }) => void;
+  setMyApartmentCorridorPreviewFloor: (input: {
+    levelIndex: number;
+    floorDocId: string;
+    corridorKey: string;
+  }) => void;
+  setMyApartmentAuthoringTarget: (target: MyApartmentAuthoringTarget) => void;
   setActiveApartmentLayoutSource: (source: ApartmentLayoutSource) => void;
   setActiveApartmentLayoutProfileId: (profileId: string | null) => void;
   createApartmentLayoutProfileFromCurrent: (name: string) => string | null;
@@ -263,6 +286,7 @@ export interface EditorState {
     fn: (d: OwnedApartmentBuiltinsDoc) => OwnedApartmentBuiltinsDoc,
   ) => void;
   clearOwnedApartmentBuiltinsDiskFlushFlag: () => void;
+  clearFloor19CorridorBuiltinsDiskFlushFlag: () => void;
   clearApartmentUnitLayoutProfilesDiskFlushFlag: () => void;
 
   getActiveFloorDoc: () => FloorDoc | undefined;

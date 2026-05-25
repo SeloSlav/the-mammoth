@@ -41,6 +41,10 @@ import {
   collectFpSessionUnitInteriorMeshEntries,
   collectFpSessionTopFloorResidentialUnitShellMeshes,
 } from "./fpSession/fpSessionUnitInteriorShellMeshes.js";
+import {
+  FP_FLOOR_19_CORRIDOR_DECOR_ROOT_NAME,
+  mountFpFloor19CorridorCeilingLights,
+} from "./fpSession/fpSessionCorridorCeilingLights.js";
 import { installFpSessionTransientDebugConsole } from "./fpSession/fpSessionTransientDebugConsole.js";
 import { createFpSessionFloorPlateVisibility } from "./fpSession/fpSessionFloorPlateVisibility.js";
 import { createFpSessionMoveIntentChannel } from "./fpSession/fpSessionMoveIntentChannel.js";
@@ -370,6 +374,9 @@ export async function mountFpSession(
   scene.add(buildingRoot);
   scene.add(cellRoot);
   buildingRoot.updateMatrixWorld(true);
+  const floor19CorridorCeilingLights = isCombatSim
+    ? null
+    : mountFpFloor19CorridorCeilingLights({ buildingRoot });
   if (!isCombatSim) {
     // Auth backdrop may hide unit shells on the shared megablock cache; FP visibility owns them again.
     restoreUnitInteriorMeshVisibilityAfterAuthView(buildingRoot);
@@ -541,17 +548,18 @@ export async function mountFpSession(
   };
 
   const refreshApartmentInteriorMeshes = () => {
-    const decorRoot = scene.getObjectByName("apartment_unit_decor_root");
-    if (decorRoot) {
+    const tex = scene.userData.mammothFpMetallicReadableEnv;
+    const envTexture = tex instanceof THREE.Texture ? tex : null;
+    const decorRoots = [
+      scene.getObjectByName("apartment_unit_decor_root"),
+      buildingRoot.getObjectByName(FP_FLOOR_19_CORRIDOR_DECOR_ROOT_NAME),
+    ].filter((node): node is THREE.Object3D => node != null);
+    for (const decorRoot of decorRoots) {
       prepareMammothApartmentInteriorContentRoots({
         shellRoot: buildingRoot,
         decorRoot,
       });
-      const tex = scene.userData.mammothFpMetallicReadableEnv;
-      bindMammothApartmentPropReadableEnv(
-        decorRoot,
-        tex instanceof THREE.Texture ? tex : null,
-      );
+      bindMammothApartmentPropReadableEnv(decorRoot, envTexture);
     }
     syncFpViewmodelReadableEnv();
     unitInteriorMeshEntries.length = 0;
@@ -739,6 +747,11 @@ export async function mountFpSession(
       });
   if (!isCombatSim) {
     refreshApartmentInteriorMeshes();
+    if (floor19CorridorCeilingLights) {
+      void floor19CorridorCeilingLights.ready.then(() => {
+        refreshApartmentInteriorMeshes();
+      });
+    }
   }
 
   let sessionDisposed = false;
@@ -2219,6 +2232,7 @@ export async function mountFpSession(
     fpApartmentDecorMeshes.dispose();
     fpBalconyGrow.dispose();
     fpApartmentDoors.dispose();
+    floor19CorridorCeilingLights?.dispose();
     unregisterFpDebugMenuSessionSnapshot();
     setFpActiveStashPanel(null);
     disposeFpSessionDevDebug();

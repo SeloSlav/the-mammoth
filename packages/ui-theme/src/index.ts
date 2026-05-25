@@ -61,3 +61,10 @@ export {
   mammothIssuerSocialMetaHead,
   type MammothIssuerSocialHeadOpts,
 } from "./mammothSiteMeta.js";
+export {
+  getMammothCompassHeadingRad,
+  publishMammothCompassHeadingFromForwardXZ,
+  resetMammothCompassHeading,
+  subscribeMammothCompassHeading,
+} from "./compassHeading.js";
+export { MammothCompassHud } from "./MammothCompassHud.js";

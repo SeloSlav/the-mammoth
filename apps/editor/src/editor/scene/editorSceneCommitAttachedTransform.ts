@@ -8,9 +8,10 @@ import {
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
 } from "@the-mammoth/schemas";
 import { useEditorStore } from "../../state/editorStore.js";
+import { resolveMyApartmentAuthoringFractionMappingForEditor } from "../myApartment/editorMyApartmentAuthoringContext.js";
 import {
-  ownedApartmentFractionMappingForEditor,
   resolveOwnedApartmentAuthoringLayoutForEditor,
+  type OwnedApartmentFractionToPreviewXZ,
 } from "../myApartment/editorMyApartmentAuthoringShell.js";
 import {
   applyMyApartmentDecorRootScaleFromDoc,
@@ -115,7 +116,7 @@ export type MyApartmentWallPlacementPatch = {
  */
 export function readMyApartmentWallPlacementPatchFromSceneRoot(
   targetRoot: THREE.Object3D,
-  fractionMapping: ReturnType<typeof ownedApartmentFractionMappingForEditor>,
+  fractionMapping: OwnedApartmentFractionToPreviewXZ,
 ): MyApartmentWallPlacementPatch | null {
   if (!(targetRoot instanceof THREE.Group)) return null;
   if (!targetRoot.userData.mammothEditorMyApartmentWallId) return null;
@@ -162,9 +163,12 @@ export function persistAllMyApartmentWallPlacementsFromScene(): boolean {
     building: store.building,
     previewUnitId: store.myApartmentPreviewUnitId,
   });
-  const fractionMapping = ownedApartmentFractionMappingForEditor({
-    layout,
-    builtinsFallbackPreviewM: store.ownedApartmentBuiltins.previewSizeM,
+  const fractionMapping = resolveMyApartmentAuthoringFractionMappingForEditor({
+    myApartmentAuthoringTarget: store.myApartmentAuthoringTarget,
+    floorDocs: store.floorDocs,
+    building: store.building,
+    myApartmentPreviewUnitId: store.myApartmentPreviewUnitId,
+    ownedApartmentBuiltins: store.ownedApartmentBuiltins,
   });
 
   const patches = new Map<string, MyApartmentWallPlacementPatch>();
@@ -409,14 +413,12 @@ export function commitEditorAttachedTransform(opts: {
 
   if (store.mode === "my_apartment_layout") {
     const doc = store.ownedApartmentBuiltins;
-    const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
-      floorDoc: store.floorDocs[TYPICAL_FLOOR_DOC_ID],
+    const m = resolveMyApartmentAuthoringFractionMappingForEditor({
+      myApartmentAuthoringTarget: store.myApartmentAuthoringTarget,
+      floorDocs: store.floorDocs,
       building: store.building,
-      previewUnitId: store.myApartmentPreviewUnitId,
-    });
-    const m = ownedApartmentFractionMappingForEditor({
-      layout,
-      builtinsFallbackPreviewM: doc.previewSizeM,
+      myApartmentPreviewUnitId: store.myApartmentPreviewUnitId,
+      ownedApartmentBuiltins: doc,
     });
 
     if (attached.userData[MY_APARTMENT_OBJECT_GROUP_MANIP_UD] === true) {

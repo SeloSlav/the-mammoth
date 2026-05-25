@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { ownedDefaultApartmentUnitKey } from "@the-mammoth/world";
+import { ownedDefaultApartmentUnitKey, FLOOR_19_GAMEPLAY_LEVEL_INDEX } from "@the-mammoth/world";
 import type { CollisionArtifactsStatus } from "../../editor/content/editorContentDiscovery.js";
 import { reloadEditorFromContent } from "../../editor/bootstrap/editorBootstrap.js";
 import {
@@ -30,6 +30,7 @@ import {
   postSaveStairWell,
   postSaveApartmentUnitLayoutProfiles,
   postSaveOwnedApartmentBuiltins,
+  postSaveFloor19CorridorBuiltins,
 } from "../editorChromeNetwork.js";
 import { resolveOwnedApartmentBuiltinsForDiskWrite } from "../../editor/persistence/resolveOwnedApartmentBuiltinsForDiskWrite.js";
 
@@ -56,6 +57,9 @@ export function useEditorChromeDiskPersistence(
       activeFloorOverrideDocId: s.activeFloorOverrideDocId,
       activeApartmentLayoutSource: s.activeApartmentLayoutSource,
       activeApartmentLayoutProfileId: s.activeApartmentLayoutProfileId,
+      myApartmentAuthoringTarget: s.myApartmentAuthoringTarget,
+      myApartmentCorridorLevelIndex: s.myApartmentCorridorLevelIndex,
+      workspace: s.workspace,
     })),
   );
 
@@ -84,9 +88,13 @@ export function useEditorChromeDiskPersistence(
           ? `Save floor override ${saveLabelSnapshot.activeFloorOverrideDocId}`
           : "Save floor override";
       case "my_apartment_layout":
-        return saveLabelSnapshot.activeApartmentLayoutSource === "owned_default"
-          ? "Save owned default to disk"
-          : "Save profile to disk";
+        return saveLabelSnapshot.workspace === "corridor"
+          ? saveLabelSnapshot.myApartmentCorridorLevelIndex === FLOOR_19_GAMEPLAY_LEVEL_INDEX
+            ? "Save corridor to disk"
+            : "Corridor floor (preview only)"
+          : saveLabelSnapshot.activeApartmentLayoutSource === "owned_default"
+            ? "Save owned default to disk"
+            : "Save profile to disk";
       default:
         return "Save to disk";
     }
@@ -122,8 +130,10 @@ export function useEditorChromeDiskPersistence(
     try {
       const s = useEditorStore.getState();
       const needsOwnedAptBuiltinsFlush = s.ownedApartmentBuiltinsNeedsDiskFlush;
+      const needsFloor19CorridorBuiltinsFlush = s.floor19CorridorBuiltinsNeedsDiskFlush;
       const needsApartmentProfilesFlush = s.apartmentUnitLayoutProfilesNeedsDiskFlush;
       let wroteOwnedApartmentBuiltins = false;
+      let wroteFloor19CorridorBuiltins = false;
       let wroteApartmentProfiles = false;
       if (s.mode === "cab") {
         await postSaveElevatorCab(
@@ -177,32 +187,56 @@ export function useEditorChromeDiskPersistence(
       } else if (s.mode === "my_apartment_layout") {
         requestEditorMyApartmentLayoutPersistFromScene();
         const stAfterPersist = useEditorStore.getState();
-        if (stAfterPersist.activeApartmentLayoutSource === "unassigned") {
-          throw new Error("Create or select an apartment layout profile before saving this apartment.");
-        }
-        if (stAfterPersist.activeApartmentLayoutSource === "profile") {
-          await postSaveApartmentUnitLayoutProfiles(
-            serializeApartmentUnitLayoutProfilesDocPretty(
-              stAfterPersist.apartmentUnitLayoutProfiles,
-            ),
-          );
-          wroteApartmentProfiles = true;
-        } else {
-          if (
-            stAfterPersist.myApartmentPreviewUnitKey !==
-            ownedDefaultApartmentUnitKey(stAfterPersist.building)
-          ) {
+        if (stAfterPersist.workspace === "corridor") {
+          if (stAfterPersist.myApartmentCorridorLevelIndex !== FLOOR_19_GAMEPLAY_LEVEL_INDEX) {
             throw new Error(
-              "Only the player-owned home unit can save owned_apartment_builtins.json. Create this unit's own profile first.",
+              "Only Floor 19 corridor layout can be saved to disk today. Select Floor 19 in the Corridor workspace.",
             );
           }
-          await postSaveOwnedApartmentBuiltins(
-            serializeOwnedApartmentBuiltinsDocPretty(
-              resolveOwnedApartmentBuiltinsForDiskWrite(stAfterPersist),
-            ),
+          await postSaveFloor19CorridorBuiltins(
+            serializeOwnedApartmentBuiltinsDocPretty(stAfterPersist.ownedApartmentBuiltins),
           );
-          wroteOwnedApartmentBuiltins = true;
+          wroteFloor19CorridorBuiltins = true;
+        } else {
+          if (stAfterPersist.activeApartmentLayoutSource === "unassigned") {
+            throw new Error("Create or select an apartment layout profile before saving this apartment.");
+          }
+          if (stAfterPersist.activeApartmentLayoutSource === "profile") {
+            await postSaveApartmentUnitLayoutProfiles(
+              serializeApartmentUnitLayoutProfilesDocPretty(
+                stAfterPersist.apartmentUnitLayoutProfiles,
+              ),
+            );
+            wroteApartmentProfiles = true;
+          } else {
+            if (
+              stAfterPersist.myApartmentPreviewUnitKey !==
+              ownedDefaultApartmentUnitKey(stAfterPersist.building)
+            ) {
+              throw new Error(
+                "Only the player-owned home unit can save owned_apartment_builtins.json. Create this unit's own profile first.",
+              );
+            }
+            await postSaveOwnedApartmentBuiltins(
+              serializeOwnedApartmentBuiltinsDocPretty(
+                resolveOwnedApartmentBuiltinsForDiskWrite(stAfterPersist),
+              ),
+            );
+            wroteOwnedApartmentBuiltins = true;
+          }
         }
+      }
+
+      if (!wroteFloor19CorridorBuiltins && needsFloor19CorridorBuiltinsFlush) {
+        const st = useEditorStore.getState();
+        const corridorDoc =
+          st.workspace === "corridor"
+            ? st.ownedApartmentBuiltins
+            : st.floor19CorridorBuiltins;
+        await postSaveFloor19CorridorBuiltins(
+          serializeOwnedApartmentBuiltinsDocPretty(corridorDoc),
+        );
+        wroteFloor19CorridorBuiltins = true;
       }
 
       if (!wroteOwnedApartmentBuiltins && needsOwnedAptBuiltinsFlush) {
@@ -228,6 +262,9 @@ export function useEditorChromeDiskPersistence(
       if (wroteOwnedApartmentBuiltins) {
         useEditorStore.getState().clearOwnedApartmentBuiltinsDiskFlushFlag();
       }
+      if (wroteFloor19CorridorBuiltins) {
+        useEditorStore.getState().clearFloor19CorridorBuiltinsDiskFlushFlag();
+      }
       if (wroteApartmentProfiles) {
         useEditorStore.getState().clearApartmentUnitLayoutProfilesDiskFlushFlag();
       }
@@ -236,12 +273,22 @@ export function useEditorChromeDiskPersistence(
       await refreshCollisionStatus();
       const flushedAptLayoutExtra =
         wroteOwnedApartmentBuiltins && s.mode !== "my_apartment_layout";
-      if (s.mode === "my_apartment_layout" && wroteApartmentProfiles && !wroteOwnedApartmentBuiltins) {
+      const flushedCorridorExtra =
+        wroteFloor19CorridorBuiltins && s.mode !== "my_apartment_layout";
+      if (s.mode === "my_apartment_layout" && wroteFloor19CorridorBuiltins) {
+        setSaveMsg("Saved content/apartment/floor_19_corridor_builtins.json.");
+      } else if (s.mode === "my_apartment_layout" && wroteApartmentProfiles && !wroteOwnedApartmentBuiltins) {
         setSaveMsg("Saved content/apartment/unit_layout_profiles.json.");
-      } else if (s.mode === "my_apartment_layout") {
+      } else if (s.mode === "my_apartment_layout" && wroteOwnedApartmentBuiltins) {
         setSaveMsg(
           "Saved content/apartment/owned_apartment_builtins.json.",
         );
+      } else if (flushedCorridorExtra && flushedAptLayoutExtra) {
+        setSaveMsg(
+          "Saved to content/, owned_apartment_builtins.json, and floor_19_corridor_builtins.json.",
+        );
+      } else if (flushedCorridorExtra) {
+        setSaveMsg("Saved to content/ and content/apartment/floor_19_corridor_builtins.json.");
       } else if (flushedAptLayoutExtra) {
         setSaveMsg(
           "Saved to content/ and content/apartment/owned_apartment_builtins.json (bed / wardrobe / footlocker + imported decor).",

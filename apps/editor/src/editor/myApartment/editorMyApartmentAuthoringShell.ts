@@ -5,14 +5,19 @@ import {
   floorPlaceholderMeshMaterials,
   maxBuildingLevelIndex,
   RESIDENTIAL_UNIT_BALCONY_OVERHANG_M,
+  resolveFloor19CorridorAuthoringFootprint,
+  resolveCorridorEditorShellForAuthoring,
   resolveOwnedApartmentAuthoringPreviewLayout,
   residentialUnitBalconyExteriorEdge,
   residentialUnitHasBalconyBay,
   TYPICAL_FLOOR_DOC_ID,
+  type CorridorAuthoringFootprint,
   type OwnedApartmentAuthoringPreviewLayout,
 } from "@the-mammoth/world";
 import { buildOwnedApartmentDerivedReferenceRoom } from "./editorMyApartmentReferenceEnclosure.js";
-import { EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y } from "./editorMyApartmentMeshes.js";
+import { buildCorridorDerivedReferenceRoom } from "./editorMyApartmentCorridorReferenceEnclosure.js";
+import { EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y } from "./editorMyApartmentDecorClamp.js";
+import type { MyApartmentAuthoringTarget } from "../../state/editorStoreTypes.js";
 /**
  * Canonical preview rectangles for fractions in {@link OwnedApartmentBuiltinsDoc} when mamutica
  * content resolves; otherwise callers fall back to the saved square `previewSizeM`.
@@ -103,6 +108,38 @@ export function ownedApartmentFractionMappingForEditor(args: {
   };
 }
 
+export function floor19CorridorFractionMappingForEditor(args: {
+  footprint: CorridorAuthoringFootprint | null;
+  builtinsFallbackPreviewM: number;
+}): OwnedApartmentFractionToPreviewXZ {
+  if (!args.footprint) {
+    const w = Math.max(2, args.builtinsFallbackPreviewM);
+    return {
+      unitId: "",
+      strictMinX: 0,
+      strictMinZ: 0,
+      spanX: w,
+      spanZ: w,
+      prefabOriginX: 0,
+      prefabOriginZ: 0,
+      prefabFootprintSx: w,
+      prefabFootprintSz: w,
+    };
+  }
+  const { footprint } = args;
+  return {
+    unitId: footprint.corridorObjectId,
+    strictMinX: footprint.strictMinX,
+    strictMinZ: footprint.strictMinZ,
+    spanX: footprint.spanX,
+    spanZ: footprint.spanZ,
+    prefabOriginX: footprint.prefabOriginX,
+    prefabOriginZ: footprint.prefabOriginZ,
+    prefabFootprintSx: footprint.prefabFootprintSx,
+    prefabFootprintSz: footprint.prefabFootprintSz,
+  };
+}
+
 /** Grey authoring slab X extent in preview space (origin = prefab south-west corner). */
 export function authoringPreviewSlabBoundsX(
   spans: Pick<OwnedApartmentFractionToPreviewXZ, "unitId" | "prefabFootprintSx" | "slabFootprintSx">,
@@ -126,6 +163,112 @@ export function authoringPreviewSlabFloorCenterX(
   return (minX + maxX) * 0.5;
 }
 
+function buildAuthoringShellFloorSlab(args: {
+  spanSlabX: number;
+  spanSlabZ: number;
+  mapping: OwnedApartmentFractionToPreviewXZ;
+  interiorCeilingInnerY?: number;
+}): THREE.Group {
+  const root = new THREE.Group();
+  root.name = "editor_owned_apartment_authoring_shell";
+
+  root.userData.editorMyApartmentSlabSx = args.spanSlabX;
+  root.userData.editorMyApartmentSlabSz = args.spanSlabZ;
+  root.userData.editorMyApartmentUnitId = args.mapping.unitId;
+  root.userData.editorMyApartmentStrictMinX = args.mapping.strictMinX;
+  root.userData.editorMyApartmentStrictMinZ = args.mapping.strictMinZ;
+  root.userData.editorMyApartmentStrictSpanX = args.mapping.spanX;
+  root.userData.editorMyApartmentStrictSpanZ = args.mapping.spanZ;
+  root.userData.editorMyApartmentPrefabOriginX = args.mapping.prefabOriginX;
+  root.userData.editorMyApartmentPrefabOriginZ = args.mapping.prefabOriginZ;
+  if (typeof args.interiorCeilingInnerY === "number") {
+    root.userData.editorMyApartmentInteriorCeilingInnerY = args.interiorCeilingInnerY;
+  }
+
+  const floorGeom = new THREE.BoxGeometry(args.spanSlabX, 0.04, args.spanSlabZ);
+  const floor = new THREE.Mesh(floorGeom, floorPlaceholderMeshMaterials.unitFloor);
+  floor.name = "editor_owned_apartment_floor";
+  floor.position.set(
+    authoringPreviewSlabFloorCenterX(args.mapping),
+    EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y - 0.02,
+    args.spanSlabZ * 0.5,
+  );
+  floor.receiveShadow = APARTMENT_INTERIOR_VISUAL_PROFILE.decorShadow.enabled;
+  floor.castShadow = false;
+  floor.userData[MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD] = true;
+  root.add(floor);
+
+  const edge = new THREE.LineSegments(
+    new THREE.EdgesGeometry(floorGeom),
+    new THREE.LineBasicMaterial({ color: 0x8893a5 }),
+  );
+  edge.position.copy(floor.position);
+  root.add(edge);
+
+  return root;
+}
+
+export function buildFloor19CorridorAuthoringShell(args: {
+  ownedApartmentBuiltins: OwnedApartmentBuiltinsDoc;
+  typicalFloorDoc: FloorDoc | undefined;
+  corridorLevelIndex: number;
+}): THREE.Group {
+  const footprint = resolveFloor19CorridorAuthoringFootprint(args.typicalFloorDoc);
+  const mapping = floor19CorridorFractionMappingForEditor({
+    footprint,
+    builtinsFallbackPreviewM: args.ownedApartmentBuiltins.previewSizeM,
+  });
+  const spanSlabX = footprint
+    ? Math.max(2, footprint.prefabFootprintSx)
+    : Math.max(2, mapping.spanX);
+  const spanSlabZ = footprint
+    ? Math.max(2, footprint.prefabFootprintSz)
+    : Math.max(2, mapping.spanZ);
+  const interiorCeilingInnerY =
+    footprint != null
+      ? EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y +
+        (footprint.ceilingInnerY - footprint.floorY)
+      : undefined;
+
+  const root = buildAuthoringShellFloorSlab({
+    spanSlabX,
+    spanSlabZ,
+    mapping,
+    interiorCeilingInnerY,
+  });
+
+  if (args.typicalFloorDoc) {
+    const resolved = resolveCorridorEditorShellForAuthoring({
+      floor: args.typicalFloorDoc,
+      corridorObjectId: footprint?.corridorObjectId,
+      storyLevelIndex: args.corridorLevelIndex,
+    });
+    if (resolved) {
+      root.add(buildCorridorDerivedReferenceRoom({ shellPlan: resolved.plan }));
+    }
+  }
+
+  return root;
+}
+
+export function buildMyApartmentAuthoringShell(args: {
+  authoringTarget: MyApartmentAuthoringTarget;
+  ownedApartmentBuiltins: OwnedApartmentBuiltinsDoc;
+  typicalFloorDoc: FloorDoc | undefined;
+  building: BuildingDoc;
+  previewUnitId?: string;
+  corridorLevelIndex: number;
+}): THREE.Group {
+  if (args.authoringTarget === "floor_19_corridor") {
+    return buildFloor19CorridorAuthoringShell({
+      ownedApartmentBuiltins: args.ownedApartmentBuiltins,
+      typicalFloorDoc: args.typicalFloorDoc,
+      corridorLevelIndex: args.corridorLevelIndex,
+    });
+  }
+  return buildOwnedApartmentAuthoringShell(args);
+}
+
 /**
  * Preview floor + game-derived reference perimeter for owned‑apartment builtin authoring.
  *
@@ -139,9 +282,6 @@ export function buildOwnedApartmentAuthoringShell(args: {
   building: BuildingDoc;
   previewUnitId?: string;
 }): THREE.Group {
-  const root = new THREE.Group();
-  root.name = "editor_owned_apartment_authoring_shell";
-
   const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
     floorDoc: args.typicalFloorDoc,
     building: args.building,
@@ -164,42 +304,15 @@ export function buildOwnedApartmentAuthoringShell(args: {
     ? Math.max(2, 2 * layout.shellPlan.hz)
     : Math.max(2, mapping.spanZ);
 
-  root.userData.editorMyApartmentSlabSx = spanSlabX;
-  root.userData.editorMyApartmentSlabSz = spanSlabZ;
-  /** Lets pose clamps match fraction encoding (0..1 along strict hull); see `clampPreviewXZToAuthoringInterior`. */
-  root.userData.editorMyApartmentUnitId = mapping.unitId;
-  root.userData.editorMyApartmentStrictMinX = mapping.strictMinX;
-  root.userData.editorMyApartmentStrictMinZ = mapping.strictMinZ;
-  root.userData.editorMyApartmentStrictSpanX = mapping.spanX;
-  root.userData.editorMyApartmentStrictSpanZ = mapping.spanZ;
-  root.userData.editorMyApartmentPrefabOriginX = mapping.prefabOriginX;
-  root.userData.editorMyApartmentPrefabOriginZ = mapping.prefabOriginZ;
-
-  /** Inner ceiling Y in authoring-shell space (`slabTop + shellPlan.vh`); decor AABB max Y clamps below this minus slack. */
-  if (layout?.shellPlan) {
-    root.userData.editorMyApartmentInteriorCeilingInnerY =
-      EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + layout.shellPlan.vh;
-  }
-
-  const floorGeom = new THREE.BoxGeometry(spanSlabX, 0.04, spanSlabZ);
-  const floor = new THREE.Mesh(floorGeom, floorPlaceholderMeshMaterials.unitFloor);
-  floor.name = "editor_owned_apartment_floor";
-  floor.position.set(
-    authoringPreviewSlabFloorCenterX(mapping),
-    EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y - 0.02,
-    spanSlabZ * 0.5,
-  );
-  floor.receiveShadow = APARTMENT_INTERIOR_VISUAL_PROFILE.decorShadow.enabled;
-  floor.castShadow = false;
-  floor.userData[MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD] = true;
-  root.add(floor);
-
-  const edge = new THREE.LineSegments(
-    new THREE.EdgesGeometry(floorGeom),
-    new THREE.LineBasicMaterial({ color: 0x8893a5 }),
-  );
-  edge.position.copy(floor.position);
-  root.add(edge);
+  const root = buildAuthoringShellFloorSlab({
+    spanSlabX,
+    spanSlabZ,
+    mapping,
+    interiorCeilingInnerY:
+      layout?.shellPlan != null
+        ? EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + layout.shellPlan.vh
+        : undefined,
+  });
 
   if (layout && args.typicalFloorDoc && layout.shellPlan) {
     const placed = args.typicalFloorDoc.objects.find(

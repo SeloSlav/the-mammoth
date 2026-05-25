@@ -1,17 +1,18 @@
 import * as THREE from "three";
 import type { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { EDITOR_ORBIT_KEYBOARD_YAW_RAD_PER_SEC } from "./editorOrbitSpeeds.js";
 import { editorKeyboardTargetIsFormField } from "./editorSceneTransformModeHotkeys.js";
 import { demandEditorSceneRender } from "./editorSceneRenderDemand.js";
 
-type OrbitMoveAxis = "forward" | "back" | "left" | "right" | "up" | "down";
+type OrbitMoveAxis = "forward" | "back" | "left" | "right" | "orbitLeft" | "orbitRight";
 
 const ORBIT_MOVE_KEY_CODES: Readonly<Record<string, OrbitMoveAxis>> = {
   KeyW: "forward",
   KeyS: "back",
   KeyA: "left",
   KeyD: "right",
-  KeyQ: "up",
-  KeyE: "down",
+  KeyQ: "orbitLeft",
+  KeyE: "orbitRight",
 };
 
 export function createEditorOrbitKeyboardMove(deps: {
@@ -27,8 +28,8 @@ export function createEditorOrbitKeyboardMove(deps: {
     back: 0,
     left: 0,
     right: 0,
-    up: 0,
-    down: 0,
+    orbitLeft: 0,
+    orbitRight: 0,
   };
 
   const forward = new THREE.Vector3();
@@ -64,8 +65,8 @@ export function createEditorOrbitKeyboardMove(deps: {
       moveState.back +
       moveState.left +
       moveState.right +
-      moveState.up +
-      moveState.down >
+      moveState.orbitLeft +
+      moveState.orbitRight >
     0;
 
   const update = (dt: number): void => {
@@ -73,8 +74,13 @@ export function createEditorOrbitKeyboardMove(deps: {
 
     const forwardAxis = moveState.forward - moveState.back;
     const strafeAxis = moveState.right - moveState.left;
-    const verticalAxis = moveState.up - moveState.down;
-    if (forwardAxis === 0 && strafeAxis === 0 && verticalAxis === 0) return;
+    const yawAxis = moveState.orbitLeft - moveState.orbitRight;
+
+    if (yawAxis !== 0) {
+      orbitControls.rotateLeft(yawAxis * EDITOR_ORBIT_KEYBOARD_YAW_RAD_PER_SEC * dt);
+    }
+
+    if (forwardAxis === 0 && strafeAxis === 0) return;
 
     camera.getWorldDirection(forward).normalize();
     right.crossVectors(forward, worldUp);
@@ -88,7 +94,6 @@ export function createEditorOrbitKeyboardMove(deps: {
     delta.set(0, 0, 0);
     delta.addScaledVector(forward, forwardAxis * speed);
     delta.addScaledVector(right, strafeAxis * speed);
-    delta.addScaledVector(worldUp, verticalAxis * speed);
 
     camera.position.add(delta);
     orbitControls.target.add(delta);

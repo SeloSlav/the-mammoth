@@ -11,6 +11,9 @@ export const EDITOR_DOOR_DIR = "door";
 export const EDITOR_APARTMENT_KIT_FILE = "door/apartment_unit_kit.json";
 /** Built-in bed / wardrobe / footlocker layout (normalized to unit hull in-game). */
 export const EDITOR_OWNED_APT_BUILTINS_FILE = "apartment/owned_apartment_builtins.json";
+/** Floor 19 main corridor décor / ceiling fixtures (plate-local fractions). */
+export const EDITOR_FLOOR_19_CORRIDOR_BUILTINS_FILE =
+  "apartment/floor_19_corridor_builtins.json";
 /** Per-apartment layout profiles and unit assignments. */
 export const EDITOR_APARTMENT_UNIT_LAYOUT_PROFILES_FILE =
   "apartment/unit_layout_profiles.json";

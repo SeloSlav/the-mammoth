@@ -15,6 +15,7 @@ import {
 import type { StairWellAuthoringScope } from "@the-mammoth/world";
 import {
   formatOwnedApartmentPreviewUnitKeyHeading,
+  listAuthoringCorridorPreviewFloors,
   listOwnedApartmentAuthoringPreviewUnits,
   ownedDefaultApartmentUnitKey,
 } from "@the-mammoth/world";
@@ -56,7 +57,13 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
   activeApartmentLayoutSource: ApartmentLayoutSource;
   activeApartmentLayoutProfileId: string | null;
   myApartmentPreviewUnitKey: string;
+  myApartmentCorridorPreviewKey: string;
   setMyApartmentPreviewUnit: (input: { unitKey: string; unitId: string }) => void;
+  setMyApartmentCorridorPreviewFloor: (input: {
+    levelIndex: number;
+    floorDocId: string;
+    corridorKey: string;
+  }) => void;
   setActiveApartmentLayoutSource: (source: ApartmentLayoutSource) => void;
   setActiveApartmentLayoutProfileId: (profileId: string | null) => void;
   createApartmentLayoutProfileFromCurrent: (name: string) => string | null;
@@ -86,7 +93,9 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
     activeApartmentLayoutSource,
     activeApartmentLayoutProfileId,
     myApartmentPreviewUnitKey,
+    myApartmentCorridorPreviewKey,
     setMyApartmentPreviewUnit,
+    setMyApartmentCorridorPreviewFloor,
     setActiveApartmentLayoutSource,
     setActiveApartmentLayoutProfileId,
     createApartmentLayoutProfileFromCurrent,
@@ -137,6 +146,10 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
     },
     [apartmentUnitLayoutProfiles, building, floorDocs],
   );
+  const corridorPreviewFloors = useMemo(
+    () => listAuthoringCorridorPreviewFloors(building, (floorDocId) => floorDocs[floorDocId]),
+    [building, floorDocs],
+  );
   const previewUnit =
     apartmentPreviewUnits.find((unit) => unit.unitKey === myApartmentPreviewUnitKey) ?? null;
   const assignedProfileDoc = apartmentUnitLayoutProfileForUnitKey(
@@ -153,6 +166,9 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
       ? apartmentUnitLayoutProfiles.profiles.find((p) => p.id === activeApartmentLayoutProfileId)
           ?.name
       : null;
+  const activeCorridorFloor =
+    corridorPreviewFloors.find((floor) => floor.corridorKey === myApartmentCorridorPreviewKey) ??
+    null;
   return (
     <>
       <div id={EDITOR_CHROME_SECTION.authoringTop} style={editorChromePanelTitle}>
@@ -177,6 +193,19 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             onClick={() => setWorkspace("apartment")}
           >
             Apartment
+          </button>
+          <button
+            type="button"
+            style={{
+              ...rowBtn,
+              fontWeight: workspace === "corridor" ? 700 : 400,
+              background: workspace === "corridor" ? "#3a4a7a" : "#2a2a34",
+              border: "1px solid #444",
+              color: "#fff",
+            }}
+            onClick={() => setWorkspace("corridor")}
+          >
+            Corridor
           </button>
           <button
             type="button"
@@ -238,7 +267,7 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
           </button>
         </div>
 
-        {workspace !== "apartment" ? (
+        {workspace !== "apartment" && workspace !== "corridor" ? (
           <p
             style={{
               ...editorChromeHelp,
@@ -248,6 +277,7 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             }}
           >
             <strong>Apartment</strong> authors owned-unit furniture, décor, and partition walls.{" "}
+            <strong>Corridor</strong> authors shared corridor décor and ceiling fixtures.{" "}
             <strong>Cab</strong>, <strong>Corridor Door</strong>, and <strong>Stairwell</strong> edit
             shared vertical-core visuals (
             <code>{contentIndex.elevatorCabRelPath ?? "elevator/cab.json"}</code>,{" "}
@@ -255,6 +285,46 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             <code>{contentIndex.stairWellRelPath ?? "elevator/stairwell.json"}</code>
             ). <strong>FP viewmodel</strong> authors weapons and held consumables.
           </p>
+        ) : null}
+
+        {workspace === "corridor" ? (
+          <>
+            <span style={{ ...editorChromeLabel, marginTop: 12 }}>Preview floor</span>
+            <select
+              style={input}
+              value={myApartmentCorridorPreviewKey}
+              onChange={(e) => {
+                const floor = corridorPreviewFloors.find((f) => f.corridorKey === e.target.value);
+                if (floor) {
+                  setMyApartmentCorridorPreviewFloor({
+                    levelIndex: floor.levelIndex,
+                    floorDocId: floor.floorDocId,
+                    corridorKey: floor.corridorKey,
+                  });
+                }
+              }}
+            >
+              {corridorPreviewFloors.map((floor) => (
+                <option key={floor.corridorKey} value={floor.corridorKey}>
+                  {floor.label}
+                  {floor.hasPersistedBuiltins ? " — disk-backed" : ""}
+                </option>
+              ))}
+            </select>
+            <p style={editorChromeHelp}>
+              {activeCorridorFloor?.hasPersistedBuiltins ? (
+                <>
+                  Editing corridor props for {activeCorridorFloor.label}. Saves to{" "}
+                  <code style={{ fontSize: 10 }}>floor_19_corridor_builtins.json</code>.
+                </>
+              ) : (
+                <>
+                  Previewing {activeCorridorFloor?.label ?? "this floor"} — placement is session-only
+                  until more floors get disk-backed corridor docs.
+                </>
+              )}
+            </p>
+          </>
         ) : null}
 
         {workspace === "stairwell" ? (
@@ -310,10 +380,10 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
           </select>
           <p style={editorChromeHelp}>
             {assignedProfileName
-              ? `This unit owns layout profile "${assignedProfileName}". Selecting it loads that profile.`
+              ? `Editing layout profile "${assignedProfileName}" for this unit.`
               : previewUnit?.isPlayerSpawnHome
-                ? "This player-owned unit is using the protected default layout until you assign a profile."
-                : "No profile assigned yet — this unit starts from an empty draft until you save a new profile."}
+                ? "Editing the player-owned default layout for this unit."
+                : "Editing an empty draft for this unit — save as a profile to persist."}
           </p>
 
           <EditorChromeGroupTitleIcon icon={faDiagramProject}>Layout profile</EditorChromeGroupTitleIcon>
@@ -343,18 +413,16 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
           </select>
           {activeProfileName ? (
             <p style={editorChromeHelp}>
-              Editing this unit&apos;s profile <strong>{activeProfileName}</strong>. Saves go to
-              unit layout profiles, not the player-owned default.
+              Saves go to unit layout profiles, not the player-owned default.
             </p>
           ) : activeApartmentLayoutSource === "owned_default" ? (
             <p style={editorChromeHelp}>
-              Editing the protected player-owned fallback (
-              <code style={{ fontSize: 10 }}>owned_apartment_builtins.json</code>).
+              Saves to{" "}
+              <code style={{ fontSize: 10 }}>owned_apartment_builtins.json</code>.
             </p>
           ) : (
             <p style={editorChromeHelp}>
-              Empty draft — use <strong>Save as new profile</strong> to create a layout that belongs
-              to this unit.
+              Empty draft — use <strong>Save as new profile</strong> below.
             </p>
           )}
 
@@ -376,11 +444,11 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
               Save as new profile
             </button>
           </div>
-          <p style={editorChromeHelp}>
-            Create a profile once for a new unit. After that, keep editing the assigned profile and
-            use the disk save below to update it.
-          </p>
+        </div>
+      ) : null}
 
+      {workspace === "apartment" || workspace === "corridor" ? (
+        <div style={{ ...editorChromeSection, scrollMarginTop: 6 }}>
           <EditorChromeGroupTitleIcon icon={faFloppyDisk}>Disk</EditorChromeGroupTitleIcon>
           <span style={{ ...label, marginTop: 0 }}>Content (JSON on disk)</span>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -394,10 +462,15 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
               </button>
             ) : null}
           </div>
-          {!canSaveContentToDisk ? (
+          {!canSaveContentToDisk && workspace === "apartment" ? (
             <p style={editorChromeHelp}>
               This empty draft has no disk destination yet. Use <strong>Save as new profile</strong>{" "}
               once to create and assign one.
+            </p>
+          ) : null}
+          {!canSaveContentToDisk && workspace === "corridor" ? (
+            <p style={editorChromeHelp}>
+              Only Floor 19 has a disk-backed corridor doc today. Other floors are preview-only.
             </p>
           ) : null}
           <p style={editorChromeHelp}>

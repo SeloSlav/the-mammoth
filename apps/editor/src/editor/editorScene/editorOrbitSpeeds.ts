@@ -24,6 +24,9 @@ export const EDITOR_ORBIT_ROTATE_SPEED_MAX = 4;
 export const EDITOR_ORBIT_PAN_SPEED_MIN = 0.12;
 export const EDITOR_ORBIT_PAN_SPEED_MAX = 42;
 
+/** Horizontal in-place orbit while holding Q / E (rad/s before {@link OrbitControls#rotateSpeed}). */
+export const EDITOR_ORBIT_KEYBOARD_YAW_RAD_PER_SEC = 2.85;
+
 export type EditorOrbitDistanceInvariantSpeeds = {
   zoomSpeed: number;
   rotateSpeed: number;

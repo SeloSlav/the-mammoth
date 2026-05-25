@@ -19,6 +19,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import {
   isStairWellOpeningProxyId,
+  FLOOR_19_GAMEPLAY_LEVEL_INDEX,
   LANDING_DOOR_OPENING_PROXY_ID,
 } from "@the-mammoth/world";
 import { spawnInFrontOfCamera } from "../editor/bridges/spawnBridge.js";
@@ -84,6 +85,9 @@ export function EditorChrome() {
     activePrefabDefId,
     activeFloorOverrideDocId,
     myApartmentPreviewUnitKey,
+    myApartmentAuthoringTarget,
+    myApartmentCorridorPreviewKey,
+    myApartmentCorridorLevelIndex,
     selectedId,
     dirty,
     collisionArtifactsStatus,
@@ -106,6 +110,7 @@ export function EditorChrome() {
     setGridSnapM,
     setStairWellAuthorScope,
     setMyApartmentPreviewUnit,
+    setMyApartmentCorridorPreviewFloor,
     setActiveApartmentLayoutSource,
     setActiveApartmentLayoutProfileId,
     createApartmentLayoutProfileFromCurrent,
@@ -317,11 +322,18 @@ export function EditorChrome() {
   const input = editorChromeInput;
   const rowBtn = editorChromeRowBtn;
   const isUnassignedApartmentLayoutDraft =
-    mode === "my_apartment_layout" && activeApartmentLayoutSource === "unassigned";
+    mode === "my_apartment_layout" &&
+    workspace === "apartment" &&
+    activeApartmentLayoutSource === "unassigned";
+  const isNonPersistedCorridorFloor =
+    mode === "my_apartment_layout" &&
+    workspace === "corridor" &&
+    myApartmentCorridorLevelIndex !== FLOOR_19_GAMEPLAY_LEVEL_INDEX;
   const canSaveContentToDisk =
     mode !== "fp_viewmodel" &&
     mode !== "fp_consumable" &&
-    !isUnassignedApartmentLayoutDraft;
+    !isUnassignedApartmentLayoutDraft &&
+    !isNonPersistedCorridorFloor;
   const paletteIds =
     mode === "floor"
       ? floorPrefabIds
@@ -451,7 +463,9 @@ export function EditorChrome() {
           activeApartmentLayoutSource={activeApartmentLayoutSource}
           activeApartmentLayoutProfileId={activeApartmentLayoutProfileId}
           myApartmentPreviewUnitKey={myApartmentPreviewUnitKey}
+          myApartmentCorridorPreviewKey={myApartmentCorridorPreviewKey}
           setMyApartmentPreviewUnit={setMyApartmentPreviewUnit}
+          setMyApartmentCorridorPreviewFloor={setMyApartmentCorridorPreviewFloor}
           setActiveApartmentLayoutSource={setActiveApartmentLayoutSource}
           setActiveApartmentLayoutProfileId={setActiveApartmentLayoutProfileId}
           createApartmentLayoutProfileFromCurrent={createApartmentLayoutProfileFromCurrent}

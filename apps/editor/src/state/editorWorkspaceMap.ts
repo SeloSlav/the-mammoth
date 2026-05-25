@@ -15,12 +15,19 @@ export function landingDocKindToMode(kind: LandingDocKind): EditorMode {
   }
 }
 
+export function isApartmentLayoutWorkspace(
+  workspace: EditorWorkspace,
+): workspace is "apartment" | "corridor" {
+  return workspace === "apartment" || workspace === "corridor";
+}
+
 export function workspaceToInitialMode(
   workspace: EditorWorkspace,
   landingDocKind: LandingDocKind,
 ): EditorMode {
   switch (workspace) {
     case "apartment":
+    case "corridor":
       return "my_apartment_layout";
     case "cab":
       return "cab";

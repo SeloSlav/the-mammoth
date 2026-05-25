@@ -20,10 +20,15 @@ export function cloneHistorySlice(state: EditorState): HistoryEntry {
     activeApartmentLayoutSource: state.activeApartmentLayoutSource,
     activeApartmentLayoutProfileId: state.activeApartmentLayoutProfileId,
     ownedApartmentBuiltins: structuredClone(state.ownedApartmentBuiltins),
+    myApartmentAuthoringTarget: state.myApartmentAuthoringTarget,
+    myApartmentCorridorLevelIndex: state.myApartmentCorridorLevelIndex,
+    myApartmentCorridorPreviewKey: state.myApartmentCorridorPreviewKey,
+    floor19CorridorBuiltins: structuredClone(state.floor19CorridorBuiltins),
     selectedId: state.selectedId,
     myApartmentMultiselectExtraIds: [...state.myApartmentMultiselectExtraIds],
     dirty: state.dirty,
     ownedApartmentBuiltinsNeedsDiskFlush: state.ownedApartmentBuiltinsNeedsDiskFlush,
+    floor19CorridorBuiltinsNeedsDiskFlush: state.floor19CorridorBuiltinsNeedsDiskFlush,
     contentStructureEpoch: state.contentStructureEpoch ?? 0,
   };
 }

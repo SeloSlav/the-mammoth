@@ -465,7 +465,26 @@ export {
   type OwnedApartmentEditorShellPlan,
 } from "./ownedApartmentEditorShell.js";
 export {
-  applyLandingKitPartTransforms,
+  corridorFractionsFromPlateLocalPosition,
+  corridorPlateLocalPositionFromFractions,
+  authoringCorridorPreviewKey,
+  FLOOR_19_CORRIDOR_OBJECT_ID,
+  FLOOR_19_GAMEPLAY_LEVEL_INDEX,
+  listAuthoringCorridorPreviewFloors,
+  resolveFloor19CorridorAuthoringFootprint,
+  resolveFloor19CorridorDecorPoses,
+  seedFloor19CorridorCeilingLightPlacedItems,
+  type AuthoringCorridorPreviewFloorOption,
+  type CorridorAuthoringFootprint,
+  type CorridorDecorPose,
+} from "./corridorAuthoring.js";
+export {
+  corridorEditorShellWallHoleCount,
+  planCorridorEditorShellForPlacedObject,
+  resolveCorridorEditorShellForAuthoring,
+  type CorridorEditorShellPlan,
+} from "./corridorEditorShell.js";
+export {
   buildLandingDoorPreviewRoot,
   rebuildLandingDoorPreviewSwing,
 } from "./landingDoorPreview.js";

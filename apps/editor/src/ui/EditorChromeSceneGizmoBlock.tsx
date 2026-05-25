@@ -264,7 +264,7 @@ export function EditorChromeSceneGizmoBlock(props: {
           lineHeight: 1.35,
         }}
       >
-        Viewport fly: <strong>W A S D</strong> move, <strong>Q / E</strong> down / up. Shortcut:{" "}
+        Viewport fly: <strong>W A S D</strong> move, <strong>Q / E</strong> orbit in place. Shortcut:{" "}
         <strong>H</strong> flips the view 180°.
       </p>
       <span style={{ ...label, display: "block", marginTop: 8 }}>Grid snap (m / deg-ish for rotate)</span>

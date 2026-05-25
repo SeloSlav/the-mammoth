@@ -23,6 +23,10 @@ import { useEditorStore } from "../../state/editorStore.js";
 import type { LandingKitVariant } from "../../state/editorStoreTypes.js";
 import {
   HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
+  FLOOR_19_CORRIDOR_OBJECT_ID,
+  FLOOR_19_GAMEPLAY_LEVEL_INDEX,
+  TYPICAL_FLOOR_DOC_ID,
+  authoringCorridorPreviewKey,
   maxBuildingLevelIndex,
   ownedDefaultApartmentUnitKey,
 } from "@the-mammoth/world";
@@ -32,6 +36,7 @@ import {
   EDITOR_BUILDING_FILE,
   EDITOR_ELEVATOR_DIR,
   EDITOR_APARTMENT_UNIT_LAYOUT_PROFILES_FILE,
+  EDITOR_FLOOR_19_CORRIDOR_BUILTINS_FILE,
   EDITOR_OWNED_APT_BUILTINS_FILE,
 } from "../content/editorContentDiscovery.js";
 
@@ -150,6 +155,7 @@ export async function bootstrapEditorFromContent(): Promise<void> {
   }
 
   let ownedApartmentBuiltins = DEFAULT_OWNED_APARTMENT_BUILTINS_DOC;
+  let floor19CorridorBuiltins = DEFAULT_OWNED_APARTMENT_BUILTINS_DOC;
   let apartmentUnitLayoutProfiles = DEFAULT_APARTMENT_UNIT_LAYOUT_PROFILES_DOC;
   let ownedApartmentBuiltinsLoadFailed = false;
   try {
@@ -161,6 +167,17 @@ export async function bootstrapEditorFromContent(): Promise<void> {
     console.error(
       `[editor bootstrap] Failed to parse content/${EDITOR_OWNED_APT_BUILTINS_FILE}; ` +
         "using built-in default until reload. Saving owned default now would overwrite disk with ~5 items.",
+      err,
+    );
+  }
+  try {
+    floor19CorridorBuiltins = OwnedApartmentBuiltinsDocSchema.parse(
+      await fetchJson(`/content/${EDITOR_FLOOR_19_CORRIDOR_BUILTINS_FILE}`),
+    );
+  } catch (err) {
+    console.error(
+      `[editor bootstrap] Failed to parse content/${EDITOR_FLOOR_19_CORRIDOR_BUILTINS_FILE}; ` +
+        "using built-in default until reload.",
       err,
     );
   }
@@ -213,6 +230,15 @@ export async function bootstrapEditorFromContent(): Promise<void> {
     activeApartmentLayoutProfileId: initialAssignedProfile?.id ?? null,
     ownedApartmentBuiltins: initialApartmentLayoutDoc,
     ownedApartmentBuiltinsNeedsDiskFlush: false,
+    myApartmentAuthoringTarget: "unit",
+    myApartmentCorridorLevelIndex: FLOOR_19_GAMEPLAY_LEVEL_INDEX,
+    myApartmentCorridorPreviewKey: authoringCorridorPreviewKey(
+      TYPICAL_FLOOR_DOC_ID,
+      FLOOR_19_GAMEPLAY_LEVEL_INDEX,
+      FLOOR_19_CORRIDOR_OBJECT_ID,
+    ),
+    floor19CorridorBuiltins,
+    floor19CorridorBuiltinsNeedsDiskFlush: false,
     ...(elevatorCabDef ? { elevatorCabDef } : {}),
     // Bootstrap always lands on the elevator variant so the freshly parsed `landingKitDef` matches
     // what the existing scene-runtime + inspector code expects. Authoring is swapped post-load via
