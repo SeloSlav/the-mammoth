@@ -466,6 +466,8 @@ export function addStairWellPlaceholder(
     def: opts?.def,
     authoringScope,
     sy,
+    L,
+    omitOnlyLanding,
   });
   if (opts?.omitStairwellCigaretteLitter !== true) {
     const litterSearchRoot = opts?.stairGraphicsMergeRoot ?? group.parent ?? group;

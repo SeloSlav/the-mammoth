@@ -323,7 +323,7 @@ function alignSceneToAnchorCorner(
   scene.position.set(-x, -box.min.y, -z);
 }
 
-function findLandingMeshForCorner(
+export function findLandingMeshForCorner(
   root: THREE.Object3D,
   landing: StairCornerLanding,
 ): THREE.Mesh | undefined {

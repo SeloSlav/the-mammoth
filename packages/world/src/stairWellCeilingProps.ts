@@ -7,11 +7,12 @@ import {
   type StairWellDef,
 } from "@the-mammoth/schemas";
 import { clientModelUrlToOwnedApartmentDecorRelPath } from "./stairwellLitterCanonicalScale.js";
-import { loadPropTemplate } from "./stairWellLandingProps.js";
+import { findLandingMeshForCorner, loadPropTemplate } from "./stairWellLandingProps.js";
 import {
   stairWellCeilingPropEditorId,
   type StairWellAuthoringScope,
 } from "./stairWellEditorIds.js";
+import type { StairCornerLanding, StairSwitchbackLayout } from "./stairWellGeometry.js";
 
 export const STAIRWELL_CEILING_LIGHT_MODEL_URL =
   "/static/models/objects/light-ceiling-2.glb";
@@ -49,14 +50,31 @@ export function resolveStairWellCeilingPropsForScope(
   return def.ceilingProps ?? [];
 }
 
+/** First ceiling fixture template for a scope (model + shared yaw/scale). */
+export function resolveStairWellCeilingPropTemplate(
+  def: StairWellDef | undefined,
+  scope: StairWellAuthoringScope,
+): StairWellCeilingProp | undefined {
+  return resolveStairWellCeilingPropsForScope(def, scope).find((prop) =>
+    propAllowedForScope(prop, scope),
+  );
+}
+
+export function stairWellCeilingPropInstanceId(landingIndex: number): string {
+  return `landing_${landingIndex}`;
+}
+
 export function patchStairWellCeilingPropAnchorInDef(
   def: StairWellDef,
   scope: StairWellAuthoringScope,
   propId: string,
   anchorPatch: Partial<StairWellCeilingPropAnchor>,
 ): StairWellDef {
+  const templateId = resolveStairWellCeilingTemplateIdForPatch(def, scope, propId);
+  if (!templateId) return def;
+
   const mergeAnchor = (prop: StairWellCeilingProp): StairWellCeilingProp =>
-    prop.id === propId
+    prop.id === templateId
       ? { ...prop, anchor: { ...prop.anchor, ...anchorPatch } }
       : prop;
 
@@ -68,9 +86,30 @@ export function patchStairWellCeilingPropAnchorInDef(
   return { ...def, ceilingProps: base.map(mergeAnchor) };
 }
 
+function resolveStairWellCeilingTemplateIdForPatch(
+  def: StairWellDef,
+  scope: StairWellAuthoringScope,
+  propOrInstanceId: string,
+): string | null {
+  const props = resolveStairWellCeilingPropsForScope(def, scope);
+  if (props.some((p) => p.id === propOrInstanceId)) return propOrInstanceId;
+  if (props.length > 0 && propOrInstanceId.startsWith("landing_")) {
+    return props[0]!.id;
+  }
+  return null;
+}
+
 export function readStairWellCeilingPropAnchorFromTransform(
   obj: THREE.Object3D,
 ): Partial<StairWellCeilingPropAnchor> | null {
+  const templateId = obj.userData.editorStairCeilingTemplateId as string | undefined;
+  if (templateId) {
+    const u = obj.scale.x;
+    return {
+      yawRad: obj.rotation.y,
+      uniformScale: Number.isFinite(u) && u > 0 ? u : undefined,
+    };
+  }
   const sy = obj.userData.editorStairPreviewSy as number | undefined;
   if (typeof sy !== "number" || !Number.isFinite(sy)) return null;
   const ceilingY = shaftInteriorCeilingYLocal(sy);
@@ -82,66 +121,6 @@ export function readStairWellCeilingPropAnchorFromTransform(
     yawRad: obj.rotation.y,
     uniformScale: Number.isFinite(u) && u > 0 ? u : undefined,
   };
-}
-
-function applyCeilingPropAnchorToWrap(
-  wrap: THREE.Object3D,
-  prop: StairWellCeilingProp,
-  sy: number,
-): void {
-  const ceilingY = shaftInteriorCeilingYLocal(sy);
-  const offsetX = prop.anchor.offsetXM ?? 0;
-  const offsetZ = prop.anchor.offsetZM ?? 0;
-  const dropM = prop.anchor.dropM ?? 0.06;
-  wrap.position.set(offsetX, ceilingY - dropM, offsetZ);
-  wrap.rotation.set(0, prop.anchor.yawRad ?? 0, 0);
-  const u = resolveCeilingPropUniformScale(prop);
-  wrap.scale.set(u, u, u);
-}
-
-function tagStairWellEditorCeilingProp(
-  wrap: THREE.Group,
-  propId: string,
-  scope: StairWellAuthoringScope,
-  sy: number,
-): void {
-  wrap.userData.editorStairCeilingPropId = propId;
-  wrap.userData.editorStairPickId = stairWellCeilingPropEditorId(propId);
-  wrap.userData.editorStairAuthoringScope = scope;
-  wrap.userData.editorStairPreviewSy = sy;
-}
-
-/** Reapply authored anchors from {@link StairWellDef} onto tagged editor/runtime wraps. */
-export function applyStairWellCeilingPropAnchors(
-  root: THREE.Object3D,
-  def: StairWellDef | undefined,
-): void {
-  if (!def) return;
-  root.traverse((obj) => {
-    const propId = obj.userData.editorStairCeilingPropId as string | undefined;
-    if (!propId) return;
-    const scope =
-      (obj.userData.editorStairAuthoringScope as StairWellAuthoringScope | undefined) ??
-      "typical";
-    const sy = obj.userData.editorStairPreviewSy as number | undefined;
-    if (typeof sy !== "number" || !Number.isFinite(sy)) return;
-    const prop = resolveStairWellCeilingPropsForScope(def, scope).find(
-      (entry) => entry.id === propId,
-    );
-    if (!prop) return;
-    applyCeilingPropAnchorToWrap(obj, prop, sy);
-  });
-}
-
-function alignCeilingFixtureToMountPoint(scene: THREE.Object3D): void {
-  _bboxScratch.setFromObject(scene);
-  if (_bboxScratch.isEmpty()) return;
-  _bboxScratch.getCenter(_centerScratch);
-  scene.position.set(
-    -_centerScratch.x,
-    -_bboxScratch.max.y,
-    -_centerScratch.z,
-  );
 }
 
 function resolveCeilingPropUniformScale(prop: StairWellCeilingProp): number {
@@ -156,38 +135,118 @@ function resolveCeilingPropModelRelPath(prop: StairWellCeilingProp): string {
   );
 }
 
+/** Mount point on the landing slab underside, centered in landing-local space. */
+export function landingUndersideCeilingMountLocalY(cl: StairCornerLanding): number {
+  return -cl.thicknessHalf;
+}
+
+export function applyLandingUndersideCeilingPropToWrap(
+  wrap: THREE.Object3D,
+  prop: StairWellCeilingProp,
+  cl: StairCornerLanding,
+): void {
+  wrap.position.set(0, landingUndersideCeilingMountLocalY(cl), 0);
+  wrap.rotation.set(0, prop.anchor.yawRad ?? 0, 0);
+  const u = resolveCeilingPropUniformScale(prop);
+  wrap.scale.set(u, u, u);
+}
+
+function tagStairWellEditorCeilingProp(
+  wrap: THREE.Group,
+  instanceId: string,
+  templateId: string,
+  scope: StairWellAuthoringScope,
+  sy: number,
+): void {
+  wrap.userData.editorStairCeilingPropId = instanceId;
+  wrap.userData.editorStairCeilingTemplateId = templateId;
+  wrap.userData.editorStairPickId = stairWellCeilingPropEditorId(templateId);
+  wrap.userData.editorStairAuthoringScope = scope;
+  wrap.userData.editorStairPreviewSy = sy;
+}
+
+/** Reapply authored template (yaw/scale) and landing underside placement on every instance. */
+export function applyStairWellCeilingPropAnchors(
+  root: THREE.Object3D,
+  def: StairWellDef | undefined,
+): void {
+  if (!def) return;
+  root.traverse((obj) => {
+    const templateId = obj.userData.editorStairCeilingTemplateId as string | undefined;
+    if (!templateId) return;
+    const scope =
+      (obj.userData.editorStairAuthoringScope as StairWellAuthoringScope | undefined) ??
+      "typical";
+    const prop = resolveStairWellCeilingPropsForScope(def, scope).find(
+      (entry) => entry.id === templateId,
+    );
+    if (!prop) return;
+    const landingMesh = obj.parent;
+    const cl = landingMesh?.userData.mammothStairCornerLandingRef as
+      | StairCornerLanding
+      | undefined;
+    if (!cl) return;
+    applyLandingUndersideCeilingPropToWrap(obj, prop, cl);
+  });
+}
+
+function alignCeilingFixtureToMountPoint(scene: THREE.Object3D): void {
+  _bboxScratch.setFromObject(scene);
+  if (_bboxScratch.isEmpty()) return;
+  _bboxScratch.getCenter(_centerScratch);
+  scene.position.set(
+    -_centerScratch.x,
+    -_bboxScratch.max.y,
+    -_centerScratch.z,
+  );
+}
+
 /**
- * Parents ceiling GLBs under each stair segment root (typical + ground share authored offsets).
+ * One flush ceiling fixture per corner landing, centered on the slab underside (parents to the
+ * landing mesh so {@link applyStairWellPartTransforms} moves lights with each deck).
  */
 export function attachStairWellCeilingProps(args: {
   root: THREE.Group;
   def: StairWellDef | undefined;
   authoringScope: StairWellAuthoringScope;
   sy: number;
+  L: StairSwitchbackLayout;
+  omitOnlyLanding?: StairCornerLanding;
 }): void {
-  const props = resolveStairWellCeilingPropsForScope(args.def, args.authoringScope);
-  if (props.length === 0) return;
+  const template = resolveStairWellCeilingPropTemplate(args.def, args.authoringScope);
+  if (!template) return;
 
-  for (const prop of props) {
-    if (!propAllowedForScope(prop, args.authoringScope)) continue;
+  for (const [landingIndex, cl] of args.L.cornerLandings.entries()) {
+    if (args.omitOnlyLanding !== undefined && cl === args.omitOnlyLanding) continue;
 
+    const landingMesh = findLandingMeshForCorner(args.root, cl);
+    if (!landingMesh) continue;
+    landingMesh.userData.mammothSkipFloorGeometryMerge = true;
+
+    const instanceId = stairWellCeilingPropInstanceId(landingIndex);
     const wrap = new THREE.Group();
-    wrap.name = `stairwell_ceiling_light_${prop.id}`;
+    wrap.name = `stairwell_ceiling_light_${instanceId}`;
     wrap.userData.mammothStairwellCeilingLight = true;
-    wrap.userData.mammothApartmentDecorModelRelPath = resolveCeilingPropModelRelPath(prop);
+    wrap.userData.mammothApartmentDecorModelRelPath = resolveCeilingPropModelRelPath(template);
     wrap.userData.mammothApartmentDecorProp = true;
     wrap.userData.mammothUnitInterior = true;
     wrap.userData.mammothSkipFloorGeometryMerge = true;
     wrap.userData.mammothNoCollision = true;
-    tagStairWellEditorCeilingProp(wrap, prop.id, args.authoringScope, args.sy);
-    applyCeilingPropAnchorToWrap(wrap, prop, args.sy);
+    tagStairWellEditorCeilingProp(
+      wrap,
+      instanceId,
+      template.id,
+      args.authoringScope,
+      args.sy,
+    );
+    applyLandingUndersideCeilingPropToWrap(wrap, template, cl);
 
-    args.root.add(wrap);
+    landingMesh.add(wrap);
 
-    const url = prop.modelUrl;
+    const url = template.modelUrl;
     void loadPropTemplate(url).then(
-      (template) => {
-        const scene = template.clone(true);
+      (loaded) => {
+        const scene = loaded.clone(true);
         scene.traverse((o) => {
           if (!(o instanceof THREE.Mesh)) return;
           o.castShadow = false;
@@ -202,7 +261,7 @@ export function attachStairWellCeilingProps(args: {
       },
       (err) => {
         console.warn(
-          `[attachStairWellCeilingProps] failed to load "${url}" for prop "${prop.id}":`,
+          `[attachStairWellCeilingProps] failed to load "${url}" for landing ${landingIndex}:`,
           err,
         );
         wrap.userData.mammothStairwellCeilingLightLoadFailed = true;
@@ -243,4 +302,22 @@ export function allStairwellCeilingLightGroupsReady(root: THREE.Object3D): boole
   const groups = collectStairwellCeilingLightGroups(root);
   if (groups.length === 0) return false;
   return groups.every((group) => group.children.length > 0);
+}
+
+/** Keep yaw/scale in sync across every landing instance sharing a template id. */
+export function syncStairWellCeilingTemplateInstances(
+  segmentRoot: THREE.Object3D,
+  templateId: string,
+  sourceWrap: THREE.Object3D,
+): void {
+  segmentRoot.traverse((obj) => {
+    if (obj.userData.editorStairCeilingTemplateId !== templateId) return;
+    obj.rotation.copy(sourceWrap.rotation);
+    obj.scale.copy(sourceWrap.scale);
+    const cl = obj.parent?.userData.mammothStairCornerLandingRef as
+      | StairCornerLanding
+      | undefined;
+    if (!cl) return;
+    obj.position.set(0, landingUndersideCeilingMountLocalY(cl), 0);
+  });
 }

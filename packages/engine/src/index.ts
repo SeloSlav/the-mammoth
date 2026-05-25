@@ -268,7 +268,11 @@ export {
 } from "./rendering/apartmentDecorMoodGrade.js";
 export {
   applyMammothStairwellCeilingFixtureVisual,
+  collectMammothStairwellCeilingDecorGroups,
+  ensureMammothStairwellCeilingFixtureVisuals,
+  MAMMOTH_STAIRWELL_CEILING_VISUAL_APPLIED_UD,
   syncMammothStairwellCeilingFixturePresentation,
+  syncMammothStairwellCeilingPracticalLights,
 } from "./rendering/stairwellCeilingFixturePresentation.js";
 export {
   createApartmentInteriorWarmEnvMap,

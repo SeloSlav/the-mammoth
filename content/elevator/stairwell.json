@@ -296,31 +296,13 @@
   ],
   "ceilingProps": [
     {
-      "id": "stairwell_ceiling_light_w",
+      "id": "stairwell_ceiling_light",
       "modelUrl": "/static/models/objects/light-ceiling-2.glb",
       "applyToScopes": [
         "typical",
         "ground"
       ],
       "anchor": {
-        "offsetXM": -0.85,
-        "offsetZM": 0,
-        "dropM": 0.06,
-        "yawRad": 0,
-        "uniformScale": 0.19097143292300797
-      }
-    },
-    {
-      "id": "stairwell_ceiling_light_e",
-      "modelUrl": "/static/models/objects/light-ceiling-2.glb",
-      "applyToScopes": [
-        "typical",
-        "ground"
-      ],
-      "anchor": {
-        "offsetXM": 0.85,
-        "offsetZM": 0,
-        "dropM": 0.06,
         "yawRad": 0,
         "uniformScale": 0.19097143292300797
       }

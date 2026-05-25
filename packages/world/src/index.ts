@@ -110,6 +110,11 @@ export {
   resolveStairWellCeilingPropsForScope,
   shaftInteriorCeilingYLocal,
   subscribeStairwellCeilingPropReady,
+  resolveStairWellCeilingPropTemplate,
+  stairWellCeilingPropInstanceId,
+  landingUndersideCeilingMountLocalY,
+  applyLandingUndersideCeilingPropToWrap,
+  syncStairWellCeilingTemplateInstances,
 } from "./stairWellCeilingProps.js";
 export {
   ensureStairwellCigaretteMeshReady,

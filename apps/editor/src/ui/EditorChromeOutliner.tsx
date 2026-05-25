@@ -304,7 +304,9 @@ export function EditorChromeOutliner(props: {
                   }}
                 >
                   {prop.id}{" "}
-                  <span style={{ opacity: 0.65 }}>(ceiling light)</span>
+                  <span style={{ opacity: 0.65 }}>
+                    (underside of each landing, centered)
+                  </span>
                 </button>
               );
             })

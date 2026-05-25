@@ -21,7 +21,13 @@ import {
   syncMammothStairwellCeilingFixturePresentation,
   type ApartmentPracticalLightsMount,
 } from "@the-mammoth/engine";
-import { LANDING_DOOR_OPENING_PROXY_ID, collectStairwellCeilingLightGroups, subscribeStairwellCeilingPropReady } from "@the-mammoth/world";
+import {
+  LANDING_DOOR_OPENING_PROXY_ID,
+  collectStairwellCeilingLightGroups,
+  isStairWellCeilingPropEditorId,
+  subscribeStairwellCeilingPropReady,
+  syncStairWellCeilingTemplateInstances,
+} from "@the-mammoth/world";
 import { useEditorStore } from "../../state/editorStore.js";
 import { disposeSceneEnvironment } from "../scene/disposeSubtree.js";
 import { registerEditorSpawnCalculator } from "../bridges/spawnBridge.js";
@@ -1138,7 +1144,14 @@ export async function mountEditorScene(
         const opening =
           s.mode === "landing_preview" &&
           s.selectedId === LANDING_DOOR_OPENING_PROXY_ID;
+        const stairCeilingTemplate =
+          s.mode === "stairwell_preview" &&
+          s.selectedId != null &&
+          isStairWellCeilingPropEditorId(s.selectedId);
         transformControls.setSize(opening ? 1.35 : 1);
+        if (stairCeilingTemplate && s.transformMode === "translate") {
+          transformControls.setMode("rotate");
+        }
         if (opening) {
           transformControls.setTranslationSnap(null);
           transformControls.setRotationSnap(null);
@@ -1452,6 +1465,21 @@ export async function mountEditorScene(
       }
     }
     applyAnchoredScaleGesture();
+    if (
+      aptSt.mode === "stairwell_preview" &&
+      aptObj?.userData.editorStairCeilingTemplateId &&
+      aptSt.selectedId &&
+      isStairWellCeilingPropEditorId(aptSt.selectedId)
+    ) {
+      let segmentRoot: THREE.Object3D | null = aptObj.parent;
+      while (segmentRoot && segmentRoot.name !== "editor_stair_well_preview") {
+        segmentRoot = segmentRoot.parent;
+      }
+      const templateId = aptObj.userData.editorStairCeilingTemplateId as string;
+      if (segmentRoot) {
+        syncStairWellCeilingTemplateInstances(segmentRoot, templateId, aptObj);
+      }
+    }
     if (aptSt.mode !== "stairwell_preview") {
       commitLevelEditorAttachedTransformToStore();
     }

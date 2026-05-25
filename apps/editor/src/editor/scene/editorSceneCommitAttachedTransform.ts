@@ -369,8 +369,11 @@ export function commitEditorAttachedTransform(opts: {
       const anchorPatch = readStairWellCeilingPropAnchorFromTransform(ceilingPropRoot);
       if (!anchorPatch) return;
       const scope = store.stairWellAuthorScope;
+      const templateId =
+        (ceilingPropRoot.userData.editorStairCeilingTemplateId as string | undefined) ??
+        ceilingPropId;
       store.patchStairWellDef((d) =>
-        patchStairWellCeilingPropAnchorInDef(d, scope, ceilingPropId!, anchorPatch),
+        patchStairWellCeilingPropAnchorInDef(d, scope, templateId, anchorPatch),
       );
       return;
     }

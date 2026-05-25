@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { parseStairWellDef } from "./index.js";
+import { addStairWellPlaceholder } from "./stairWellPlaceholder.js";
 import {
   applyStairWellCeilingPropAnchors,
+  attachStairWellCeilingProps,
+  landingUndersideCeilingMountLocalY,
   patchStairWellCeilingPropAnchorInDef,
   resolveStairWellCeilingPropsForScope,
   shaftInteriorCeilingYLocal,
-  attachStairWellCeilingProps,
+  stairWellCeilingPropInstanceId,
 } from "./stairWellCeilingProps.js";
 import { stairWellCeilingPropEditorId } from "./stairWellEditorIds.js";
 
@@ -23,26 +26,23 @@ describe("shaftInteriorCeilingYLocal", () => {
 });
 
 describe("StairWellDef ceilingProps", () => {
-  it("parses authored stairwell ceiling fixtures", () => {
+  it("parses shared ceiling fixture template", () => {
     const def = parseStairWellDef({
       id: "t",
       version: 1,
+      entryOpening: { widthM: 1, heightM: 2, offsetXM: 0, offsetYM: 0 },
+      groundEntryOpening: { widthM: 1, heightM: 2, offsetXM: 0, offsetYM: 0 },
       ceilingProps: [
         {
-          id: "stairwell_ceiling_light_w",
+          id: "stairwell_ceiling_light",
           modelUrl: "/static/models/objects/light-ceiling-2.glb",
           applyToScopes: ["typical", "ground"],
-          anchor: {
-            offsetXM: -0.85,
-            offsetZM: 0,
-            dropM: 0.06,
-            uniformScale: 0.19097143292300797,
-          },
+          anchor: { yawRad: 0, uniformScale: 0.19 },
         },
       ],
     });
     expect(def.ceilingProps).toHaveLength(1);
-    expect(def.ceilingProps?.[0]?.anchor.offsetXM).toBe(-0.85);
+    expect(def.ceilingProps?.[0]?.anchor.uniformScale).toBe(0.19);
   });
 
   it("parses groundCeilingProps overrides", () => {
@@ -53,29 +53,29 @@ describe("StairWellDef ceilingProps", () => {
       groundEntryOpening: { widthM: 1, heightM: 2, offsetXM: 0, offsetYM: 0 },
       ceilingProps: [
         {
-          id: "light_w",
+          id: "stairwell_ceiling_light",
           modelUrl: "/static/models/objects/light-ceiling-2.glb",
-          anchor: { offsetXM: -0.85 },
+          anchor: { uniformScale: 0.19 },
         },
       ],
       groundCeilingProps: [
         {
-          id: "light_w",
+          id: "stairwell_ceiling_light",
           modelUrl: "/static/models/objects/light-ceiling-2.glb",
-          anchor: { offsetXM: -0.5 },
+          anchor: { uniformScale: 0.22 },
         },
       ],
     });
-    expect(resolveStairWellCeilingPropsForScope(def, "typical")[0]?.anchor.offsetXM).toBe(
-      -0.85,
+    expect(resolveStairWellCeilingPropsForScope(def, "typical")[0]?.anchor.uniformScale).toBe(
+      0.19,
     );
-    expect(resolveStairWellCeilingPropsForScope(def, "ground")[0]?.anchor.offsetXM).toBe(
-      -0.5,
+    expect(resolveStairWellCeilingPropsForScope(def, "ground")[0]?.anchor.uniformScale).toBe(
+      0.22,
     );
   });
 });
 
-describe("stairWellCeilingProp authoring", () => {
+describe("stairWellCeilingProp landing underside placement", () => {
   const baseDef = parseStairWellDef({
     id: "t",
     version: 1,
@@ -83,45 +83,81 @@ describe("stairWellCeilingProp authoring", () => {
     groundEntryOpening: { widthM: 1, heightM: 2, offsetXM: 0, offsetYM: 0 },
     ceilingProps: [
       {
-        id: "stairwell_ceiling_light_w",
+        id: "stairwell_ceiling_light",
         modelUrl: "/static/models/objects/light-ceiling-2.glb",
         applyToScopes: ["typical", "ground"],
-        anchor: { offsetXM: -0.85, offsetZM: 0, dropM: 0.06, uniformScale: 0.19 },
+        anchor: { yawRad: 0.2, uniformScale: 0.19 },
       },
     ],
   });
 
-  it("tags ceiling wraps for editor picking and syncs anchors from def", () => {
+  it("parents one centered fixture per corner landing on the slab underside", () => {
     const root = new THREE.Group();
+    const sx = 4;
     const sy = 3.2;
-    attachStairWellCeilingProps({
-      root,
+    const sz = 4;
+    addStairWellPlaceholder(root, sx, sy, sz, {
       def: baseDef,
       authoringScope: "typical",
-      sy,
+      includeCeiling: false,
     });
-    const wrap = root.children[0] as THREE.Group;
-    expect(wrap.userData.editorStairCeilingPropId).toBe("stairwell_ceiling_light_w");
-    expect(wrap.userData.editorStairPickId).toBe(
-      stairWellCeilingPropEditorId("stairwell_ceiling_light_w"),
-    );
 
-    const patched = patchStairWellCeilingPropAnchorInDef(baseDef, "typical", "stairwell_ceiling_light_w", {
-      offsetXM: -1.1,
+    const landingMeshes: THREE.Mesh[] = [];
+    root.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      if (!o.userData.mammothStairCornerLandingRef) return;
+      landingMeshes.push(o);
     });
-    applyStairWellCeilingPropAnchors(root, patched);
-    expect(wrap.position.x).toBeCloseTo(-1.1, 6);
+    expect(landingMeshes.length).toBeGreaterThan(0);
+
+    const lightWraps: THREE.Group[] = [];
+    for (const landing of landingMeshes) {
+      const cl = landing.userData.mammothStairCornerLandingRef;
+      const child = landing.children.find(
+        (c) => c.userData.mammothStairwellCeilingLight === true,
+      ) as THREE.Group | undefined;
+      expect(child).toBeDefined();
+      expect(child!.position.x).toBeCloseTo(0, 6);
+      expect(child!.position.z).toBeCloseTo(0, 6);
+      expect(child!.position.y).toBeCloseTo(landingUndersideCeilingMountLocalY(cl), 6);
+      expect(child!.userData.editorStairPickId).toBe(
+        stairWellCeilingPropEditorId("stairwell_ceiling_light"),
+      );
+      lightWraps.push(child!);
+    }
+
+    expect(lightWraps.length).toBe(landingMeshes.length);
   });
 
-  it("writes ground scope edits to groundCeilingProps", () => {
+  it("syncs template yaw/scale across instances", () => {
+    const root = new THREE.Group();
+    const sy = 3.2;
+    addStairWellPlaceholder(root, 4, sy, 4, {
+      def: baseDef,
+      authoringScope: "typical",
+      includeCeiling: false,
+    });
+
+    const wraps: THREE.Object3D[] = [];
+    root.traverse((o) => {
+      if (o.userData.mammothStairwellCeilingLight === true) wraps.push(o);
+    });
+    expect(wraps.length).toBeGreaterThan(1);
+    const first = wraps[0] as THREE.Group;
+    first.rotation.y = 0.9;
+    first.scale.setScalar(0.25);
+
     const patched = patchStairWellCeilingPropAnchorInDef(
       baseDef,
-      "ground",
-      "stairwell_ceiling_light_w",
-      { offsetXM: -0.4 },
+      "typical",
+      stairWellCeilingPropInstanceId(0),
+      { yawRad: 0.9, uniformScale: 0.25 },
     );
-    expect(patched.groundCeilingProps).toHaveLength(1);
-    expect(patched.groundCeilingProps?.[0]?.anchor.offsetXM).toBe(-0.4);
-    expect(patched.ceilingProps?.[0]?.anchor.offsetXM).toBe(-0.85);
+    applyStairWellCeilingPropAnchors(root, patched);
+
+    for (const wrap of wraps) {
+      expect(wrap.rotation.y).toBeCloseTo(0.9, 6);
+      expect(wrap.scale.x).toBeCloseTo(0.25, 6);
+    }
   });
 });
