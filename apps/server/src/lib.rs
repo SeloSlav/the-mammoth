@@ -10,6 +10,7 @@ mod apartment_door;
 mod apartment_interior_anchors;
 mod apartment_stash_location_match;
 mod apartment_stash_rules;
+mod apartment_utilities;
 mod apartments;
 mod auth;
 mod balcony_grow;
@@ -24,6 +25,7 @@ mod feature_flags;
 mod firearm;
 mod fish_tank;
 mod fish_tank_filter;
+mod game_time;
 mod generated_apartment_doors;
 mod generated_collision_solids;
 mod generated_walk_surfaces;
@@ -41,7 +43,6 @@ mod pose;
 mod spawn_routing;
 mod stair_runtime_overlay;
 mod water_container;
-mod world_day;
 mod world_sound;
 
 use crate::movement::player_input;
@@ -66,6 +67,7 @@ pub fn init(ctx: &ReducerContext) {
     crafting::start_hud_toast_cleanup_schedule(ctx);
     balcony_grow::start_balcony_grow_schedule(ctx);
     npc::start_world_npc_schedule(ctx);
+    game_time::start_game_time_schedule(ctx);
 }
 
 /// Ensure `user`, `player_pose`, and `player_input` rows exist.
@@ -99,8 +101,9 @@ pub fn on_connect(ctx: &ReducerContext) {
     water_container::backfill_water_bottle_fill_rows(ctx);
     apartments::ensure_starter_apartment_water_tank(ctx, id);
     apartments::ensure_authored_fish_tank_decor_for_owner(ctx, id);
+    apartments::ensure_authored_fish_tank_filter_decor_for_owner(ctx, id);
     balcony_grow::ensure_balcony_grow_for_owner(ctx, id);
-    world_day::ensure_player_world_progress(ctx, id);
+    game_time::ensure_player_world_progress(ctx, id);
     loadout::ensure_player_active_hotbar_row(ctx, id);
 }
 
@@ -199,7 +202,6 @@ pub fn respawn_player(ctx: &ReducerContext, _mode: u8) {
         loadout::reset_player_active_hotbar_slot_to_first(ctx, id);
     }
     let unit_key = apartments::claimed_unit_key_for_owner(ctx, id);
-    let _ = world_day::advance_world_day_for_player(ctx, id, unit_key.as_deref());
-    player_vitals::restore_player_vitals_full(ctx, id);
+    let _ = game_time::advance_world_day_for_player(ctx, id, unit_key.as_deref());
     world_sound::reset_player_melee_cooldown_row(ctx, id);
 }

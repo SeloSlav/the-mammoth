@@ -81,6 +81,19 @@ export function buildMammothItemTooltipContent(pop: MammothPopulatedItem): Mammo
     }
   }
 
+  if (def.id === "caffeine-gum") {
+    stats.push({
+      label: "Alertness",
+      value: "Temporary",
+      color: THEME_SUCCESS,
+    });
+    stats.push({
+      label: "Sleep",
+      value: "Worse if overused",
+      color: THEME_ERROR,
+    });
+  }
+
   if (def.construction) {
     const { buildTimeSecs, materials, requiredTools } = def.construction;
     stats.push({

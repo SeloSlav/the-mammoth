@@ -20,5 +20,7 @@ export * from "./apartmentNotebook.js";
 export * from "./balconyGrowOp.js";
 export * from "./apartmentFishTank.js";
 export * from "./apartmentFishTankFilter.js";
+export * from "./apartmentUtilities.js";
 export * from "./apartmentWindowShutters.js";
 export * from "./playerInventory.js";
+export * from "./gameTime.js";

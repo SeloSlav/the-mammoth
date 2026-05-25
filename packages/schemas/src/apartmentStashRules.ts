@@ -12,8 +12,12 @@ import {
   apartmentFishTankAcceptsFeedDefId,
 } from "./apartmentFishTank.js";
 import {
+  APARTMENT_FISH_TANK_FILTER_MAINTENANCE_SLOT,
+  APARTMENT_FISH_TANK_FILTER_WATER_BOTTLE_SLOT,
   APARTMENT_STASH_KIND_FISH_TANK_FILTER,
   apartmentFishTankFilterAcceptsDefId,
+  apartmentFishTankFilterAcceptsDefIdAtSlot,
+  apartmentFishTankFilterPreferredSlotForDefId,
 } from "./apartmentFishTankFilter.js";
 
 export { APARTMENT_STASH_KIND_GROW_TRAY, BALCONY_GROW_FERTILIZER_DEF_ID };
@@ -69,7 +73,7 @@ export const APARTMENT_STASH_SLOT_COUNT_BY_KIND: Record<ApartmentStashKind, numb
   [APARTMENT_STASH_KIND_FRIDGE]: 14,
   [APARTMENT_STASH_KIND_WATER_TANK]: 1,
   [APARTMENT_STASH_KIND_FISH_TANK]: 1,
-  [APARTMENT_STASH_KIND_FISH_TANK_FILTER]: 1,
+  [APARTMENT_STASH_KIND_FISH_TANK_FILTER]: 2,
   [APARTMENT_STASH_KIND_GROW_TRAY]: 1,
 };
 
@@ -125,6 +129,22 @@ export function apartmentStashAcceptsItemCategory(
   }
 }
 
+/** Whether a catalog def id may enter this stash slot from player inventory/hotbar. */
+export function apartmentStashAcceptsDefIdAtSlot(
+  stashKind: ApartmentStashKind,
+  defId: string,
+  category: ApartmentStashItemCategory,
+  slotIndex: number,
+): boolean {
+  if (!isApartmentStashSlotIndexValid(stashKind, slotIndex)) {
+    return false;
+  }
+  if (stashKind === APARTMENT_STASH_KIND_FISH_TANK_FILTER) {
+    return apartmentFishTankFilterAcceptsDefIdAtSlot(slotIndex, defId, category);
+  }
+  return apartmentStashAcceptsDefId(stashKind, defId, category);
+}
+
 /** Whether a catalog def id may enter this stash from player inventory/hotbar. */
 export function apartmentStashAcceptsDefId(
   stashKind: ApartmentStashKind,
@@ -166,7 +186,7 @@ export function apartmentStashRejectionHint(stashKind: ApartmentStashKind): stri
     case APARTMENT_STASH_KIND_FISH_TANK:
       return "Fish tank only holds food for the fish.";
     case APARTMENT_STASH_KIND_FISH_TANK_FILTER:
-      return "Fish filter only holds a filter sponge cartridge.";
+      return "Fish filter: water bottle in the water slot, sponge cartridge in the cartridge slot.";
     case APARTMENT_STASH_KIND_GROW_TRAY:
       return "Grow tray only holds tray compost.";
     default:
@@ -180,15 +200,42 @@ export type ApartmentStashHudSection = {
   cols: number;
 };
 
-/** Stove uses 2 burner slots + 1 oven slot; other kinds use a single grid. */
+/** Stove uses 2 burner slots + 1 oven slot; fish filter uses water + cartridge slots. */
 export function apartmentStashHudSections(
   stashKind: ApartmentStashKind,
 ): ApartmentStashHudSection[] | null {
-  if (stashKind !== APARTMENT_STASH_KIND_STOVE) return null;
-  return [
-    { label: "Burners", slotIndices: [0, 1], cols: 2 },
-    { label: "Oven", slotIndices: [2], cols: 1 },
-  ];
+  if (stashKind === APARTMENT_STASH_KIND_STOVE) {
+    return [
+      { label: "Burners", slotIndices: [0, 1], cols: 2 },
+      { label: "Oven", slotIndices: [2], cols: 1 },
+    ];
+  }
+  if (stashKind === APARTMENT_STASH_KIND_FISH_TANK_FILTER) {
+    return [
+      {
+        label: "Water bottle",
+        slotIndices: [APARTMENT_FISH_TANK_FILTER_WATER_BOTTLE_SLOT],
+        cols: 1,
+      },
+      {
+        label: "Spare cartridge",
+        slotIndices: [APARTMENT_FISH_TANK_FILTER_MAINTENANCE_SLOT],
+        cols: 1,
+      },
+    ];
+  }
+  return null;
+}
+
+/** Quick-transfer target slot when the stash kind assigns fixed slots per item type. */
+export function apartmentStashPreferredSlotForDefId(
+  stashKind: ApartmentStashKind,
+  defId: string,
+): number | null {
+  if (stashKind === APARTMENT_STASH_KIND_FISH_TANK_FILTER) {
+    return apartmentFishTankFilterPreferredSlotForDefId(defId);
+  }
+  return null;
 }
 
 /** Default grid columns when not using sectional layout. */

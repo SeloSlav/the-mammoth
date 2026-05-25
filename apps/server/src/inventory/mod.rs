@@ -753,6 +753,7 @@ pub fn consume_hotbar_item(ctx: &ReducerContext, hotbar_slot: u8) {
     }
 
     player_vitals::apply_instant_vital_deltas(ctx, sender, dhp, dh, dy, true);
+    crate::game_time::apply_stimulant_consume(ctx, sender, item.def_id.as_str());
 
     let kind = match items_catalog::hotbar_consume_sound(&item.def_id) {
         items_catalog::HotbarConsumeSound::Eat => world_sound::KIND_CONSUME_EAT,

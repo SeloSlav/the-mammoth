@@ -25,9 +25,11 @@
     {
       "id": "caffeine-gum",
       "displayName": "Caffeine gum",
-      "description": "Keeps you sharp for short sprints. Mild stamina buff placeholder (effect hook TBD).",
+      "description": "Bitter chew. Sharpens you for a while; sleep hits harder if you overdo it.",
       "category": "consumable",
-      "maxStack": 40
+      "maxStack": 40,
+      "hotbarConsumeSound": "eat",
+      "consumeOnUse": { "hungerDelta": 2 }
     },
     {
       "id": "apple",

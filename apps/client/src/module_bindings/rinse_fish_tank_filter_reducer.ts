@@ -12,5 +12,4 @@ import {
 
 export default {
   filterDecorId: __t.u64(),
-  hotbarSlot: __t.u8(),
 };

@@ -3,10 +3,11 @@ import type { FpActiveStashPanelState } from "../game/fpInteraction/fpActiveStas
 import {
   clientMayPushToActiveApartmentStash,
   mammothItemAllowedInApartmentStash,
+  mammothStashQuickTransferDestIndex,
   reportApartmentStashRejection,
 } from "./apartmentStashInventoryRules";
 import type { MammothDragSourceSlotInfo, MammothPopulatedItem } from "./inventoryDragDropTypes";
-import { destIndexForQuickTransfer, destPlayerCarrySlotForQuickTransfer } from "./inventoryQuickTransfer";
+import { destPlayerCarrySlotForQuickTransfer } from "./inventoryQuickTransfer";
 import { playInventoryItemDragDropSound, playInventoryItemDragPickSound } from "./inventoryDragUiSound";
 import type { SlotGrids } from "./inventoryOptimistic";
 import type { MammothHotLootContext } from "./mammothHotLootSlotKey";
@@ -30,7 +31,11 @@ export function hotLootDepositPlayerItemToStash(
   }
   if (!clientMayPushToActiveApartmentStash(conn, activeStash)) return false;
 
-  const destIndex = destIndexForQuickTransfer(grids.stash ?? [], pop);
+  const destIndex = mammothStashQuickTransferDestIndex(activeStash.stashKind, pop, grids.stash ?? []);
+  if (destIndex == null) {
+    reportApartmentStashRejection(activeStash.stashKind);
+    return false;
+  }
   playInventoryItemDragDropSound();
   try {
     void conn.reducers.stashPushItemToSlot({

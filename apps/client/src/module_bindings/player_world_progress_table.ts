@@ -13,4 +13,12 @@ import {
 export default __t.row({
   identity: __t.identity().primaryKey(),
   sleepsCount: __t.u32().name("sleeps_count"),
+  timeOfDayMinutes: __t.u16().name("time_of_day_minutes"),
+  awakeMinutes: __t.u32().name("awake_minutes"),
+  sleepPressure: __t.f32().name("sleep_pressure"),
+  lastBedTimeMinutes: __t.u16().name("last_bed_time_minutes"),
+  lastSleepQuality: __t.u8().name("last_sleep_quality"),
+  stimulantLoad: __t.f32().name("stimulant_load"),
+  fatigueDebt: __t.f32().name("fatigue_debt"),
+  stimulantChewsToday: __t.u8().name("stimulant_chews_today"),
 });

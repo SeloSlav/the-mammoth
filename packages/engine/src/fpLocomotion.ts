@@ -79,6 +79,8 @@ export type FpLocomotionWalkOptions = {
    * to {@link JUMP_SPEED} on jump for elevator jump inherit.
    */
   jumpKinematicPlatformVyMps?: number;
+  /** Override sprint cap (m/s) — e.g. fatigue slows sprint without disabling input. */
+  sprintSpeedMps?: number;
 };
 
 export type FpLocomotionInput = {
@@ -144,7 +146,7 @@ export function stepFpLocomotion(
   const speed = input.crouch
     ? CROUCH_SPEED
     : input.sprint
-      ? SPRINT_SPEED
+      ? (walk?.sprintSpeedMps ?? SPRINT_SPEED)
       : WALK_SPEED;
   const accel = state.grounded ? GROUND_ACCEL : AIR_ACCEL;
   const targetVx = _desired.x * speed;

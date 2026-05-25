@@ -22,7 +22,8 @@ pub(crate) use harvest::{
 pub(crate) use tables::*;
 pub(crate) use tray::{
     ensure_balcony_grow_for_owner, ensure_balcony_grow_for_unit, grow_speed_modifier,
-    grow_tray_stash_kind, grow_tray_stash_near_sender, start_balcony_grow_schedule,
+    grow_tray_stash_kind, grow_tray_stash_near_sender, set_grow_lights_for_unit,
+    start_balcony_grow_schedule,
 };
 
 pub use reducers::{harvest_balcony_grow_slot, plant_balcony_grow_slot};

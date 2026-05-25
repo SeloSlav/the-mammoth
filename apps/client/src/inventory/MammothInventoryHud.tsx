@@ -51,6 +51,7 @@ import {
   apartmentStashMoveFailureHint,
   clientMayPushToActiveApartmentStash,
   mammothItemAllowedInApartmentStash,
+  mammothStashQuickTransferDestIndex,
   reportApartmentStashRejection,
 } from "./apartmentStashInventoryRules";
 import { showGameplayErrorBar } from "../ui/gameplayErrorBar";
@@ -444,7 +445,15 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
       }
       if (!clientMayPushToActiveApartmentStash(conn, activeStash)) return;
       const g = gridsForPrediction();
-      const destIndex = destIndexForQuickTransfer(g.stash ?? [], pop);
+      const destIndex = mammothStashQuickTransferDestIndex(
+        activeStash.stashKind,
+        pop,
+        g.stash ?? [],
+      );
+      if (destIndex == null) {
+        reportApartmentStashRejection(activeStash.stashKind);
+        return;
+      }
       const predicted = predictSlotMove(g, sourceSlot, { type: "stash", index: destIndex });
       if (!predicted) return;
       playInventoryItemDragDropSound();

@@ -5,7 +5,7 @@ use spacetimedb::{Identity, ReducerContext, Table};
 use crate::accounts::user;
 use crate::apartment_door::{apartment_door, building_floor_refs, ApartmentDoor, SwingDoorFace};
 use crate::apartment_stash_rules::{
-    apartment_stash_accepts_def_id, apartment_stash_rejection_hint, apartment_stash_slot_count,
+    apartment_stash_accepts_def_id_at_slot, apartment_stash_rejection_hint, apartment_stash_slot_count,
     apartment_stash_slot_index_valid,
 };
 use crate::auth;
@@ -1011,6 +1011,7 @@ pub(crate) fn ensure_starter_apartment_water_tank(ctx: &ReducerContext, owner: I
         return;
     };
     crate::water_container::ensure_starter_apartment_water_tank(ctx, unit_key.as_str());
+    crate::apartment_utilities::ensure_apartment_unit_utilities(ctx, unit_key.as_str());
 }
 
 /// Default fish tank in `owned_apartment_builtins.json` — keep in sync with client layout doc.
@@ -1146,6 +1147,23 @@ pub(crate) fn ensure_authored_fish_tank_decor_for_owner(ctx: &ReducerContext, ow
     ensure_authored_fish_tank_decor_for_unit(ctx, owner, unit_key.as_str());
 }
 
+/// Ensures the layout fish filter decor + default tank link for the player's claimed apartment.
+pub(crate) fn ensure_authored_fish_tank_filter_decor_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) {
+    let Some(unit_key) = claimed_unit_key_for_owner(ctx, owner) else {
+        return;
+    };
+    ensure_authored_fish_tank_filter_decor_for_unit(ctx, owner, unit_key.as_str());
+    try_bind_default_fish_filter_link(ctx, owner, unit_key.as_str());
+    crate::fish_tank_filter::ensure_starter_fish_filter_cartridge_for_unit(
+        ctx,
+        owner,
+        unit_key.as_str(),
+    );
+}
+
 /// Idempotent backfill for authored stash decor rows (fish tank + filter today).
 #[spacetimedb::reducer]
 pub fn sync_owned_apartment_stash_decor(ctx: &ReducerContext) {
@@ -1164,6 +1182,11 @@ pub fn sync_owned_apartment_stash_decor(ctx: &ReducerContext) {
         ensure_authored_fish_tank_decor_for_unit(ctx, sender, unit.unit_key.as_str());
         ensure_authored_fish_tank_filter_decor_for_unit(ctx, sender, unit.unit_key.as_str());
         try_bind_default_fish_filter_link(ctx, sender, unit.unit_key.as_str());
+        crate::fish_tank_filter::ensure_starter_fish_filter_cartridge_for_unit(
+            ctx,
+            sender,
+            unit.unit_key.as_str(),
+        );
     }
 }
 
@@ -2413,7 +2436,7 @@ fn stash_push_item_to_slot_impl(
     let (owner_id, _, _) = owned_apartment_stash_owner_near_sender(ctx, unit_key)
         .ok_or_else(|| "Move closer to this storage.".to_string())?;
     let row = inventory::get_player_item(ctx, item_instance_id)?;
-    if !apartment_stash_accepts_def_id(stash_kind, row.def_id.as_str()) {
+    if !apartment_stash_accepts_def_id_at_slot(stash_kind, row.def_id.as_str(), target_stash_slot) {
         return Err(apartment_stash_rejection_hint(stash_kind).to_string());
     }
     let target_opt = find_item_in_stash_slot(ctx, owner_id, unit_key, target_stash_slot);

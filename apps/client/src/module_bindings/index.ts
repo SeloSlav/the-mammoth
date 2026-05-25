@@ -38,15 +38,10 @@ import AddApartmentUnitDecorReducer from "./add_apartment_unit_decor_reducer";
 import AddCombatSimNpcSpawnReducer from "./add_combat_sim_npc_spawn_reducer";
 import ApartmentDoorSetReducer from "./apartment_door_set_reducer";
 import ApartmentDoorToggleReducer from "./apartment_door_toggle_reducer";
-import ApartmentWaterTankTickStepReducer from "./apartment_water_tank_tick_step_reducer";
 import ApplyFishFilterPatchReducer from "./apply_fish_filter_patch_reducer";
-import BalconyGrowTickStepReducer from "./balcony_grow_tick_step_reducer";
 import BindFishTankFilterReducer from "./bind_fish_tank_filter_reducer";
 import CancelWaitingCraftReducer from "./cancel_waiting_craft_reducer";
 import ClaimApartmentPulseReducer from "./claim_apartment_pulse_reducer";
-import CleanupOldDroppedItemsReducer from "./cleanup_old_dropped_items_reducer";
-import CleanupOldHudToastsStepReducer from "./cleanup_old_hud_toasts_step_reducer";
-import CleanupOldWorldSoundEventsReducer from "./cleanup_old_world_sound_events_reducer";
 import ClearCombatSimNpcSpawnsReducer from "./clear_combat_sim_npc_spawns_reducer";
 import ConsumeHotbarItemReducer from "./consume_hotbar_item_reducer";
 import DeleteApartmentUnitDecorReducer from "./delete_apartment_unit_decor_reducer";
@@ -63,13 +58,9 @@ import HarvestBalconyGrowSlotReducer from "./harvest_balcony_grow_slot_reducer";
 import LeaveCombatSimReducer from "./leave_combat_sim_reducer";
 import MoveItemToHotbarReducer from "./move_item_to_hotbar_reducer";
 import MoveItemToInventoryReducer from "./move_item_to_inventory_reducer";
-import NpcTickStepReducer from "./npc_tick_step_reducer";
-import PhysicsTickStepReducer from "./physics_tick_step_reducer";
 import PickupDroppedItemReducer from "./pickup_dropped_item_reducer";
 import PingWorldReducer from "./ping_world_reducer";
 import PlantBalconyGrowSlotReducer from "./plant_balcony_grow_slot_reducer";
-import PlayerVitalsTickStepReducer from "./player_vitals_tick_step_reducer";
-import RefreshWorldLootSpawnsReducer from "./refresh_world_loot_spawns_reducer";
 import ReinforceApartmentPulseReducer from "./reinforce_apartment_pulse_reducer";
 import RespawnPlayerReducer from "./respawn_player_reducer";
 import RinseFishTankFilterReducer from "./rinse_fish_tank_filter_reducer";
@@ -90,7 +81,6 @@ import SubmitMeleeSwingReducer from "./submit_melee_swing_reducer";
 import SubmitPlayerLocomotionSnapshotReducer from "./submit_player_locomotion_snapshot_reducer";
 import SyncApartmentAuthoredStashLayoutReducer from "./sync_apartment_authored_stash_layout_reducer";
 import SyncOwnedApartmentStashDecorReducer from "./sync_owned_apartment_stash_decor_reducer";
-import TickCraftQueueStepReducer from "./tick_craft_queue_step_reducer";
 import TopOffFishTankFromBottleReducer from "./top_off_fish_tank_from_bottle_reducer";
 import UpdateApartmentUnitDecorReducer from "./update_apartment_unit_decor_reducer";
 
@@ -101,6 +91,7 @@ import ApartmentDoorRow from "./apartment_door_table";
 import ApartmentDoorGameplayRow from "./apartment_door_gameplay_table";
 import ApartmentUnitRow from "./apartment_unit_table";
 import ApartmentUnitDecorRow from "./apartment_unit_decor_table";
+import ApartmentUnitUtilitiesRow from "./apartment_unit_utilities_table";
 import ApartmentWaterTankRow from "./apartment_water_tank_table";
 import ApartmentWaterTankScheduleRow from "./apartment_water_tank_schedule_table";
 import BalconyGrowLightRow from "./balcony_grow_light_table";
@@ -118,6 +109,7 @@ import ElevatorLandingDoorRow from "./elevator_landing_door_table";
 import FishTankEcosystemRow from "./fish_tank_ecosystem_table";
 import FishTankFilterLinkRow from "./fish_tank_filter_link_table";
 import FlashlightChargeRow from "./flashlight_charge_table";
+import GameTimeScheduleRow from "./game_time_schedule_table";
 import HudToastCleanupTickRow from "./hud_toast_cleanup_tick_table";
 import HudToastEventRow from "./hud_toast_event_table";
 import InventoryItemRow from "./inventory_item_table";
@@ -189,6 +181,17 @@ const tablesSchema = __schema({
       { name: 'apartment_unit_decor_decor_id_key', constraint: 'unique', columns: ['decorId'] },
     ],
   }, ApartmentUnitDecorRow),
+  apartment_unit_utilities: __table({
+    name: 'apartment_unit_utilities',
+    indexes: [
+      { name: 'unit_key', algorithm: 'btree', columns: [
+        'unitKey',
+      ] },
+    ],
+    constraints: [
+      { name: 'apartment_unit_utilities_unit_key_key', constraint: 'unique', columns: ['unitKey'] },
+    ],
+  }, ApartmentUnitUtilitiesRow),
   apartment_water_tank: __table({
     name: 'apartment_water_tank',
     indexes: [
@@ -376,6 +379,17 @@ const tablesSchema = __schema({
       { name: 'flashlight_charge_item_instance_id_key', constraint: 'unique', columns: ['itemInstanceId'] },
     ],
   }, FlashlightChargeRow),
+  game_time_schedule: __table({
+    name: 'game_time_schedule',
+    indexes: [
+      { name: 'scheduled_id', algorithm: 'btree', columns: [
+        'scheduledId',
+      ] },
+    ],
+    constraints: [
+      { name: 'game_time_schedule_scheduled_id_key', constraint: 'unique', columns: ['scheduledId'] },
+    ],
+  }, GameTimeScheduleRow),
   hud_toast_cleanup_tick: __table({
     name: 'hud_toast_cleanup_tick',
     indexes: [
@@ -626,15 +640,10 @@ const reducersSchema = __reducers(
   __reducerSchema("add_combat_sim_npc_spawn", AddCombatSimNpcSpawnReducer),
   __reducerSchema("apartment_door_set", ApartmentDoorSetReducer),
   __reducerSchema("apartment_door_toggle", ApartmentDoorToggleReducer),
-  __reducerSchema("apartment_water_tank_tick_step", ApartmentWaterTankTickStepReducer),
   __reducerSchema("apply_fish_filter_patch", ApplyFishFilterPatchReducer),
-  __reducerSchema("balcony_grow_tick_step", BalconyGrowTickStepReducer),
   __reducerSchema("bind_fish_tank_filter", BindFishTankFilterReducer),
   __reducerSchema("cancel_waiting_craft", CancelWaitingCraftReducer),
   __reducerSchema("claim_apartment_pulse", ClaimApartmentPulseReducer),
-  __reducerSchema("cleanup_old_dropped_items", CleanupOldDroppedItemsReducer),
-  __reducerSchema("cleanup_old_hud_toasts_step", CleanupOldHudToastsStepReducer),
-  __reducerSchema("cleanup_old_world_sound_events", CleanupOldWorldSoundEventsReducer),
   __reducerSchema("clear_combat_sim_npc_spawns", ClearCombatSimNpcSpawnsReducer),
   __reducerSchema("consume_hotbar_item", ConsumeHotbarItemReducer),
   __reducerSchema("delete_apartment_unit_decor", DeleteApartmentUnitDecorReducer),
@@ -651,13 +660,9 @@ const reducersSchema = __reducers(
   __reducerSchema("leave_combat_sim", LeaveCombatSimReducer),
   __reducerSchema("move_item_to_hotbar", MoveItemToHotbarReducer),
   __reducerSchema("move_item_to_inventory", MoveItemToInventoryReducer),
-  __reducerSchema("npc_tick_step", NpcTickStepReducer),
-  __reducerSchema("physics_tick_step", PhysicsTickStepReducer),
   __reducerSchema("pickup_dropped_item", PickupDroppedItemReducer),
   __reducerSchema("ping_world", PingWorldReducer),
   __reducerSchema("plant_balcony_grow_slot", PlantBalconyGrowSlotReducer),
-  __reducerSchema("player_vitals_tick_step", PlayerVitalsTickStepReducer),
-  __reducerSchema("refresh_world_loot_spawns", RefreshWorldLootSpawnsReducer),
   __reducerSchema("reinforce_apartment_pulse", ReinforceApartmentPulseReducer),
   __reducerSchema("respawn_player", RespawnPlayerReducer),
   __reducerSchema("rinse_fish_tank_filter", RinseFishTankFilterReducer),
@@ -678,7 +683,6 @@ const reducersSchema = __reducers(
   __reducerSchema("submit_player_locomotion_snapshot", SubmitPlayerLocomotionSnapshotReducer),
   __reducerSchema("sync_apartment_authored_stash_layout", SyncApartmentAuthoredStashLayoutReducer),
   __reducerSchema("sync_owned_apartment_stash_decor", SyncOwnedApartmentStashDecorReducer),
-  __reducerSchema("tick_craft_queue_step", TickCraftQueueStepReducer),
   __reducerSchema("top_off_fish_tank_from_bottle", TopOffFishTankFromBottleReducer),
   __reducerSchema("update_apartment_unit_decor", UpdateApartmentUnitDecorReducer),
 );

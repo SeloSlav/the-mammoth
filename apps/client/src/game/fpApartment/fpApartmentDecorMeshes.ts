@@ -73,6 +73,10 @@ import {
   syncApartmentInteriorPropVisibilityUnit,
   type ApartmentInteriorPropVisibilityApplyItem,
 } from "./fpApartmentInteriorPropVisibility.js";
+import {
+  readApartmentUnitUtilities,
+  subscribeApartmentUnitUtilities,
+} from "./fpApartmentUnitUtilities.js";
 import { runFpApartmentDecorFullRebuild } from "./fpApartmentDecorRebuild.js";
 
 type FixtureEmissiveBackup = {
@@ -246,6 +250,7 @@ export function mountFpApartmentDecorMeshes(opts: {
   let practicalLightsContextUnitKey: string | null = null;
   let practicalLightsMasterEnabled: boolean | null = null;
   let practicalLightsDecorEnabled: boolean | null = null;
+  let practicalLightsUnitPowerOn: boolean | null = null;
 
   const metallicReadableEnv = (): THREE.Texture | null => {
     const env = opts.scene.userData.mammothFpMetallicReadableEnv;
@@ -405,16 +410,21 @@ export function mountFpApartmentDecorMeshes(opts: {
     const decorFixtureLightsEnabled = isFpDebugRenderIsolationEnabled(
       "apartmentDecorPracticalLights",
     );
+    const unitPowerOn = containingUnitKey
+      ? readApartmentUnitUtilities(opts.conn, containingUnitKey).powerOn
+      : true;
+    const effectiveDecorEnabled = decorFixtureLightsEnabled && unitPowerOn;
 
-    applyDecorFixtureEmissiveDebugIsolation(groupByRenderKey.values(), decorFixtureLightsEnabled);
+    applyDecorFixtureEmissiveDebugIsolation(groupByRenderKey.values(), effectiveDecorEnabled);
 
-    if (!masterEnabled || !containingUnitKey) {
+    if (!masterEnabled || !containingUnitKey || !unitPowerOn) {
       if (practicalLightsMount !== null || practicalLightsUnitKey !== null) {
         clearPracticalLightsOnly();
       }
       practicalLightsUnitKey = containingUnitKey;
       practicalLightsMasterEnabled = masterEnabled;
       practicalLightsDecorEnabled = decorFixtureLightsEnabled;
+      practicalLightsUnitPowerOn = unitPowerOn;
       resyncDecorShadowsForUnit(containingUnitKey);
       return;
     }
@@ -423,7 +433,8 @@ export function mountFpApartmentDecorMeshes(opts: {
       !force &&
       containingUnitKey === practicalLightsUnitKey &&
       masterEnabled === practicalLightsMasterEnabled &&
-      decorFixtureLightsEnabled === practicalLightsDecorEnabled
+      decorFixtureLightsEnabled === practicalLightsDecorEnabled &&
+      unitPowerOn === practicalLightsUnitPowerOn
     ) {
       return;
     }
@@ -431,6 +442,7 @@ export function mountFpApartmentDecorMeshes(opts: {
     practicalLightsUnitKey = containingUnitKey;
     practicalLightsMasterEnabled = masterEnabled;
     practicalLightsDecorEnabled = decorFixtureLightsEnabled;
+    practicalLightsUnitPowerOn = unitPowerOn;
 
     const bounds = unitBoundsForKey(containingUnitKey);
     practicalLightsMount = syncApartmentInteriorPracticalLighting({
@@ -524,10 +536,16 @@ export function mountFpApartmentDecorMeshes(opts: {
       scheduleRebuild();
   };
 
+  const onUtilitiesBump = (): void => {
+    if (disposed) return;
+    syncPracticalLightsForUnit(practicalLightsContextUnitKey, true);
+  };
+
   opts.conn.db.apartment_unit_decor.onInsert(onDecorBump);
   opts.conn.db.apartment_unit_decor.onDelete(onDecorBump);
   opts.conn.db.apartment_unit_decor.onUpdate(onDecorBump);
   opts.conn.db.apartment_unit.onUpdate(onUnitUpdateForDecor);
+  const unsubUtilities = subscribeApartmentUnitUtilities(opts.conn, onUtilitiesBump);
 
   scheduleRebuild();
   rebuildStashRayOcclusion();
@@ -769,6 +787,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       stashPickMaterial.dispose();
       clearInteriorLighting();
       unsubRenderIsolation();
+      unsubUtilities();
       opts.buildingRoot.remove(root);
     },
   };

@@ -328,6 +328,20 @@ fn ensure_grow_light_row(ctx: &ReducerContext, unit_key: &str) {
     });
 }
 
+pub(crate) fn set_grow_lights_for_unit(ctx: &ReducerContext, unit_key: &str, on: bool) {
+    ensure_grow_light_row(ctx, unit_key);
+    let table = ctx.db.balcony_grow_light();
+    let Some(mut row) = table.unit_key().find(&unit_key.to_string()) else {
+        return;
+    };
+    let next = if on { 1u8 } else { 0u8 };
+    if row.lights_on == next {
+        return;
+    }
+    row.lights_on = next;
+    table.unit_key().update(row);
+}
+
 pub(crate) fn grow_tray_stash_near_sender(
     ctx: &ReducerContext,
     stash_key: &str,

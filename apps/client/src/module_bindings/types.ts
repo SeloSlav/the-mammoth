@@ -82,6 +82,15 @@ export const ApartmentUnitDecor = __t.object("ApartmentUnitDecor", {
 });
 export type ApartmentUnitDecor = __Infer<typeof ApartmentUnitDecor>;
 
+export const ApartmentUnitUtilities = __t.object("ApartmentUnitUtilities", {
+  unitKey: __t.string(),
+  powerOn: __t.u8(),
+  powerRestoreAfterMinutes: __t.u16(),
+  waterTankOk: __t.u8(),
+  waterRestoreAfterMinutes: __t.u16(),
+});
+export type ApartmentUnitUtilities = __Infer<typeof ApartmentUnitUtilities>;
+
 export const ApartmentWaterTank = __t.object("ApartmentWaterTank", {
   unitKey: __t.string(),
   waterLiters: __t.f32(),
@@ -254,6 +263,12 @@ export const FlashlightCharge = __t.object("FlashlightCharge", {
 });
 export type FlashlightCharge = __Infer<typeof FlashlightCharge>;
 
+export const GameTimeSchedule = __t.object("GameTimeSchedule", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type GameTimeSchedule = __Infer<typeof GameTimeSchedule>;
+
 export const HotbarLocationData = __t.object("HotbarLocationData", {
   ownerId: __t.identity(),
   slotIndex: __t.u8(),
@@ -396,6 +411,14 @@ export type PlayerVitalsSchedule = __Infer<typeof PlayerVitalsSchedule>;
 export const PlayerWorldProgress = __t.object("PlayerWorldProgress", {
   identity: __t.identity(),
   sleepsCount: __t.u32(),
+  timeOfDayMinutes: __t.u16(),
+  awakeMinutes: __t.u32(),
+  sleepPressure: __t.f32(),
+  lastBedTimeMinutes: __t.u16(),
+  lastSleepQuality: __t.u8(),
+  stimulantLoad: __t.f32(),
+  fatigueDebt: __t.f32(),
+  stimulantChewsToday: __t.u8(),
 });
 export type PlayerWorldProgress = __Infer<typeof PlayerWorldProgress>;
 

@@ -6,11 +6,15 @@ import {
   equippedHeldItemIdFromDefId,
   fpLocomotionConstants,
   type FpLocomotionInput,
+  type FpLocomotionWalkOptions,
   PlayerPresentationManager,
   createFpLocomotionState,
 } from "@the-mammoth/engine";
+import { deriveFatigueSprintSpeedMul } from "@the-mammoth/game";
 import type { HeldItemId } from "@the-mammoth/game";
 import { buildLocalPlayerGameplayState } from "./localPlayerGameplay.js";
+import { tickFpFatigueFeedback } from "./fpFatigueFeedback.js";
+import { showGameplayErrorBar } from "../../ui/gameplayErrorBar.js";
 import { getMammothItemDef, mammothItemDefSupportsHotbarFpViewmodel } from "../../inventory/mammothItemCatalog.js";
 import {
   findNearestDroppedPickupsHud,
@@ -47,6 +51,7 @@ import { APARTMENT_STASH_KIND_GROW_TRAY } from "../fpApartment/fpApartmentStashK
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 import { getFpActiveStashPanel } from "../fpInteraction/fpActiveStashPanel.js";
 import { publishFpInteractionFeet } from "../fpInteraction/fpInteractionFeetState.js";
+import { dismissFpInteractPanelsWhenOutOfRange } from "../fpInteraction/fpDismissPanelsWhenOutOfRange.js";
 import {
   clearFpPickupPrompts,
   setFpPickupPrompt,
@@ -217,6 +222,7 @@ export type FpSessionMainRafFrameDeps = {
   prevPos: THREE.Vector3;
   _input: FpLocomotionInput;
   _mainStepOpts: FpSessionMainStepOpts;
+  _walkOpts: FpLocomotionWalkOptions;
   simulatePredictedPlayerStep: (opts: FpSessionMainStepOpts) => number;
   fpCollisionDebug: ReturnType<typeof createFpCollisionDebugOverlay>;
   fpElevators: MountFpElevatorWorldResult;
@@ -488,6 +494,30 @@ export function createFpSessionMainRafFrame(
     deps._mainStepOpts.crouch = mainRaf.crouchToggle;
     deps._mainStepOpts.jumpPressedThisFrame = jumpQueuedBeforeStep && !jumpBlockedInElevatorCab;
     deps._mainStepOpts.bodyYawRad = mainRaf.bodyYaw;
+
+    const progressRow = deps.conn.identity
+      ? deps.conn.db.player_world_progress.identity.find(deps.conn.identity)
+      : undefined;
+    if (progressRow) {
+      const fatigueMul = deriveFatigueSprintSpeedMul({
+        timeOfDayMinutes: progressRow.timeOfDayMinutes,
+        sleepPressure: progressRow.sleepPressure,
+        stimulantLoad: progressRow.stimulantLoad,
+      });
+      deps._walkOpts.sprintSpeedMps = fpLocomotionConstants.sprintSpeedMps * fatigueMul;
+      const fatigueMsg = tickFpFatigueFeedback({
+        timeOfDayMinutes: progressRow.timeOfDayMinutes,
+        sleepPressure: progressRow.sleepPressure,
+        stimulantLoad: progressRow.stimulantLoad,
+      });
+      if (fatigueMsg) {
+        showGameplayErrorBar(fatigueMsg);
+      }
+    } else {
+      deps._walkOpts.sprintSpeedMps = fpLocomotionConstants.sprintSpeedMps;
+      tickFpFatigueFeedback(null);
+    }
+
     let headY: number;
     const sitSession = getFpSitSession();
     if (sitSession) {
@@ -727,6 +757,10 @@ export function createFpSessionMainRafFrame(
     {
       const ft = deps.fpInteractionFeet();
       publishFpInteractionFeet({ x: ft.x, y: ft.y, z: ft.z });
+      dismissFpInteractPanelsWhenOutOfRange({
+        conn: deps.conn,
+        getApartmentNotebookPrompt: deps.getApartmentNotebookPrompt,
+      });
     }
     deps.syncDroppedItemVisualVisibility(
       deps.pos.x,

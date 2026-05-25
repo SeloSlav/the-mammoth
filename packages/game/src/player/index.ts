@@ -11,3 +11,11 @@ export type {
 export type { ReplicatedPlayerSnapshot } from "./replicatedSnapshot.js";
 export type { ThirdPersonWeaponPresentationDrive } from "./thirdPersonWeaponPresentationDrive.js";
 export { derivePlayerAnimationIntent } from "./deriveAnimationIntent.js";
+export type { FatigueTier } from "@the-mammoth/schemas";
+export {
+  deriveFatigueSprintSpeedMul,
+  deriveFatigueTier,
+  fatigueSprintSpeedMul,
+  shouldShowFatigueWarning,
+  type GameTimeProgressSnapshot,
+} from "./fatigueTier.js";

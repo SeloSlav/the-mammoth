@@ -18,6 +18,7 @@ const INITIAL_TABLE_SNAPSHOT_BATCHES_AFTER_SELF_USER: readonly (readonly string[
     "SELECT * FROM flashlight_charge",
     "SELECT * FROM water_bottle_fill",
     "SELECT * FROM apartment_water_tank",
+    "SELECT * FROM apartment_unit_utilities",
     "SELECT * FROM fish_tank_filter_link",
     "SELECT * FROM fish_tank_ecosystem",
     "SELECT * FROM balcony_grow_tray",

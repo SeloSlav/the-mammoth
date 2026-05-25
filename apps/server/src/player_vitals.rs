@@ -5,6 +5,7 @@ use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Tim
 
 use crate::accounts::user;
 use crate::auth;
+use crate::game_time::player_world_progress;
 use crate::movement::{player_input, PlayerInput, BIT_SPRINT};
 
 /// All vitals use 0..=MAX; keeps HUD math simple and matches a “percent bar” mental model.
@@ -15,8 +16,10 @@ pub(crate) const RESPAWN_HYDRATION: f32 = VITAL_MAX * 0.78;
 const HUNGER_FULL_DRAIN_SECS: f32 = 120.0 * 60.0;
 /// Hydration falls a bit faster than hunger (~90 minutes full → empty at 1×).
 const HYDRATION_FULL_DRAIN_SECS: f32 = 90.0 * 60.0;
-/// Sprinting increases hunger + hydration drain (not health).
-const SPRINT_DRAIN_MULTIPLIER: f32 = 1.35;
+/// Sprinting adds a small extra hunger + hydration drain (not health).
+pub(crate) const SPRINT_VITALS_DRAIN_MUL: f32 = 1.15;
+/// Legacy alias — prefer [`SPRINT_VITALS_DRAIN_MUL`].
+const SPRINT_DRAIN_MULTIPLIER: f32 = SPRINT_VITALS_DRAIN_MUL;
 /// Passive regen when both needs are above this fraction of max (server-side “comfortable”).
 const NEED_COMFORT_FRAC: f32 = 0.52;
 const HEALTH_REGEN_PER_SEC: f32 = 0.12;
@@ -27,6 +30,15 @@ const TICK_INTERVAL_MICROS: i64 = 2_000_000;
 
 /// Hotbar instant-use consumable spacing (matches client HUD cooldown; broth-style 1s gate).
 pub(crate) const HOTBAR_INSTANT_CONSUME_COOLDOWN_MICROS: i64 = 1_000_000;
+
+/// Post-sleep vitals restore profile — no stamina bar; hunger/hydration proxy "energy".
+pub struct SleepRecoveryProfile {
+    pub health: f32,
+    pub hunger: f32,
+    pub hydration: f32,
+    pub health_bonus_if_comfortable: f32,
+    pub fatigue_debt_add: f32,
+}
 
 #[spacetimedb::table(public, accessor = player_vitals)]
 pub struct PlayerVitals {
@@ -63,17 +75,14 @@ pub(crate) fn step_vitals_once(
     hunger: f32,
     hydration: f32,
     dt_secs: f32,
-    sprinting: bool,
+    base_drain_mul: f32,
+    sprint_drain_mul: f32,
 ) -> (f32, f32, f32) {
     let mut h = clamp_vital(health);
     let mut hu = clamp_vital(hunger);
     let mut hy = clamp_vital(hydration);
 
-    let drain_mul = if sprinting {
-        SPRINT_DRAIN_MULTIPLIER
-    } else {
-        1.0
-    };
+    let drain_mul = base_drain_mul * sprint_drain_mul;
 
     let hunger_rate = (VITAL_MAX / HUNGER_FULL_DRAIN_SECS) * drain_mul;
     let hydration_rate = (VITAL_MAX / HYDRATION_FULL_DRAIN_SECS) * drain_mul;
@@ -194,14 +203,36 @@ pub fn reset_player_vitals_for_respawn(ctx: &ReducerContext, owner: Identity) {
 }
 
 pub fn restore_player_vitals_full(ctx: &ReducerContext, owner: Identity) {
+    restore_player_vitals_after_sleep(
+        ctx,
+        owner,
+        SleepRecoveryProfile {
+            health: VITAL_MAX,
+            hunger: VITAL_MAX,
+            hydration: VITAL_MAX,
+            health_bonus_if_comfortable: 0.0,
+            fatigue_debt_add: 0.0,
+        },
+    );
+}
+
+pub fn restore_player_vitals_after_sleep(
+    ctx: &ReducerContext,
+    owner: Identity,
+    profile: SleepRecoveryProfile,
+) {
     let Some(mut v) = ctx.db.player_vitals().identity().find(&owner) else {
         ensure_player_vitals_row(ctx, owner);
-        restore_player_vitals_full(ctx, owner);
+        restore_player_vitals_after_sleep(ctx, owner, profile);
         return;
     };
-    v.health = VITAL_MAX;
-    v.hunger = VITAL_MAX;
-    v.hydration = VITAL_MAX;
+    v.health = clamp_vital(profile.health);
+    v.hunger = clamp_vital(profile.hunger);
+    v.hydration = clamp_vital(profile.hydration);
+    let comfort = VITAL_MAX * NEED_COMFORT_FRAC;
+    if v.hunger >= comfort && v.hydration >= comfort && profile.health_bonus_if_comfortable > 0.0 {
+        v.health = clamp_vital(v.health + profile.health_bonus_if_comfortable);
+    }
     v.last_hotbar_consume_at = None;
     ctx.db.player_vitals().identity().update(v);
 }
@@ -245,8 +276,22 @@ pub fn player_vitals_tick_step(ctx: &ReducerContext, _arg: PlayerVitalsSchedule)
             .map(|i: PlayerInput| (i.bits & BIT_SPRINT) != 0)
             .unwrap_or(false);
 
-        let (nh, nhu, nhy) =
-            step_vitals_once(row.health, row.hunger, row.hydration, dt_secs, sprinting);
+        let (base_mul, sprint_mul) = ctx
+            .db
+            .player_world_progress()
+            .identity()
+            .find(&row.identity)
+            .map(|p| crate::game_time::vitals_drain_multipliers_for_progress(&p, sprinting))
+            .unwrap_or((1.0, if sprinting { SPRINT_VITALS_DRAIN_MUL } else { 1.0 }));
+
+        let (nh, nhu, nhy) = step_vitals_once(
+            row.health,
+            row.hunger,
+            row.hydration,
+            dt_secs,
+            base_mul,
+            sprint_mul,
+        );
 
         // Skip writes when nothing meaningful changed (reduces replication noise).
         const EPS: f32 = 0.004;
@@ -266,5 +311,29 @@ pub fn player_vitals_tick_step(ctx: &ReducerContext, _arg: PlayerVitalsSchedule)
         if was_alive && nh <= 0.0 {
             on_player_death(ctx, owner);
         }
+    }
+}
+
+#[cfg(test)]
+mod vitals_tests {
+    use super::*;
+
+    #[test]
+    fn sprint_drain_is_incremental_on_top_of_base() {
+        let (_, hu_base, _) = step_vitals_once(100.0, 100.0, 100.0, 120.0, 1.0, 1.0);
+        let (_, hu_sprint, _) =
+            step_vitals_once(100.0, 100.0, 100.0, 120.0, 1.0, SPRINT_VITALS_DRAIN_MUL);
+        assert!(hu_sprint < hu_base);
+        let base_drop = 100.0 - hu_base;
+        let sprint_drop = 100.0 - hu_sprint;
+        assert!(sprint_drop > base_drop);
+        assert!(sprint_drop < base_drop * 1.25);
+    }
+
+    #[test]
+    fn fatigue_multiplies_base_drain() {
+        let (_, hu_calm, _) = step_vitals_once(100.0, 100.0, 100.0, 60.0, 1.0, 1.0);
+        let (_, hu_tired, _) = step_vitals_once(100.0, 100.0, 100.0, 60.0, 1.35, 1.0);
+        assert!(hu_tired < hu_calm);
     }
 }

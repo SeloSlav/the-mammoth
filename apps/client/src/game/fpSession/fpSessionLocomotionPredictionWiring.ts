@@ -69,6 +69,7 @@ export type WireFpSessionLocomotionPredictionArgs = {
 export type WiredFpSessionLocomotionPrediction = {
   _mainStepOpts: FpSessionMainStepOpts;
   _elevSupportEval: FpKinematicSupportSampleOpts;
+  _walkOpts: FpLocomotionWalkOptions;
   simulatePredictedPlayerStep: (opts: FpSessionMainStepOpts) => number;
   reconcileLocalPredictionToServer: (row: PlayerPose) => void;
 };
@@ -227,6 +228,7 @@ export function wireFpSessionLocomotionPrediction(
   return {
     _mainStepOpts,
     _elevSupportEval,
+    _walkOpts,
     simulatePredictedPlayerStep,
     reconcileLocalPredictionToServer,
   };

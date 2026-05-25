@@ -10,12 +10,10 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-import {
-  BalconyGrowTickSchedule,
-} from "./types";
-
-export default {
-  get arg() {
-    return BalconyGrowTickSchedule;
-  },
-};
+export default __t.row({
+  unitKey: __t.string().primaryKey().name("unit_key"),
+  powerOn: __t.u8().name("power_on"),
+  powerRestoreAfterMinutes: __t.u16().name("power_restore_after_minutes"),
+  waterTankOk: __t.u8().name("water_tank_ok"),
+  waterRestoreAfterMinutes: __t.u16().name("water_restore_after_minutes"),
+});

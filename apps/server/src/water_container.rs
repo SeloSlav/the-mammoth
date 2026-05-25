@@ -260,6 +260,12 @@ pub(crate) fn fill_bottle_in_water_tank_stash(
     }
 
     ensure_apartment_water_tank_row(ctx, &unit_key);
+    if !crate::apartment_utilities::water_tank_ok_for_unit(ctx, &unit_key) {
+        return Err(
+            "water tank header is broken — sleep won't refill it until maintenance fixes it"
+                .to_string(),
+        );
+    }
     let tank_table = ctx.db.apartment_water_tank();
     let mut tank = tank_table
         .unit_key()

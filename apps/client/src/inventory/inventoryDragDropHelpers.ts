@@ -4,7 +4,7 @@ import type { FpActiveStashPanelState } from "../game/fpInteraction/fpActiveStas
 import {
   clientMayPushToActiveApartmentStash,
   isApartmentStashSlotIndexValid,
-  mammothItemAllowedInApartmentStash,
+  mammothItemAllowedInApartmentStashAtSlot,
 } from "./apartmentStashInventoryRules";
 import type {
   MammothDraggedItemInfo,
@@ -75,7 +75,7 @@ export function evaluateInventoryStashTarget(
   if (!stashKind) return "blocked";
   if (!isApartmentStashSlotIndexValid(stashKind, target.index)) return "reject";
   if (src.sourceSlot.type === "stash") return "ok";
-  if (!mammothItemAllowedInApartmentStash(stashKind, src.item.def)) return "reject";
+  if (!mammothItemAllowedInApartmentStashAtSlot(stashKind, src.item.def, target.index)) return "reject";
   const panel = stashPanelFromRules(rules);
   if (!panel) return "blocked";
   if (!clientMayPushToActiveApartmentStash(rules.conn, panel)) return "blocked";

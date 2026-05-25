@@ -13,7 +13,10 @@ pub(crate) const APARTMENT_STASH_SLOT_INDEX_MAX: u16 = 24;
 
 const WATER_TANK_ALLOWED_DEF_IDS: &[&str] = &["water-bottle"];
 const GROW_TRAY_ALLOWED_DEF_IDS: &[&str] = &["balcony-grow-substrate"];
-const FISH_TANK_FILTER_ALLOWED_DEF_IDS: &[&str] = &["fish-filter-sponge"];
+const FISH_TANK_FILTER_CARTRIDGE_DEF_IDS: &[&str] = &["fish-filter-sponge"];
+
+pub(crate) const FISH_TANK_FILTER_MAINTENANCE_SLOT: u16 = 0;
+pub(crate) const FISH_TANK_FILTER_WATER_BOTTLE_SLOT: u16 = 1;
 
 pub(crate) fn apartment_stash_slot_count(stash_kind: &str) -> u16 {
     match stash_kind {
@@ -23,7 +26,7 @@ pub(crate) fn apartment_stash_slot_count(stash_kind: &str) -> u16 {
         APARTMENT_STASH_KIND_FRIDGE => 14,
         APARTMENT_STASH_KIND_WATER_TANK => 1,
         APARTMENT_STASH_KIND_FISH_TANK => 1,
-        APARTMENT_STASH_KIND_FISH_TANK_FILTER => 1,
+        APARTMENT_STASH_KIND_FISH_TANK_FILTER => 2,
         APARTMENT_STASH_KIND_GROW_TRAY => 1,
         _ => 24,
     }
@@ -66,11 +69,35 @@ pub(crate) fn apartment_stash_rejection_hint(stash_kind: &str) -> &'static str {
         APARTMENT_STASH_KIND_WATER_TANK => "Water tank only holds a water bottle.",
         APARTMENT_STASH_KIND_FISH_TANK => "Fish tank only holds food for the fish.",
         APARTMENT_STASH_KIND_FISH_TANK_FILTER => {
-            "Fish filter only holds a filter sponge cartridge."
+            "Fish filter: water bottle in the water slot, sponge cartridge in the cartridge slot."
         }
         APARTMENT_STASH_KIND_GROW_TRAY => "Grow tray only holds balcony substrate fertilizer.",
         _ => "This item cannot go in this storage.",
     }
+}
+
+fn fish_tank_filter_accepts_def_id_at_slot(slot_index: u16, def_id: &str) -> bool {
+    if slot_index == FISH_TANK_FILTER_MAINTENANCE_SLOT {
+        return FISH_TANK_FILTER_CARTRIDGE_DEF_IDS.contains(&def_id);
+    }
+    if slot_index == FISH_TANK_FILTER_WATER_BOTTLE_SLOT {
+        return def_id == "water-bottle";
+    }
+    false
+}
+
+pub(crate) fn apartment_stash_accepts_def_id_at_slot(
+    stash_kind: &str,
+    def_id: &str,
+    slot_index: u16,
+) -> bool {
+    if !apartment_stash_slot_index_valid(stash_kind, slot_index) {
+        return false;
+    }
+    if stash_kind == APARTMENT_STASH_KIND_FISH_TANK_FILTER {
+        return fish_tank_filter_accepts_def_id_at_slot(slot_index, def_id);
+    }
+    apartment_stash_accepts_def_id(stash_kind, def_id)
 }
 
 pub(crate) fn apartment_stash_accepts_def_id(stash_kind: &str, def_id: &str) -> bool {
@@ -84,7 +111,8 @@ pub(crate) fn apartment_stash_accepts_def_id(stash_kind: &str, def_id: &str) -> 
         return crate::fish_tank::is_fish_tank_feed_def_id(def_id);
     }
     if stash_kind == APARTMENT_STASH_KIND_FISH_TANK_FILTER {
-        return FISH_TANK_FILTER_ALLOWED_DEF_IDS.contains(&def_id);
+        return fish_tank_filter_accepts_def_id_at_slot(FISH_TANK_FILTER_MAINTENANCE_SLOT, def_id)
+            || fish_tank_filter_accepts_def_id_at_slot(FISH_TANK_FILTER_WATER_BOTTLE_SLOT, def_id);
     }
     if stash_kind == APARTMENT_STASH_KIND_FRIDGE && def_id == "water-bottle" {
         return true;

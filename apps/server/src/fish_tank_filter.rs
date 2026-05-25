@@ -6,27 +6,30 @@ use spacetimedb::{Identity, ReducerContext, Table};
 use crate::apartments::{self, apartment_unit, apartment_unit_decor, ApartmentUnitDecor};
 use crate::auth;
 use crate::fish_tank;
-use crate::inventory::{
-    find_item_in_hotbar_slot, find_item_in_stash_slot, remove_stash_item_quantity,
-};
+use crate::inventory::{find_item_in_stash_slot, inventory_item, remove_stash_item_quantity, InventoryItem};
+use crate::inventory_models::{ItemLocation, StashLocationData};
+use crate::items_catalog;
 use crate::inventory_models::apartment_stash_key_decor;
 use crate::water_container;
 
 pub(crate) const APARTMENT_STASH_KIND_FISH_TANK_FILTER: &str = "fish_tank_filter";
 pub(crate) const FISH_TANK_FILTER_MAINTENANCE_SLOT: u16 = 0;
+pub(crate) const FISH_TANK_FILTER_WATER_BOTTLE_SLOT: u16 = 1;
 pub(crate) const FISH_TANK_FILTER_PATCH_DEF_ID: &str = "fish-filter-sponge";
 
 pub(crate) const FISH_TANK_WATER_CAPACITY_L: f32 = 5.0;
 pub(crate) const FISH_TANK_WATER_START_L: f32 = 4.0;
-pub(crate) const FISH_TANK_FILTER_HEALTH_START: u8 = 85;
+pub(crate) const FISH_TANK_FILTER_HEALTH_START: u8 = 100;
 
 const TOP_OFF_LITERS: f32 = 0.5;
 const RINSE_LITERS: f32 = 1.0;
 const RINSE_HEALTH_GAIN: u8 = 25;
 const CARTRIDGE_INSTALL_HEALTH: u8 = 100;
 const OVERNIGHT_WATER_LOSS_L: f32 = 0.35;
-const OVERNIGHT_FILTER_LOSS_OK: u8 = 4;
-const OVERNIGHT_FILTER_LOSS_STRESSED: u8 = 10;
+/// ~7 slept nights from full cartridge when water level is healthy.
+const OVERNIGHT_FILTER_LOSS_OK: u8 = 14;
+/// Low tank water clogs the sponge faster.
+const OVERNIGHT_FILTER_LOSS_STRESSED: u8 = 20;
 
 #[spacetimedb::table(public, accessor = fish_tank_filter_link)]
 pub struct FishTankFilterLink {
@@ -210,21 +213,21 @@ fn player_near_filter_stash(
     Ok(())
 }
 
-fn sip_bottle_liters(
+fn sip_stash_bottle_liters(
     ctx: &ReducerContext,
     owner: Identity,
-    hotbar_slot: u8,
+    stash_key: &str,
     liters: f32,
 ) -> Result<(), String> {
-    use crate::inventory::NUM_PLAYER_HOTBAR_SLOTS;
-
-    if hotbar_slot >= NUM_PLAYER_HOTBAR_SLOTS {
-        return Err("invalid hotbar slot".to_string());
-    }
-    let item = find_item_in_hotbar_slot(ctx, owner, hotbar_slot)
-        .ok_or_else(|| "hold a water bottle on the hotbar".to_string())?;
+    let item = find_item_in_stash_slot(
+        ctx,
+        owner,
+        stash_key,
+        FISH_TANK_FILTER_WATER_BOTTLE_SLOT,
+    )
+    .ok_or_else(|| "place a water bottle in the filter water slot first".to_string())?;
     if item.def_id != water_container::WATER_BOTTLE_DEF_ID {
-        return Err("hold a water bottle on the hotbar".to_string());
+        return Err("filter water slot only accepts a water bottle".to_string());
     }
     let spec = water_container::water_container_spec(&item.def_id)
         .ok_or_else(|| "water bottle spec missing".to_string())?;
@@ -244,7 +247,6 @@ fn sip_bottle_liters(
 pub(crate) fn top_off_fish_tank_from_bottle_impl(
     ctx: &ReducerContext,
     filter_decor_id: u64,
-    hotbar_slot: u8,
 ) -> Result<(), String> {
     auth::ensure_gameplay_unlocked(ctx)?;
     let sender = ctx.sender();
@@ -257,12 +259,13 @@ pub(crate) fn top_off_fish_tank_from_bottle_impl(
     if !is_filter_decor_row(&filter) {
         return Err("not a fish tank filter".to_string());
     }
-    player_near_filter_stash(ctx, sender, filter_stash_key(&filter).as_str())?;
+    let stash_key = filter_stash_key(&filter);
+    player_near_filter_stash(ctx, sender, stash_key.as_str())?;
     let link = filter_link_for_decor(ctx, filter_decor_id).ok_or_else(|| {
         "filter is not linked to a fish tank — set the link in the apartment editor".to_string()
     })?;
 
-    sip_bottle_liters(ctx, sender, hotbar_slot, TOP_OFF_LITERS)?;
+    sip_stash_bottle_liters(ctx, sender, stash_key.as_str(), TOP_OFF_LITERS)?;
 
     ensure_fish_tank_ecosystem(ctx, link.unit_key.as_str(), link.tank_decor_id);
     let eco_table = ctx.db.fish_tank_ecosystem();
@@ -275,8 +278,8 @@ pub(crate) fn top_off_fish_tank_from_bottle_impl(
 }
 
 #[spacetimedb::reducer]
-pub fn top_off_fish_tank_from_bottle(ctx: &ReducerContext, filter_decor_id: u64, hotbar_slot: u8) {
-    if let Err(e) = top_off_fish_tank_from_bottle_impl(ctx, filter_decor_id, hotbar_slot) {
+pub fn top_off_fish_tank_from_bottle(ctx: &ReducerContext, filter_decor_id: u64) {
+    if let Err(e) = top_off_fish_tank_from_bottle_impl(ctx, filter_decor_id) {
         log::debug!("top_off_fish_tank_from_bottle: {e}");
         apartments::notify_stash_reducer_failure(ctx, e);
     }
@@ -285,7 +288,6 @@ pub fn top_off_fish_tank_from_bottle(ctx: &ReducerContext, filter_decor_id: u64,
 pub(crate) fn rinse_fish_tank_filter_impl(
     ctx: &ReducerContext,
     filter_decor_id: u64,
-    hotbar_slot: u8,
 ) -> Result<(), String> {
     auth::ensure_gameplay_unlocked(ctx)?;
     let sender = ctx.sender();
@@ -298,11 +300,12 @@ pub(crate) fn rinse_fish_tank_filter_impl(
     if !is_filter_decor_row(&filter) {
         return Err("not a fish tank filter".to_string());
     }
-    player_near_filter_stash(ctx, sender, filter_stash_key(&filter).as_str())?;
+    let stash_key = filter_stash_key(&filter);
+    player_near_filter_stash(ctx, sender, stash_key.as_str())?;
     let link = filter_link_for_decor(ctx, filter_decor_id)
         .ok_or_else(|| "filter is not linked to a fish tank".to_string())?;
 
-    sip_bottle_liters(ctx, sender, hotbar_slot, RINSE_LITERS)?;
+    sip_stash_bottle_liters(ctx, sender, stash_key.as_str(), RINSE_LITERS)?;
 
     ensure_fish_tank_ecosystem(ctx, link.unit_key.as_str(), link.tank_decor_id);
     let eco_table = ctx.db.fish_tank_ecosystem();
@@ -315,8 +318,8 @@ pub(crate) fn rinse_fish_tank_filter_impl(
 }
 
 #[spacetimedb::reducer]
-pub fn rinse_fish_tank_filter(ctx: &ReducerContext, filter_decor_id: u64, hotbar_slot: u8) {
-    if let Err(e) = rinse_fish_tank_filter_impl(ctx, filter_decor_id, hotbar_slot) {
+pub fn rinse_fish_tank_filter(ctx: &ReducerContext, filter_decor_id: u64) {
+    if let Err(e) = rinse_fish_tank_filter_impl(ctx, filter_decor_id) {
         log::debug!("rinse_fish_tank_filter: {e}");
         apartments::notify_stash_reducer_failure(ctx, e);
     }
@@ -407,6 +410,62 @@ pub(crate) fn advance_fish_tank_ecosystems_for_unit(ctx: &ReducerContext, unit_k
 }
 
 /// Sleep hook — run feed digest on tanks that have a linked filter ecosystem.
+/// One-time spare sponge in the maintenance slot so players learn the cartridge item.
+pub(crate) fn ensure_starter_fish_filter_cartridge_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) {
+    let Some(unit_key) = apartments::claimed_unit_key_for_owner(ctx, owner) else {
+        return;
+    };
+    ensure_starter_fish_filter_cartridge_for_unit(ctx, owner, unit_key.as_str());
+}
+
+pub(crate) fn ensure_starter_fish_filter_cartridge_for_unit(
+    ctx: &ReducerContext,
+    owner: Identity,
+    unit_key: &str,
+) {
+    if !items_catalog::is_known_def(FISH_TANK_FILTER_PATCH_DEF_ID) {
+        log::error!(
+            "fish filter starter: catalog missing {}",
+            FISH_TANK_FILTER_PATCH_DEF_ID
+        );
+        return;
+    }
+
+    let filters: Vec<ApartmentUnitDecor> = ctx
+        .db
+        .apartment_unit_decor()
+        .iter()
+        .filter(|d| d.unit_key.as_str() == unit_key && is_filter_decor_row(d))
+        .collect();
+
+    for filter in filters {
+        let stash_key = filter_stash_key(&filter);
+        if find_item_in_stash_slot(
+            ctx,
+            owner,
+            stash_key.as_str(),
+            FISH_TANK_FILTER_MAINTENANCE_SLOT,
+        )
+        .is_some()
+        {
+            continue;
+        }
+        let _ = ctx.db.inventory_item().insert(InventoryItem {
+            instance_id: 0,
+            def_id: FISH_TANK_FILTER_PATCH_DEF_ID.to_string(),
+            quantity: 1,
+            location: ItemLocation::Stash(StashLocationData {
+                owner_identity: owner,
+                unit_key: stash_key,
+                slot_index: FISH_TANK_FILTER_MAINTENANCE_SLOT,
+            }),
+        });
+    }
+}
+
 pub(crate) fn advance_fish_tank_filters_for_unit(ctx: &ReducerContext, unit_key: &str) {
     advance_fish_tank_ecosystems_for_unit(ctx, unit_key);
 
@@ -446,7 +505,7 @@ pub(crate) fn advance_fish_tank_filters_for_unit(ctx: &ReducerContext, unit_key:
 mod tests {
     use super::{
         clamp_health, clamp_water, FISH_TANK_FILTER_HEALTH_START, FISH_TANK_WATER_CAPACITY_L,
-        FISH_TANK_WATER_START_L,
+        FISH_TANK_WATER_START_L, OVERNIGHT_FILTER_LOSS_OK,
     };
 
     #[test]
@@ -461,6 +520,21 @@ mod tests {
     #[test]
     fn filter_health_caps_at_100() {
         assert_eq!(clamp_health(120), 100);
-        assert_eq!(FISH_TANK_FILTER_HEALTH_START, 85);
+        assert_eq!(FISH_TANK_FILTER_HEALTH_START, 100);
+    }
+
+    #[test]
+    fn installed_cartridge_lasts_about_one_week_at_full_health() {
+        let mut health = FISH_TANK_FILTER_HEALTH_START;
+        let mut nights = 0u32;
+        while health > 0 {
+            health = health.saturating_sub(OVERNIGHT_FILTER_LOSS_OK);
+            nights += 1;
+        }
+        assert_eq!(nights, 8, "100% at 14/night reaches 0 after 8 sleeps");
+        assert!(
+            nights >= 7 && nights <= 8,
+            "digestically ~one in-game week before swap"
+        );
     }
 }

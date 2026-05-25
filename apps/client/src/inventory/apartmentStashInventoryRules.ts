@@ -1,5 +1,7 @@
 import {
   apartmentStashAcceptsDefId,
+  apartmentStashAcceptsDefIdAtSlot,
+  apartmentStashPreferredSlotForDefId,
   apartmentStashRejectionHint,
   apartmentStashSlotCount,
   APARTMENT_STASH_KIND_GROW_TRAY,
@@ -17,6 +19,8 @@ import { clientMayUseApartmentStash } from "../game/fpApartment/fpApartmentGamep
 import { getFpInteractionFeetSnapshot } from "../game/fpInteraction/fpInteractionFeetState.js";
 import { showGameplayErrorBar } from "../ui/gameplayErrorBar";
 import type { FpActiveStashPanelState } from "../game/fpInteraction/fpActiveStashPanel";
+import type { MammothPopulatedItem } from "./inventoryDragDropTypes";
+import { destIndexForQuickTransfer } from "./inventoryQuickTransfer";
 
 export function mammothItemAllowedInApartmentStash(
   stashKind: ApartmentStashKind,
@@ -27,6 +31,40 @@ export function mammothItemAllowedInApartmentStash(
     def.id,
     def.category as ApartmentStashItemCategory,
   );
+}
+
+export function mammothItemAllowedInApartmentStashAtSlot(
+  stashKind: ApartmentStashKind,
+  def: MammothItemDef,
+  slotIndex: number,
+): boolean {
+  return apartmentStashAcceptsDefIdAtSlot(
+    stashKind,
+    def.id,
+    def.category as ApartmentStashItemCategory,
+    slotIndex,
+  );
+}
+
+/** Target stash slot for quick-transfer when the stash kind uses fixed slots per item type. */
+export function mammothStashQuickTransferDestIndex(
+  stashKind: ApartmentStashKind,
+  pop: MammothPopulatedItem,
+  destSlots: ReadonlyArray<MammothPopulatedItem | null>,
+): number | null {
+  const preferred = apartmentStashPreferredSlotForDefId(stashKind, pop.def.id);
+  if (preferred != null) {
+    if (
+      !mammothItemAllowedInApartmentStashAtSlot(stashKind, pop.def, preferred)
+    ) {
+      return null;
+    }
+    return preferred;
+  }
+  if (!mammothItemAllowedInApartmentStash(stashKind, pop.def)) {
+    return null;
+  }
+  return destIndexForQuickTransfer(destSlots, pop);
 }
 
 export function resolveApartmentDecorStashKindFromConn(

@@ -51,6 +51,7 @@ import {
 import { createFpFirearmImpactDecals } from "./fpSession/fpFirearmImpactDecals.js";
 import { createFpPlayerDamageBloodSquirt } from "./fpSession/fpPlayerDamageBloodSquirt.js";
 import { createFpPlayerDamageScreenShake } from "./fpSession/fpPlayerDamageScreenShake.js";
+import { mountGameTimeDisplaySync } from "./fpSession/gameTimeDisplay.js";
 import {
   wireFpSessionLocomotionPrediction,
 } from "./fpSession/fpSessionLocomotionPredictionWiring.js";
@@ -1094,7 +1095,7 @@ export async function mountFpSession(
     elevDebugEnabled: getElevDebugEnabled(),
   }));
 
-  const { _mainStepOpts, _elevSupportEval, simulatePredictedPlayerStep, reconcileLocalPredictionToServer } =
+  const { _mainStepOpts, _elevSupportEval, _walkOpts, simulatePredictedPlayerStep, reconcileLocalPredictionToServer } =
     wireFpSessionLocomotionPrediction({
       pos,
       prevPos,
@@ -1137,6 +1138,8 @@ export async function mountFpSession(
     }),
     snapshotPublishAllowed: () => moveSnapshotHydrated.current,
   });
+
+  const disposeGameTimeDisplaySync = mountGameTimeDisplaySync(conn);
 
   const flushLocalPickupPoseToServer = (): Promise<void> => {
     const locomotionBlocked = fpLocomotionInputBlocked();
@@ -1958,6 +1961,7 @@ export async function mountFpSession(
     prevPos,
     _input,
     _mainStepOpts,
+    _walkOpts,
     simulatePredictedPlayerStep,
     fpCollisionDebug,
     fpElevators,
@@ -2109,6 +2113,7 @@ export async function mountFpSession(
     unregisterFpDebugMenuSessionSnapshot();
     setFpActiveStashPanel(null);
     disposeFpSessionDevDebug();
+    disposeGameTimeDisplaySync();
     droppedWorld.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);

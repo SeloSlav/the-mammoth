@@ -499,6 +499,8 @@ export function apartmentDecorContactShadowEligible(modelRelPath: string): boole
 
   if (lower.includes("kelp")) return false;
 
+  if (lower.includes("window-shutter")) return false;
+
   return true;
 
 }
