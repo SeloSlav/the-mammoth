@@ -25,6 +25,7 @@ import {
   MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD,
   MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD,
   prepareMammothApartmentInteriorContentRoots,
+  applyApartmentDecorCrossPlacementInstancing,
   syncMammothStairwellCeilingFixturePresentation,
   ensureMammothStairwellCeilingFixtureVisuals,
   requestWebGpuAdapter,
@@ -143,6 +144,7 @@ import {
 } from "./fpSession/fpSessionGameUiHidden.js";
 import { createFpSessionPerfDebugPostRenderHook, fpSessionTrackGpuTimestampsEnabled } from "./fpSession/fpSessionPerfDebug.js";
 import { createFpSessionHeavyMeshProfiler } from "./fpSession/fpSessionHeavyMeshProfiler.js";
+import { createFpMegablockSpatialContext } from "./fpSession/fpMegablockSpatialContext.js";
 import { mountFpApartmentDoors } from "./fpApartment/fpApartmentDoors.js";
 import { mountFpApartmentDecorMeshes } from "./fpApartment/fpApartmentDecorMeshes.js";
 import {
@@ -173,6 +175,8 @@ import { getMammothItemDef } from "../inventory/mammothItemCatalog";
 import { LocalGameAudio } from "./audio/localGameAudio.js";
 import { createFpSessionCorridorPvsContext } from "./fpSession/fpSessionCorridorPvs.js";
 import { createFpNpcSession } from "./npc/fpNpcSession.js";
+import { createFpNpcRenderPvsGate } from "./npc/fpNpcRenderPvs.js";
+import { isFpWorldNpcsEnabled } from "./fpSession/fpSessionPerfDebug.js";
 import { createFpNpcCollisionSource } from "./fpPhysics/fpNpcCollision.js";
 import { setFpCombatSimMode } from "./combatSim/fpCombatSimMode.js";
 import {
@@ -341,7 +345,26 @@ export async function mountFpSession(
     sampleWalkTopBase,
     stairShaftInteriorLightBounds,
     stairShaftSpecs,
+    walkSupportAABBs,
+    walkFootprint,
+    stairWalkSupportSurfaces,
   } = world;
+
+  const megablockSpatial = isCombatSim
+    ? null
+    : createFpMegablockSpatialContext({
+        conn,
+        walkAabbsFull: walkSupportAABBs,
+        walkFootprint,
+        stairWalkSupportSurfaces,
+        storeyFilterBase: {
+          buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
+          floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
+        },
+        stairShaftBounds: stairShaftInteriorLightBounds,
+      });
+  megablockSpatial?.bindTableInvalidation();
+  const sampleWalkTopForSession = megablockSpatial?.sampleWalkTopBase ?? sampleWalkTopBase;
 
   const scene = new THREE.Scene();
   const gpuTimestampRequested = fpGpuTimestampDebugEnabled();
@@ -356,6 +379,8 @@ export async function mountFpSession(
   });
   await fpLoadingDbgTimed("webgpu_renderer_init", () => renderer.init());
   assertWebGpuRendererBackend(renderer);
+  const { bootstrapFpSessionRenderer } = await import("./fpSession/fpSessionRendererBootstrap.js");
+  await fpLoadingDbgTimed("fp_session_pbr_ktx2", () => bootstrapFpSessionRenderer(renderer));
   const rendererShadowMap = renderer.shadowMap as typeof renderer.shadowMap & {
     autoUpdate: boolean;
     needsUpdate: boolean;
@@ -659,7 +684,10 @@ export async function mountFpSession(
     groups: readonly THREE.Object3D[],
   ): string =>
     groups
-      .map((group) => `${group.uuid}:${group.visible ? 1 : 0}:${group.children.length}`)
+      .map(
+        (group) =>
+          `${group.uuid}:${group.children.length}:${group.userData.mammothApartmentDecorInstanced === true ? 1 : 0}`,
+      )
       .join("|");
 
   const syncStairwellCeilingPracticalLights = (): void => {
@@ -684,7 +712,9 @@ export async function mountFpSession(
     }
 
     const decorGroups = collectStairwellCeilingLightGroups(buildingRoot).filter(
-      (group) => group.visible && group.children.length > 0,
+      (group) =>
+        group.children.length > 0 &&
+        group.userData.mammothStairwellCeilingLightLoadFailed !== true,
     );
     const signature = stairwellCeilingPracticalGroupsSignature(decorGroups);
     if (
@@ -713,6 +743,13 @@ export async function mountFpSession(
       if (isCombatSim) return;
       ensureMammothStairwellCeilingFixtureVisuals(buildingRoot);
       prepareStairwellCeilingGroupsOnce();
+      applyApartmentDecorCrossPlacementInstancing(buildingRoot, {
+        placementRoots: collectStairwellCeilingLightGroups(buildingRoot).filter(
+          (group) =>
+            group.children.length > 0 &&
+            group.userData.mammothStairwellCeilingLightLoadFailed !== true,
+        ),
+      });
       syncStairwellCeilingPracticalLights();
     });
   };
@@ -1224,14 +1261,27 @@ export async function mountFpSession(
          * `insideResidentialUnit`: 0.85 m XZ slack extends unit bounds across the corridor gap
          * beside closed doors and hides anonymous corridor shell meshes in-unit.
          */
-        const slackUnit = apartmentUnitContainingFeetSlack(conn, pos.x, pos.y, pos.z, {
-          slackXZ: FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M,
-          slackYBelow: 1.25,
-          slackYAbove: 2.85,
-        });
+        const slackUnit = apartmentUnitContainingFeetSlack(
+          conn,
+          pos.x,
+          pos.y,
+          pos.z,
+          {
+            slackXZ: FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M,
+            slackYBelow: 1.25,
+            slackYAbove: 2.85,
+          },
+          megablockSpatial?.units,
+        );
         updateActiveOwnedApartmentFromContainingUnit(slackUnit?.unitKey ?? null);
 
-        const strictUnit = apartmentUnitContainingFeet(conn, pos.x, pos.y, pos.z);
+        const strictUnit = apartmentUnitContainingFeet(
+          conn,
+          pos.x,
+          pos.y,
+          pos.z,
+          megablockSpatial?.units,
+        );
         if (strictUnit) {
           return {
             unitId: strictUnit.unitId,
@@ -1265,10 +1315,34 @@ export async function mountFpSession(
       }
     : (nowMs: number) => {
         syncBuildingFloorPlateVisibilityBase(nowMs);
+        const band = getActiveFloorPlateBand();
+        megablockSpatial?.setWalkSampleStoreyBand(band.lo, band.hi);
         syncStairwellCeilingPracticalLights();
       };
 
   getIsInsideStairwellShaft = isInsideStairwellShaft;
+
+  if (!isCombatSim) {
+    fpElevators.setFloorPlateBandGetter(() => getActiveFloorPlateBand());
+    fpApartmentDoors.setFloorPlateBandGetter(() => getActiveFloorPlateBand());
+  }
+
+  const npcRenderPvsGate =
+    isCombatSim || !isFpWorldNpcsEnabled()
+      ? null
+      : createFpNpcRenderPvsGate(() => ({
+          floorPlateBand: getActiveFloorPlateBand(),
+          storeyOpts: {
+            buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
+            floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
+            maxLevel: maxBuildingLevel,
+          },
+          insideResidentialUnit: isInsideResidentialUnit(),
+          insideApartmentInteriorLightingZone: isInsideApartmentInteriorLightingZone(),
+          corridorPvsVisibleUnitKeys: getCorridorPvsVisibleUnitKeys(),
+          unitKeyContainingPoint: (x, y, z) =>
+            megablockSpatial?.unitAtFeet(x, y, z)?.unitKey ?? null,
+        }));
 
   const getInteractionPos = () => {
     const p = resolveAuthoritativeInteractionPose(pos, serverPose);
@@ -1281,11 +1355,18 @@ export async function mountFpSession(
       const activeBounds = apartmentUnitBoundsForKey(activeOwnedApartmentDecorUnitKey);
       if (activeBounds) return activeBounds;
     }
-    const unit = apartmentUnitContainingFeetSlack(conn, pos.x, pos.y, pos.z, {
-      slackXZ: FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M,
-      slackYBelow: 1.25,
-      slackYAbove: 2.85,
-    });
+    const unit = apartmentUnitContainingFeetSlack(
+      conn,
+      pos.x,
+      pos.y,
+      pos.z,
+      {
+        slackXZ: FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M,
+        slackYBelow: 1.25,
+        slackYAbove: 2.85,
+      },
+      megablockSpatial?.units,
+    );
     if (!unit) return null;
     return {
       minX: unit.boundMinX,
@@ -1470,22 +1551,24 @@ export async function mountFpSession(
 
   /** Footsteps + NPC voice share one Web Audio context — create before locomotion wiring. */
   const localAudio = new LocalGameAudio();
-  const fpNpcSession = isCombatSim
-    ? await createFpNpcSession({
-        worldParent: scene,
-        fxScene: scene,
-        conn,
-        getAudioContext: () => localAudio.getAudioContext(),
-        getCamera: () => camera,
-        getReadableEnvTexture: () => {
-          const tex = scene.userData.mammothFpMetallicReadableEnv;
-          return tex instanceof THREE.Texture ? tex : null;
-        },
-        npcCollision: fpNpcCollision ?? undefined,
-        /** Open arena has no megablock floor plates or corridor door PVS — always draw session NPCs. */
-        getRenderPvsGate: () => null,
-      })
-    : null;
+  let fpNpcSession: Awaited<ReturnType<typeof createFpNpcSession>> | null = null;
+
+  if (isCombatSim || isFpWorldNpcsEnabled()) {
+    fpNpcSession = await createFpNpcSession({
+      worldParent: scene,
+      fxScene: scene,
+      conn,
+      getAudioContext: () => localAudio.getAudioContext(),
+      getCamera: () => camera,
+      getReadableEnvTexture: () => {
+        const tex = scene.userData.mammothFpMetallicReadableEnv;
+        return tex instanceof THREE.Texture ? tex : null;
+      },
+      npcCollision: fpNpcCollision ?? undefined,
+      sessionKeyPrefix: isCombatSim ? "combat_sim:" : "megablock:",
+      getRenderPvsGate: () => npcRenderPvsGate,
+    });
+  }
 
   const { _mainStepOpts, _elevSupportEval, _walkOpts, simulatePredictedPlayerStep, reconcileLocalPredictionToServer } =
     wireFpSessionLocomotionPrediction({
@@ -1503,7 +1586,7 @@ export async function mountFpSession(
       mainRaf,
       displayOffset: _displayOffset,
       netDtSec: NET_DT_SEC,
-      sampleWalkTopBase,
+      sampleWalkTopBase: sampleWalkTopForSession,
       fpElevators,
       fpApartmentDoors,
       fpDynamicLocomotionBlockers,
@@ -2346,7 +2429,8 @@ export async function mountFpSession(
     fpApartmentDoors,
     fpApartmentDecorMeshes,
     fpBalconyGrowSession: fpBalconyGrow,
-    sampleWalkTopBase,
+    sampleWalkTopBase: sampleWalkTopForSession,
+    megablockSpatial,
     _elevSupportEval,
     _displayOffset,
     _rigViewScratch,
@@ -2431,12 +2515,10 @@ export async function mountFpSession(
     playerRig.rotation.y = mainRaf.bodyYaw;
     playerRig.updateMatrixWorld(true);
     if (loadDbg) fpLoadingDbgMark("mount_fp_session:gpu_entry_warmup_renders");
-    for (let warmupFrame = 0; warmupFrame < 2; warmupFrame++) {
-      renderBootstrapFrame();
-      await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => resolve());
-      });
-    }
+    const { prepareFpSessionLoadingGpuWarmup } = await import(
+      "./fpSession/fpSessionLoadingGpuWarmup.js"
+    );
+    await prepareFpSessionLoadingGpuWarmup({ renderFrame: renderBootstrapFrame });
     if (loadDbg) fpLoadingDbgMark("mount_fp_session:gpu_entry_warmup_renders_done");
   }
 

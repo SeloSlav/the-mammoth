@@ -42,6 +42,7 @@ import {
   resolveApartmentStashAnchorXZ,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 import type { FpApartmentStashRayOcclusion } from "./fpApartmentStashRayOcclusion.js";
+import type { ApartmentUnitSpatialIndex } from "../fpSession/fpApartmentUnitSpatialIndex.js";
 
 /**
  * Extra horizontal reach (m) beyond approximate visible mesh half-span so prompts still fire when
@@ -288,7 +289,9 @@ export function apartmentUnitContainingFeet(
   x: number,
   y: number,
   z: number,
+  unitIndex?: ApartmentUnitSpatialIndex | null,
 ): ApartmentUnit | null {
+  if (unitIndex) return unitIndex.unitAtFeet(x, y, z);
   let best: ApartmentUnit | null = null;
   let bestD = Infinity;
   for (const row of conn.db.apartment_unit) {
@@ -318,7 +321,9 @@ export function apartmentUnitContainingFeetSlack(
   y: number,
   z: number,
   opts?: { slackXZ?: number; slackYBelow?: number; slackYAbove?: number },
+  unitIndex?: ApartmentUnitSpatialIndex | null,
 ): ApartmentUnit | null {
+  if (unitIndex) return unitIndex.unitAtFeetSlack(x, y, z, opts);
   const slackXZ = opts?.slackXZ ?? 0.28;
   const slackYBelow = opts?.slackYBelow ?? 0.12;
   const slackYAbove = opts?.slackYAbove ?? 0.35;

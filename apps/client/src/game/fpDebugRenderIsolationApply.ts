@@ -1,5 +1,8 @@
 import * as THREE from "three";
-import { MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD } from "@the-mammoth/engine";
+import {
+  MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD,
+  MAMMOTH_FP_WORLD_NPC_UD,
+} from "@the-mammoth/engine";
 import {
   getFpDebugRenderIsolationFlags,
   isFpDebugRenderIsolationSuppressingAnything,
@@ -58,6 +61,13 @@ export function applyFpDebugRenderIsolationForceOff(targets: FpDebugRenderIsolat
   if (!flags.decals) {
     const decalsRoot = targets.scene.getObjectByName(DECALS_GROUP_NAME);
     if (decalsRoot?.visible) decalsRoot.visible = false;
+  }
+
+  if (!flags.npcs) {
+    targets.scene.traverse((obj) => {
+      if (obj.userData[MAMMOTH_FP_WORLD_NPC_UD] !== true) return;
+      if (obj.visible) obj.visible = false;
+    });
   }
 
   if (!flags.localViewmodel && targets.localViewmodelRoot.visible) {

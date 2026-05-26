@@ -86,12 +86,17 @@ export abstract class NpcPresenterFrame implements WorldNpcPresenter {
     );
   }
 
+  private lastBoundEnvTexture: THREE.Texture | null = null;
+
   tickVisualSnapshot(
     snapshot: ReplicatedNpcSnapshot,
     dt: number,
     envTexture: THREE.Texture | null = null,
   ): void {
-    bindNpcOutdoorReadableEnv(this.root, envTexture);
+    if (envTexture !== this.lastBoundEnvTexture) {
+      bindNpcOutdoorReadableEnv(this.root, envTexture);
+      this.lastBoundEnvTexture = envTexture;
+    }
 
     const { animationState } = stepNpcVisualSmoothing(this.visualSmoothing, dt);
     this.root.position.copy(this.visualSmoothing.visualPosition);

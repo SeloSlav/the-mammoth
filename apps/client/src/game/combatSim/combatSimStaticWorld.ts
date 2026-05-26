@@ -450,6 +450,12 @@ export function createCombatSimStaticWorld(conn: DbConnection): FpSessionStaticW
 
     sampleWalkTopBase,
 
+    walkSupportAABBs: walkSurfaces,
+
+    walkFootprint,
+
+    stairWalkSupportSurfaces: [],
+
     stairShaftInteriorLightBounds: [],
 
     stairShaftSpecs: [],

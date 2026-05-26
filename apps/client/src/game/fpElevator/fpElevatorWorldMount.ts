@@ -49,6 +49,13 @@ import { createFpElevatorHailAndFloorPickRaycasts } from "./world/fpElevatorHail
 import { createFpElevatorFloorVisAndCabContext } from "./world/fpElevatorFloorVisAndCabContext.js";
 import { createFpElevatorExteriorDoorInteract } from "./world/fpElevatorExteriorDoorInteract.js";
 import { createFpElevatorKinematicCollision } from "./world/fpElevatorKinematicCollision.js";
+import {
+  shouldRunElevatorShaftHeavyTick,
+  type FpActiveFloorPlateBand,
+} from "../fpSession/fpSessionActiveFloorVisBand.js";
+
+const _noopFloorBand = (): FpActiveFloorPlateBand => ({ lo: 1, hi: 99 });
+
 export function mountFpElevatorWorld(
   opts: MountFpElevatorWorldOpts,
 ): MountFpElevatorWorldResult {
@@ -471,6 +478,8 @@ export function mountFpElevatorWorld(
       hailPickFlash,
       pickFlash,
     });
+  let getFloorPlateBand: () => FpActiveFloorPlateBand = _noopFloorBand;
+
   const getCabMotionAudioEmitters = (
     nowMs: number,
   ): readonly FpElevCabMotionAudioEmitter[] => {
@@ -505,8 +514,17 @@ export function mountFpElevatorWorld(
       const row = latest.get(key);
       const rawCabY = row != null ? getCabY(key, nowMs) : Number.NaN;
       const d = getDoor(key, nowMs);
+      const insideThis = row != null && isInsideCarHud(px, py, pz, key);
+      const lx = row != null ? px - (ox + row.plateX) : 0;
+      const lz = row != null ? pz - (oz + row.plateZ) : 0;
+      const distXZ = row != null ? Math.hypot(lx, lz) : Infinity;
+      const heavyTick = shouldRunElevatorShaftHeavyTick({ distXZ, insideCab: insideThis });
       if (Number.isFinite(rawCabY)) {
         vis.updateFromServer(rawCabY, d);
+      }
+      if (!heavyTick) {
+        vis.setFloorPickRootVisible(false);
+        continue;
       }
       _swingByLevel.clear();
       for (const row of landingByRowKey.values()) {
@@ -536,9 +554,6 @@ export function mountFpElevatorWorld(
         vis.setFloorPickRootVisible(false);
         continue;
       }
-      const insideThis = isInsideCarHud(px, py, pz, key);
-      const lx = px - (ox + row.plateX);
-      const lz = pz - (oz + row.plateZ);
       const doorwayView = fpElevCarPanelDoorwayViewLocal(
         vis.layout.doorFace,
         lx,
@@ -562,6 +577,9 @@ export function mountFpElevatorWorld(
     }
   };
   return {
+    setFloorPlateBandGetter(getter: () => FpActiveFloorPlateBand) {
+      getFloorPlateBand = getter;
+    },
     dispose: () => {
       opts.conn.db.elevator_car.removeOnInsert(onElevRow);
       opts.conn.db.elevator_car.removeOnUpdate(onElevRow);

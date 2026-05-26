@@ -58,6 +58,7 @@ const inertKinematicSupport: FpKinematicSupportProvider = {
 
 export function createInertFpElevatorWorld(): MountFpElevatorWorldResult {
   return {
+    setFloorPlateBandGetter: noop,
     dispose: noop,
     syncCabEvalClock: noop,
     tick: noop,
@@ -84,6 +85,7 @@ export function createInertFpElevatorWorld(): MountFpElevatorWorldResult {
 export function createInertFpApartmentDoors(): MountFpApartmentDoorsResult {
   return {
     dispose: noop,
+    setFloorPlateBandGetter: noop,
     tick: noop,
     visitCollisionAabbsInXZ: noop,
     visitFirearmBarrierAabbsInXZ: noop,

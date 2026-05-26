@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
+  applyApartmentDecorCrossPlacementInstancing,
   attachApartmentWarmFixtureBulbGlow,
   bindMammothApartmentPropReadableEnv,
   moodGradeMammothApartmentDecorMesh,
@@ -113,6 +114,7 @@ function mountCorridorDecorPlacement(
   fixtureRoot.rotation.set(placement.pitchRad, placement.yawRad, placement.rollRad);
   applyCorridorDecorRootScale(fixtureRoot, placement);
   fixtureRoot.userData.mammothApartmentDecorModelRelPath = placement.modelRelPath;
+  fixtureRoot.userData.mammothApartmentDecorProp = true;
 
   const fixtureVisual = template.clone(true);
   prepCorridorDecorVisual(fixtureVisual, placement.modelRelPath);
@@ -178,6 +180,7 @@ export function mountFpFloor19CorridorCeilingLights(args: {
           previous: practicalLights,
         });
       }
+      applyApartmentDecorCrossPlacementInstancing(root);
     })
     .catch((error: unknown) => {
       console.warn("[fpSession] failed to mount floor 19 corridor decor", error);

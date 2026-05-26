@@ -66,6 +66,8 @@ export type FpElevatorRideDebugSnapshot = {
 };
 
 export type MountFpElevatorWorldResult = {
+  /** Wired from {@link createFpSessionFloorPlateVisibility} `getActiveFloorPlateBand`. */
+  setFloorPlateBandGetter: (getter: () => { lo: number; hi: number }) => void;
   dispose(): void;
   /**
    * Advance replicated cab evaluation time before locomotion/support sampling so moving-cab prediction stays aligned.

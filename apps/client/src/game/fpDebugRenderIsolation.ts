@@ -20,6 +20,8 @@ export type FpDebugRenderIsolationFlags = {
   lobbyInterior: boolean;
   droppedItems: boolean;
   decals: boolean;
+  /** Replicated `world_npc` skinned presenters (babushka, etc.). */
+  npcs: boolean;
   localViewmodel: boolean;
   /** Shell plaster emissive + decor fixture glow (material emissive channels only). */
   emissiveMaterials: boolean;
@@ -41,6 +43,7 @@ const ALL_ON: FpDebugRenderIsolationFlags = {
   lobbyInterior: true,
   droppedItems: true,
   decals: true,
+  npcs: true,
   localViewmodel: true,
   emissiveMaterials: true,
 };
@@ -74,6 +77,7 @@ export function isFpDebugRenderIsolationSuppressingAnything(): boolean {
     f.lobbyInterior &&
     f.droppedItems &&
     f.decals &&
+    f.npcs &&
     f.localViewmodel &&
     f.emissiveMaterials
   );
@@ -114,6 +118,7 @@ export function setAllFpDebugRenderIsolationFlags(enabled: boolean): void {
     lobbyInterior: enabled,
     droppedItems: enabled,
     decals: enabled,
+    npcs: enabled,
     localViewmodel: enabled,
     emissiveMaterials: enabled,
   };

@@ -149,6 +149,11 @@ export {
   type WalkSurfaceSpatialIndex,
 } from "./walkSurfaceSpatialIndex.js";
 export {
+  filterWalkSurfaceAabbsByStoreyBand,
+  WALK_SURFACE_STOREY_BAND_DISABLED,
+  type WalkSurfaceStoreyFilterOpts,
+} from "./walkSurfaceStoreyFilter.js";
+export {
   buildCollisionSpatialIndex,
   type CollisionSpatialIndex,
 } from "./collisionSpatialIndex.js";
@@ -350,6 +355,11 @@ export {
 } from "./elevatorVisualMaterialUtils.js";
 export type { PbrMaterialConfig, StandardAuthoringSlot } from "./pbrMaterialConfig.js";
 export { authorImportedPbrTexturesState, ensurePbrKtx2Support } from "./pbrTextureSystem.js";
+export {
+  DEFAULT_ASYNC_PBR_REVEALS_PER_FRAME,
+  drainAsyncPbrMaterialRevealBudget,
+  scheduleAsyncPbrMaterialReveal,
+} from "./pbrAsyncMaterialReveal.js";
 export { textureCandidatesFromSpec } from "./pbrTexturePath.js";
 export { disposeMaterial, disposeTexture, disposeObject3D } from "./threeDispose.js";
 export {

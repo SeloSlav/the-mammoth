@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@the-mammoth/assets": "workspace:*",
-    "@the-mammoth/game": "workspace:*"
+    "@the-mammoth/game": "workspace:*",
+    "@the-mammoth/schemas": "workspace:*"
   },
   "peerDependencies": {
     "three": "^0.183.2"

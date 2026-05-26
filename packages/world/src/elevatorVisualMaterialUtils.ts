@@ -19,6 +19,7 @@ import {
   beginHydrateTextureFromSpec,
   loadTextureFromSpec,
 } from "./pbrTextureSystem.js";
+import { scheduleAsyncPbrMaterialReveal } from "./pbrAsyncMaterialReveal.js";
 
 export type { PbrMaterialConfig };
 /** Legacy alias — same shape as {@link PbrMaterialConfig}. */
@@ -145,35 +146,47 @@ export function applyStandardAuthoringSlot(
   /** Normal map — optional, no bogus placeholder tint. */
   const nSpec = normalSpecFromConfig(slot);
   if (nSpec?.trim()) {
-    void loadTextureFromSpec(nSpec.trim(), THREE.NoColorSpace, wrapS, wrapT).then((tex) => {
-      mat.normalMap = tex;
-      mat.needsUpdate = true;
+    const spec = nSpec.trim();
+    scheduleAsyncPbrMaterialReveal(() => {
+      void loadTextureFromSpec(spec, THREE.NoColorSpace, wrapS, wrapT).then((tex) => {
+        mat.normalMap = tex;
+        mat.needsUpdate = true;
+      });
     });
   }
 
   /** Roughness — optional grayscale map baked per shell; shared GPU texture per URL stack. */
   if (roughSpec?.trim()) {
-    void acquireSharedRoughnessResolved(roughSpec.trim(), wrapS, wrapT).then((tex) => {
-      mat.roughnessMap = tex;
-      mat.needsUpdate = true;
+    const spec = roughSpec.trim();
+    scheduleAsyncPbrMaterialReveal(() => {
+      void acquireSharedRoughnessResolved(spec, wrapS, wrapT).then((tex) => {
+        mat.roughnessMap = tex;
+        mat.needsUpdate = true;
+      });
     });
   }
 
   /** Ambient occlusion — uses UV2 where authors provide meshes with a second UV set. */
   const aoSpec = aoSpecFromConfig(slot);
   if (aoSpec?.trim()) {
-    void loadTextureFromSpec(aoSpec.trim(), THREE.NoColorSpace, wrapS, wrapT).then((tex) => {
-      mat.aoMap = tex;
-      mat.needsUpdate = true;
+    const spec = aoSpec.trim();
+    scheduleAsyncPbrMaterialReveal(() => {
+      void loadTextureFromSpec(spec, THREE.NoColorSpace, wrapS, wrapT).then((tex) => {
+        mat.aoMap = tex;
+        mat.needsUpdate = true;
+      });
     });
   }
 
   if (useMetalTex) {
     const mSpec = metalnessSpecFromConfig(slot);
     if (mSpec?.trim()) {
-      void loadTextureFromSpec(mSpec.trim(), THREE.NoColorSpace, wrapS, wrapT).then((tex) => {
-        mat.metalnessMap = tex;
-        mat.needsUpdate = true;
+      const spec = mSpec.trim();
+      scheduleAsyncPbrMaterialReveal(() => {
+        void loadTextureFromSpec(spec, THREE.NoColorSpace, wrapS, wrapT).then((tex) => {
+          mat.metalnessMap = tex;
+          mat.needsUpdate = true;
+        });
       });
     }
   }
@@ -181,10 +194,13 @@ export function applyStandardAuthoringSlot(
   if (useBump) {
     const hSpec = heightSpecFromConfig(slot);
     if (hSpec?.trim()) {
-      void loadTextureFromSpec(hSpec.trim(), THREE.NoColorSpace, wrapS, wrapT).then((tex) => {
-        mat.bumpMap = tex;
-        mat.bumpScale = tex ? 0.02 : 0;
-        mat.needsUpdate = true;
+      const spec = hSpec.trim();
+      scheduleAsyncPbrMaterialReveal(() => {
+        void loadTextureFromSpec(spec, THREE.NoColorSpace, wrapS, wrapT).then((tex) => {
+          mat.bumpMap = tex;
+          mat.bumpScale = tex ? 0.02 : 0;
+          mat.needsUpdate = true;
+        });
       });
     }
   }

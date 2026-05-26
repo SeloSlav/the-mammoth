@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { MAMMOTH_APARTMENT_DECOR_PROP_LAYER } from "./apartmentInteriorLayers.js";
+import { getOrCreateMaterial } from "./materialPool.js";
 
 export const MAMMOTH_CEILING_LENS_GLOW_MESH_UD = "mammothCeilingLensGlowMesh";
 
@@ -46,6 +47,21 @@ function createGrowOpPanelGlowMaterial(
 type FixtureLensGlowMaterialFactory = (
   source: THREE.MeshStandardMaterial,
 ) => THREE.MeshStandardMaterial;
+
+const ceilingLensGlowMaterialCache = new Map<string, THREE.MeshStandardMaterial>();
+const growOpPanelGlowMaterialCache = new Map<string, THREE.MeshStandardMaterial>();
+
+function pooledCeilingLensGlowMaterial(source: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
+  return getOrCreateMaterial(ceilingLensGlowMaterialCache, `ceiling|${source.uuid}`, () =>
+    createCeilingLensGlowMaterial(source),
+  );
+}
+
+function pooledGrowOpPanelGlowMaterial(source: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
+  return getOrCreateMaterial(growOpPanelGlowMaterialCache, `growop|${source.uuid}`, () =>
+    createGrowOpPanelGlowMaterial(source),
+  );
+}
 
 function buildGeometry(
   positions: number[],
@@ -223,10 +239,10 @@ function applyFixtureLensGlow(
 }
 
 export function applyCeilingFixtureLensGlow(root: THREE.Object3D): void {
-  applyFixtureLensGlow(root, createCeilingLensGlowMaterial);
+  applyFixtureLensGlow(root, pooledCeilingLensGlowMaterial);
 }
 
 /** Cool-white lower-panel emissive for hanging grow-op LED fixtures. */
 export function applyGrowOpFixturePanelGlow(root: THREE.Object3D): void {
-  applyFixtureLensGlow(root, createGrowOpPanelGlowMaterial);
+  applyFixtureLensGlow(root, pooledGrowOpPanelGlowMaterial);
 }

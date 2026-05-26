@@ -562,6 +562,21 @@ export function mountDroppedItemsWorld(
     addRowToFallbackPool(root, fb, rowKey, row, ensureFallbackLocalMatrix(row.defId), geometry, material);
   };
 
+  /** Beyond this horizontal distance, visible drops use the shared fallback box (triangle LOD). */
+  const dropGlbNearHorizontalMSq =
+    (DROPPED_ITEM_RENDER_MAX_HORIZONTAL_M * 0.6) *
+    (DROPPED_ITEM_RENDER_MAX_HORIZONTAL_M * 0.6);
+  const dropWithinGlbDetailRange = (
+    rowX: number,
+    rowZ: number,
+    feetX: number,
+    feetZ: number,
+  ): boolean => {
+    const dx = rowX - feetX;
+    const dz = rowZ - feetZ;
+    return dx * dx + dz * dz <= dropGlbNearHorizontalMSq;
+  };
+
   const fullRebuildInstances = (
     feetX: number,
     feetY: number,
@@ -577,7 +592,10 @@ export function mountDroppedItemsWorld(
       const defId = cached.row.defId;
       void resolveDefTemplate(defId);
       const state = defTemplateState.get(defId);
-      if (state?.status === "ready") {
+      const useGlb =
+        state?.status === "ready" &&
+        dropWithinGlbDetailRange(cached.row.x, cached.row.z, feetX, feetZ);
+      if (useGlb) {
         let bucket = glbRowsByDef.get(defId);
         if (!bucket) {
           bucket = { rows: [], keys: [] };

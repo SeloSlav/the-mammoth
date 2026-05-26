@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { applyGpuRevealBudget } from "@the-mammoth/engine";
 
 /** Matches decor/furniture group bounds expansion for hallway / exterior peeks. */
 export const APARTMENT_PROP_FRUSTUM_MARGIN_M = 1.5;
@@ -286,57 +287,19 @@ export function applyApartmentInteriorPropVisibility(
   warmUpMaxShowsPerFrame = APARTMENT_INTERIOR_PROP_WARMUP_MAX_SHOWS_PER_FRAME,
   steadyMaxShowsPerFrame = APARTMENT_INTERIOR_PROP_STEADY_MAX_SHOWS_PER_FRAME,
 ): void {
-  const pendingWarmUp: ApartmentInteriorPropVisibilityApplyItem[] = [];
-  const pendingSteadyShow: ApartmentInteriorPropVisibilityApplyItem[] = [];
-
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i]!;
-
-    if (!item.desiredVisible) {
-      item.object.visible = false;
-      state.visibleKeys.delete(item.key);
-      continue;
-    }
-
-    if (!state.warmedKeys.has(item.key)) {
-      pendingWarmUp.push(item);
-      continue;
-    }
-
-    if (state.visibleKeys.has(item.key)) {
-      item.object.visible = true;
-      continue;
-    }
-
-    pendingSteadyShow.push(item);
-  }
-
-  pendingWarmUp.sort((a, b) => b.forwardDot - a.forwardDot);
-
-  const warmUpBudget = Math.max(0, warmUpMaxShowsPerFrame);
-  for (let i = 0; i < pendingWarmUp.length; i++) {
-    const item = pendingWarmUp[i]!;
-    if (i < warmUpBudget) {
-      item.object.visible = true;
-      state.visibleKeys.add(item.key);
-      state.warmedKeys.add(item.key);
-    } else {
-      item.object.visible = false;
-    }
-  }
-
-  pendingSteadyShow.sort((a, b) => b.forwardDot - a.forwardDot);
-
-  const steadyBudget = Math.max(0, steadyMaxShowsPerFrame);
-  for (let i = 0; i < pendingSteadyShow.length; i++) {
-    const item = pendingSteadyShow[i]!;
-    if (i < steadyBudget) {
-      item.object.visible = true;
-      state.visibleKeys.add(item.key);
-    } else {
-      item.object.visible = false;
-    }
-  }
+  applyGpuRevealBudget(
+    items.map((item) => ({
+      key: item.key,
+      desiredVisible: item.desiredVisible,
+      priority: item.forwardDot,
+      setVisible: (visible) => {
+        item.object.visible = visible;
+      },
+    })),
+    state,
+    "steady",
+    { warmupMax: warmUpMaxShowsPerFrame, steadyMax: steadyMaxShowsPerFrame },
+  );
 
   if (state.activeUnitKey !== null && state.warmedKeys.size > 0) {
     persistWarmedKeysForUnit(state, state.activeUnitKey);

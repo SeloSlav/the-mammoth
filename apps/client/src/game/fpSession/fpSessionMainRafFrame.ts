@@ -22,6 +22,8 @@ import {
   MAMMOTH_PICKUP_RADIUS_M,
   type MammothDroppedPickupBandOpts,
 } from "../worldRuntime/droppedItemWorldRuntime.js";
+import { drainAsyncPbrMaterialRevealBudget } from "@the-mammoth/world";
+import type { FpMegablockSpatialContext } from "./fpMegablockSpatialContext.js";
 import {
   apartmentClaimInteriorsPreferOverUnitDoor,
   getApartmentSystemPrompt,
@@ -233,6 +235,7 @@ export type FpSessionMainRafFrameDeps = {
   fpApartmentDecorMeshes: MountFpApartmentDecorMeshesResult;
   fpBalconyGrowSession?: FpBalconyGrowSession;
   sampleWalkTopBase: (x: number, z: number, probeTopY: number) => number;
+  megablockSpatial: FpMegablockSpatialContext | null;
   _elevSupportEval: FpKinematicSupportSampleOpts;
   _displayOffset: THREE.Vector3;
   _rigViewScratch: THREE.Vector3;
@@ -830,15 +833,24 @@ export function createFpSessionMainRafFrame(
         ddx * ddx + ddz * ddz > HUD_DROP_SCAN_STATIONARY_R2 || Math.abs(ddy) > 0.38;
       const scanDrops = deps.keys.has("KeyE") || movedDrops || (hudHeavyFrame & 1) === 0;
       if (scanDrops) {
-        cachedDropHud = findNearestDroppedPickupsHud(
-          deps.conn,
-          ftPick.x,
-          ftPick.y,
-          ftPick.z,
-          MAMMOTH_PICKUP_RADIUS_M,
-          MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
-          deps.droppedPickupHudBands,
-        );
+        cachedDropHud = deps.megablockSpatial
+          ? deps.megablockSpatial.drops.findNearest(
+              ftPick.x,
+              ftPick.y,
+              ftPick.z,
+              MAMMOTH_PICKUP_RADIUS_M,
+              MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
+              deps.droppedPickupHudBands,
+            )
+          : findNearestDroppedPickupsHud(
+              deps.conn,
+              ftPick.x,
+              ftPick.y,
+              ftPick.z,
+              MAMMOTH_PICKUP_RADIUS_M,
+              MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
+              deps.droppedPickupHudBands,
+            );
         dropHudCacheFx = ftPick.x;
         dropHudCacheFy = ftPick.y;
         dropHudCacheFz = ftPick.z;
@@ -1330,6 +1342,7 @@ export function createFpSessionMainRafFrame(
       floorVisCamDir: deps._floorVisCamDir,
     });
 
+    drainAsyncPbrMaterialRevealBudget();
     onFpSessionPostRenderFrame(nowMs);
     deps.logFpPerf();
     const cameraYawRad = fpCameraYawRad(deps.camera);

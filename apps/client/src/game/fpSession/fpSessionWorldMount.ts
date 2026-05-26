@@ -62,7 +62,7 @@ function stairShaftInteriorLightBoundsFromSpec(s: BuildingStairShaftSpec): FpSta
   };
 }
 
-function sampleMegablockWalkTopBase(
+export function sampleMegablockWalkTopBase(
   walkSpatialIndex: ReturnType<typeof buildWalkSurfaceSpatialIndex>,
   walkFootprint: { minX: number; maxX: number; minZ: number; maxZ: number },
   stairSupportSurfaces: Parameters<typeof sampleRuntimeStairSupportTopY>[0],
@@ -118,6 +118,9 @@ export type FpSessionStaticWorld = {
     probeTopY: number,
     sampleOpts?: SampleWalkGroundOpts,
   ) => number;
+  walkSupportAABBs: readonly import("@the-mammoth/world").WalkSurfaceAabb[];
+  walkFootprint: { minX: number; maxX: number; minZ: number; maxZ: number };
+  stairWalkSupportSurfaces: Parameters<typeof sampleRuntimeStairSupportTopY>[0];
   /** World boxes for stair shafts (+ corridor threshold) — FP dims fill lights when camera is inside. */
   stairShaftInteriorLightBounds: readonly FpStairShaftInteriorLightBounds[];
   /** Stair column specs (ids, segment counts) for client-only features such as stairwell decals. */
@@ -221,6 +224,9 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
     staticCollisionSolids: consolidatedCollisionBlockers,
     staticCollisionIndex,
     sampleWalkTopBase,
+    walkSupportAABBs,
+    walkFootprint,
+    stairWalkSupportSurfaces: stairRuntimeOverlay.supportSurfaces,
     stairShaftInteriorLightBounds,
     stairShaftSpecs: stairSpecs,
   };
@@ -326,6 +332,9 @@ export async function createFpSessionStaticWorldAsync(
     staticCollisionSolids: consolidatedCollisionBlockers,
     staticCollisionIndex,
     sampleWalkTopBase,
+    walkSupportAABBs,
+    walkFootprint,
+    stairWalkSupportSurfaces: stairRuntimeOverlay.supportSurfaces,
     stairShaftInteriorLightBounds,
     stairShaftSpecs: stairSpecs,
   };

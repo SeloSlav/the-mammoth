@@ -4,6 +4,17 @@ import * as THREE from "three";
  * Enable with `?fpdebug=1` or `localStorage.setItem("mammothFpDebug","1")`.
  * Logs once per second after each render: FPS (from RAF), draw calls, triangles.
  */
+/** Dev-only Mamutica `world_npc` presenters (`?fpnpc=1` / `mammothFpWorldNpcs`). */
+export function isFpWorldNpcsEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    if (new URLSearchParams(window.location.search).has("fpnpc")) return true;
+    return window.localStorage.getItem("mammothFpWorldNpcs") === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function isFpSessionPerfDebugEnabled(): boolean {
   if (typeof window === "undefined") return false;
   try {

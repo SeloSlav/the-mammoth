@@ -42,7 +42,7 @@ Implemented in `fpApartmentInteriorPropVisibility.ts` and applied from `fpApartm
 |-----------|---------------------|--------|
 | **Behind-camera cull (in-unit)** | `APARTMENT_INTERIOR_PROP_BEHIND_CAMERA_DOT_MAX = 0` | Props clearly behind the viewer are not drawn while inside the unit. |
 | **Entry warm-up burst** | `APARTMENT_INTERIOR_PROP_WARMUP_MAX_SHOWS_PER_FRAME = 32` | On unit entry, all decor groups ramp visible quickly (camera cone ignored) so WebGPU pipelines compile up front instead of during turns. |
-| **Steady-state immediate apply** | After warm-up per decor key | No per-frame show budget or forward-cone hysteresis while turning — only behind-camera + frustum. |
+| **Steady-state show budget** | `APARTMENT_INTERIOR_PROP_STEADY_MAX_SHOWS_PER_FRAME = 8` | After warm-up: behind-camera + frustum; re-shows after turning back are capped to avoid pipeline compile bursts. |
 | **Partition / mirror bypass** | `skipInteriorForwardCone` | Low-poly structural props do not participate in decor warm-up. |
 | **Frustum + bounds** | `APARTMENT_PROP_FRUSTUM_MARGIN_M = 1.5` | Standard frustum test on expanded decor bounds. |
 

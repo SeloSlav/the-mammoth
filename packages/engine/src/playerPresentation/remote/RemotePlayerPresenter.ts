@@ -9,6 +9,7 @@ import type {
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import { detachSkinnedModelCloneSubtree } from "../../loaders/deepDisposeObject3D.js";
+import { CrowdSkinnedPresenter } from "../crowd/CrowdSkinnedPresenter.js";
 import { buildPrimitiveHumanoid } from "../primitiveHumanoid.js";
 import { resolvePlayerBodyClipName, type PlayerBodyClipName } from "./playerBodyMotion.js";
 import { WeaponPresenter } from "../../weapons/WeaponPresenter.js";
@@ -22,8 +23,8 @@ import { FP_CROWBAR_GLTF_MAX_EDGE_M } from "../viewModelNormalize.js";
 import { resolveSkinnedHumanoidHandBone } from "../humanoidAttachmentBones.js";
 
 /**
- * Nearest N other players keep the full skinned `male.glb`; everyone else uses a shared-material
- * primitive (~36 tris / 6 draws) so crowds stay inside a sane GPU budget.
+ * Reserved for a future distance-based LOD policy. Crowd primitive LOD is disabled — remotes
+ * always render the skinned body GLB.
  */
 export const REMOTE_PLAYER_CROWD_FULL_DETAIL_NEAREST = 6;
 
@@ -566,7 +567,7 @@ export class WorldPlayerBodyPresenter {
   private readonly highBranch: THREE.Group;
   private readonly lowBranch: THREE.Group;
   private readonly crowdLod: boolean;
-  private crowdLodHighActive = false;
+  private readonly crowdSkinned: CrowdSkinnedPresenter | null;
   /** Present only when {@link crowdLod}; approximate hand socket on the low-LOD primitive. */
   private readonly primitiveRightHandWeaponSocket: THREE.Object3D | null;
   private readonly nameTag: THREE.Sprite | null = null;
@@ -627,12 +628,17 @@ export class WorldPlayerBodyPresenter {
     }
 
     if (opts.crowdLod) {
-      this.crowdLodHighActive = false;
-      this.highBranch.visible = false;
-      this.lowBranch.visible = true;
-      this.body.freezeForLodLo();
+      this.crowdSkinned = new CrowdSkinnedPresenter(
+        this.highBranch,
+        this.lowBranch,
+        {
+          freezeForLodLo: () => this.body.freezeForLodLo(),
+          resumeAfterLodHi: () => this.body.resumeAfterLodHi(),
+        },
+        false,
+      );
     } else {
-      this.crowdLodHighActive = true;
+      this.crowdSkinned = null;
       this.highBranch.visible = true;
       this.lowBranch.visible = false;
     }
@@ -650,15 +656,7 @@ export class WorldPlayerBodyPresenter {
       this.lowBranch.visible = false;
       return;
     }
-    if (wantSkinnedGlb === this.crowdLodHighActive) return;
-    this.crowdLodHighActive = wantSkinnedGlb;
-    this.highBranch.visible = wantSkinnedGlb;
-    this.lowBranch.visible = !wantSkinnedGlb;
-    if (wantSkinnedGlb) {
-      this.body.resumeAfterLodHi();
-    } else {
-      this.body.freezeForLodLo();
-    }
+    this.crowdSkinned?.setDetailLevel(wantSkinnedGlb);
   }
 
   /**
@@ -666,10 +664,15 @@ export class WorldPlayerBodyPresenter {
    * is visible, primitive {@link buildPrimitiveHumanoid} socket at low LOD, else legacy float on feet root.
    */
   getThirdPersonWeaponMountHost(): { parent: THREE.Object3D; identityLocal: boolean } {
-    if (this.crowdLod && !this.crowdLodHighActive && this.primitiveRightHandWeaponSocket) {
+    if (
+      this.crowdLod &&
+      this.crowdSkinned &&
+      !this.crowdSkinned.isHighDetailActive() &&
+      this.primitiveRightHandWeaponSocket
+    ) {
       return { parent: this.primitiveRightHandWeaponSocket, identityLocal: true };
     }
-    if (!this.crowdLod || this.crowdLodHighActive) {
+    if (!this.crowdLod || this.crowdSkinned?.isHighDetailActive()) {
       const bone = this.body.getSkinnedRightHandWeaponBone();
       if (bone) {
         return { parent: bone, identityLocal: true };
@@ -685,7 +688,7 @@ export class WorldPlayerBodyPresenter {
 
   updateFromPose(pose: BodyPose, dt: number): void {
     this.applyWorldFromPose(pose);
-    if (!this.crowdLod || this.crowdLodHighActive) {
+    if (!this.crowdLod || this.crowdSkinned?.isHighDetailActive()) {
       this.body.updateMotion({ grounded: pose.grounded, locomotion: pose.locomotion }, dt);
     }
     this.setNameTagText(pose.displayName ?? "Guest");
@@ -728,16 +731,13 @@ export class RemotePlayerPresenter {
 
   constructor(scene: THREE.Scene, modelRegistry: IModelLoadRegistry) {
     this.weaponFx = new RemoteHeldWeaponPresentation(modelRegistry);
-    this.presenter = new WorldPlayerBodyPresenter(scene, { showNameTag: true, crowdLod: true });
+    this.presenter = new WorldPlayerBodyPresenter(scene, { showNameTag: true, crowdLod: false });
     this.root = this.presenter.root;
   }
 
-  /**
-   * Nearest peers should pass true (skinned GLB); everyone else false (primitive).
-   * No-op cost when the value is unchanged.
-   */
-  setRemoteCrowdDetail(wantSkinnedGlb: boolean): void {
-    this.presenter.setDetailLevel(wantSkinnedGlb);
+  /** @deprecated Crowd primitive LOD disabled — always full skinned GLB. */
+  setRemoteCrowdDetail(_wantSkinnedGlb: boolean): void {
+    this.presenter.setDetailLevel(true);
   }
 
   updateFromSnapshot(snap: ReplicatedPlayerSnapshot, dt: number, nowMs: number): void {

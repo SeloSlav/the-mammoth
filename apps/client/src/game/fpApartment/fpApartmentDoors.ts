@@ -150,6 +150,7 @@ export type ApartmentDoorDebugSlot = {
 
 export type MountFpApartmentDoorsResult = {
   dispose(): void;
+  setFloorPlateBandGetter: (getter: () => { lo: number; hi: number }) => void;
   /** Per-frame: advance visual interpolation and apply swing rotations. */
   tick(nowMs: number): void;
   /** Player prediction: emit live door colliders for the query window. */
@@ -788,6 +789,7 @@ export function mountFpApartmentDoors(
     console.warn("[fpApartmentDoors] subscribe failed", e);
   }
 
+  let getFloorPlateBand: () => { lo: number; hi: number } = () => ({ lo: 1, hi: 99 });
   let lastApartmentDoorTickMs: number | null = null;
   let lastDoorSkewWarnMs = 0;
   const tick = (nowMs: number): void => {
@@ -797,9 +799,19 @@ export function mountFpApartmentDoors(
         : 0;
     lastApartmentDoorTickMs = nowMs;
     const maxStep = SWING_DOOR_ANIM_SPEED * dtSec;
+    const band = getFloorPlateBand();
 
     for (const slot of allSlots) {
       if (!slot.seeded) continue;
+      const inBand =
+        slot.level >= band.lo - 1 && slot.level <= band.hi + 1;
+      if (!inBand) {
+        if (slot.visualOpen01 > 1e-5) {
+          slot.visualOpen01 = 0;
+          applyMatrix(slot, 0);
+        }
+        continue;
+      }
       const goal = slot.desiredOpen !== 0 ? 1 : 0;
       let v = slot.visualOpen01;
       if (dtSec > 0) {
@@ -1058,6 +1070,9 @@ export function mountFpApartmentDoors(
 
   return {
     dispose,
+    setFloorPlateBandGetter(getter: () => { lo: number; hi: number }) {
+      getFloorPlateBand = getter;
+    },
     tick,
     visitCollisionAabbsInXZ,
     visitFirearmBarrierAabbsInXZ,

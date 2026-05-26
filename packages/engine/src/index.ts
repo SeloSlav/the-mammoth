@@ -129,6 +129,8 @@ export {
   RemoteHeldWeaponPresentation,
   RemotePlayerPresenter,
   WorldPlayerBodyPresenter,
+  CrowdSkinnedPresenter,
+  type CrowdSkinnedLodHooks,
   REMOTE_PLAYER_BODY_URI_FEMALE,
   REMOTE_PLAYER_BODY_URI_MALE,
   REMOTE_PLAYER_CROWD_FULL_DETAIL_NEAREST,
@@ -339,6 +341,14 @@ export {
   type ApartmentDecorBatchedContactShadowMount,
 } from "./rendering/apartmentInteriorContactShadow.js";
 export {
+  applyApartmentDecorCrossPlacementInstancing,
+  clearApartmentDecorCrossPlacementBatches,
+  collectApartmentDecorPlacementRoots,
+  getLastApartmentDecorInstancingSummary,
+  type ApartmentDecorInstancingBatchSummary,
+  type ApplyApartmentDecorCrossPlacementInstancingOptions,
+} from "./rendering/apartmentDecorCrossPlacementInstancing.js";
+export {
   applyApartmentDecorCastShadowFlags,
   applyApartmentInteriorFloorReceiveShadowUnder,
   ensureMammothApartmentDecorShadowRenderer,
@@ -354,3 +364,13 @@ export {
   syncApartmentDecorBakedFloorShadowOverlay,
   type ApartmentDecorBakedFloorShadowMount,
 } from "./rendering/apartmentInteriorBakedDecorFloorShadow.js";
+export {
+  applyGpuRevealBudget,
+  createGpuRevealSchedulerState,
+  DEFAULT_GPU_REVEAL_LIMITS,
+  type GpuRevealApplyItem,
+  type GpuRevealLimits,
+  type GpuRevealScope,
+  type GpuRevealSchedulerState,
+} from "./rendering/gpuRevealScheduler.js";
+export { getOrCreateMaterial } from "./rendering/materialPool.js";

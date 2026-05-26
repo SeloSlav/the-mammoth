@@ -63,10 +63,11 @@ import {
 import type { FpCabMirrorCollection } from "../fpRendering/fpCabMirrorCollection.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
 import {
+  applyApartmentDecorCrossPlacementInstancing,
+  applyApartmentDecorCastShadowFlags,
+  attachApartmentWarmFixtureBulbGlow,
   bindMammothApartmentPropReadableEnv,
   moodGradeMammothApartmentDecorMesh,
-  attachApartmentWarmFixtureBulbGlow,
-  applyApartmentDecorCastShadowFlags,
   resolveStaticModelFetchUrl,
 } from "@the-mammoth/engine";
 import {
@@ -841,6 +842,7 @@ export async function runFpApartmentDecorFullRebuild(
   ctx.resyncDecorShadowsForUnit(practicalLightsContextUnitKey, true);
   ctx.schedulePracticalLightsAfterDecorRebuild(practicalLightsContextUnitKey);
 
+  applyApartmentDecorCrossPlacementInstancing(ctx.root);
   ctx.buildingRoot.updateMatrixWorld(true);
   ctx.rebuildStashRayOcclusion();
   ctx.cabMirrorCollection?.syncApartmentDecorRoot(ctx.root);

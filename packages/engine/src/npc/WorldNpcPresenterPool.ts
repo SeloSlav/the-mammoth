@@ -1,5 +1,5 @@
 import type { NpcArchetypeId, ReplicatedNpcSnapshot } from "@the-mammoth/game";
-import type * as THREE from "three";
+import * as THREE from "three";
 import type { WorldNpcPresenter } from "./NpcPresenter.js";
 import {
   BabushkaNpcPresenter,
@@ -50,6 +50,11 @@ export class WorldNpcPresenterPool {
   /** Optional CPU PVS gate — when set, presenters outside the gate are hidden each tick. */
   setRenderPvsGate(gate: ((snap: ReplicatedNpcSnapshot) => boolean) | null): void {
     this.renderPvsGate = gate;
+  }
+
+  /** @deprecated Crowd distance LOD disabled — NPCs always use full skinned GLB. */
+  setCameraForCrowdLod(_getCamera: (() => THREE.Camera) | null): void {
+    /* no-op */
   }
 
   async ensureReady(): Promise<void> {

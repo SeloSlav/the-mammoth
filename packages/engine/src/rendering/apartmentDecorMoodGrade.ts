@@ -14,8 +14,16 @@ import {
   apartmentDecorEmitterKindFromModelPath,
   apartmentDecorWarmLightFixtureKind,
 } from "./apartmentInteriorVisualProfile.js";
+import { getOrCreateMaterial } from "./materialPool.js";
 
 const _lumaScratch = new THREE.Color();
+const decorMoodGradeMaterialCache = new Map<string, THREE.MeshStandardMaterial>();
+
+function decorMoodGradeCacheKey(material: THREE.Material, modelRelPath?: string): string {
+  const emitter =
+    modelRelPath != null ? apartmentDecorEmitterKindFromModelPath(modelRelPath) ?? "none" : "none";
+  return `${modelRelPath ?? ""}|${emitter}|${material.uuid}`;
+}
 
 export const MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_UD = "mammothApartmentFixtureBulbGlow";
 export const MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_ATTACHED_UD =
@@ -45,10 +53,10 @@ function normalizeAlbedoLuminance(
   }
 }
 
-export function moodGradeMammothApartmentDecorMaterial(
+function buildMoodGradedDecorMaterial(
   material: THREE.Material,
   opts?: { modelRelPath?: string },
-): THREE.Material {
+): THREE.MeshStandardMaterial {
   const cfg = APARTMENT_INTERIOR_VISUAL_PROFILE.decor;
   const modelRelPath = opts?.modelRelPath;
   const emitterKind =
@@ -149,6 +157,16 @@ export function moodGradeMammothApartmentDecorMaterial(
   }
   m.needsUpdate = true;
   return m;
+}
+
+export function moodGradeMammothApartmentDecorMaterial(
+  material: THREE.Material,
+  opts?: { modelRelPath?: string },
+): THREE.Material {
+  const key = decorMoodGradeCacheKey(material, opts?.modelRelPath);
+  return getOrCreateMaterial(decorMoodGradeMaterialCache, key, () =>
+    buildMoodGradedDecorMaterial(material, opts),
+  );
 }
 
 export function moodGradeMammothApartmentDecorMesh(

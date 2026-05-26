@@ -24,7 +24,7 @@ Client entry path: `apps/client/src/game/combatSim/mountCombatSimSession.ts`.
 
 | Layer | State |
 |-------|--------|
-| **`createFpNpcSession`** | **`null`** — no presenter pool, no `world_npc` subscription handling in the main loop |
+| **`createFpNpcSession`** | **Off by default** — mounted when `?fpnpc=1` / `mammothFpWorldNpcs` or combat sim; not production-ready for building-scale AI |
 | **Server AI** | Babushka step assumes combat-sim arena clamp when `session_key.starts_with("combat_sim:")`; **no megablock nav mesh, corridor graph, or unit-scoped wander** |
 | **Spawning** | No reducer or content pipeline to place persistent/building NPCs in corridor or units |
 | **Subscriptions** | Initial client batch includes `SELECT * FROM world_npc` globally — acceptable for a handful of combat-sim rows, **not** for building-scale population without AOI / session scoping |
@@ -131,7 +131,8 @@ Use this as a PR / release gate. All should be **checked intentionally**, not as
 
 - [ ] **`session_key` spec** for live world documented and implemented on server insert
 - [ ] **Client subscribes** only to relevant NPC rows (prefix or AOI), not global `SELECT * FROM world_npc`
-- [ ] **`createFpNpcSession` mounted** in `mountFpSession` (non–combat-sim) behind explicit flag
+- [x] **Client row filter** — `fpNpcSession` `sessionKeyPrefix` (`megablock:` / `combat_sim:`) before presenters
+- [x] **`createFpNpcSession` mounted** in `mountFpSession` when `?fpnpc=1` / `mammothFpWorldNpcs` (combat sim always on)
 - [ ] **Server AI** uses megablock walk/collision (not combat arena clamp) for live keys
 - [ ] **Population cap** per storey / unit / server
 - [ ] **Despawn / persistence** policy written and tested

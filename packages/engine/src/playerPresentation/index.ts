@@ -19,6 +19,10 @@ export {
   REMOTE_PLAYER_CROWD_FULL_DETAIL_NEAREST,
 } from "./remote/RemotePlayerPresenter.js";
 export {
+  CrowdSkinnedPresenter,
+  type CrowdSkinnedLodHooks,
+} from "./crowd/CrowdSkinnedPresenter.js";
+export {
   BabushkaNpcPresenter,
   preloadBabushkaNpcBody,
   BABUSHKA_NPC_GLB_URI,

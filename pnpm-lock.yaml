@@ -432,6 +432,9 @@ importers:
       '@the-mammoth/game':
         specifier: workspace:*
         version: link:../game
+      '@the-mammoth/schemas':
+        specifier: workspace:*
+        version: link:../schemas
     devDependencies:
       '@repo/eslint-config':
         specifier: workspace:*

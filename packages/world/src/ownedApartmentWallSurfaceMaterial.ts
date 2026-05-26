@@ -4,8 +4,8 @@ import {
   MAMMOTH_WORLD_METRIC_WALL_UVS_UD,
   WALL_SEGMENT_UV_METERS_PER_TILE,
 } from "./wallWithDoorCutout.js";
-import { textureCandidatesFromSpec } from "./pbrTexturePath.js";
-import { pbrTextureLoader } from "./pbrTextureSystem.js";
+import { scheduleAsyncPbrMaterialReveal } from "./pbrAsyncMaterialReveal.js";
+import { loadTextureFromSpec } from "./pbrTextureSystem.js";
 
 /** @internal Exported for unit tests — holed-wall lintels rely on repeat (1,1) with metric UVs. */
 export function syncOwnedApartmentWallSurfaceTextureRepeats(
@@ -51,24 +51,13 @@ async function loadRepeatWallTexture(
   spec: string | undefined,
   colorSpace: THREE.ColorSpace,
 ): Promise<THREE.Texture | null> {
-  if (!spec?.trim()) return null;
-  const urls = textureCandidatesFromSpec(spec.trim());
-  for (const url of urls) {
-    try {
-      const tex = await pbrTextureLoader.loadAsync(url);
-      tex.colorSpace = colorSpace;
-      tex.wrapS = THREE.RepeatWrapping;
-      tex.wrapT = THREE.RepeatWrapping;
-      tex.generateMipmaps = true;
-      tex.minFilter = THREE.LinearMipmapLinearFilter;
-      tex.magFilter = THREE.LinearFilter;
-      tex.needsUpdate = true;
-      return tex;
-    } catch {
-      /* try next candidate */
-    }
-  }
-  return null;
+  const tex = await loadTextureFromSpec(
+    spec,
+    colorSpace,
+    THREE.RepeatWrapping,
+    THREE.RepeatWrapping,
+  );
+  return tex;
 }
 
 function stillCurrent(mesh: THREE.Mesh, std: THREE.MeshStandardMaterial, gen: number): boolean {
@@ -114,45 +103,51 @@ export function applyOwnedApartmentWallSurfaceMaterial(
     syncOwnedApartmentWallSurfaceTextureRepeats(mesh, m, metersPerTile);
   };
 
-  void (async (): Promise<void> => {
-    const map = await loadRepeatWallTexture(mat.mapUrl, THREE.SRGBColorSpace);
-    if (!stillCurrent(mesh, std, gen)) {
-      map?.dispose();
-      return;
-    }
-    if (map) {
-      std.map = map;
-      std.color.setHex(0xffffff);
-    }
+  scheduleAsyncPbrMaterialReveal(() => {
+    void (async (): Promise<void> => {
+      const map = await loadRepeatWallTexture(mat.mapUrl, THREE.SRGBColorSpace);
+      if (!stillCurrent(mesh, std, gen)) {
+        map?.dispose();
+        return;
+      }
+      if (map) {
+        std.map = map;
+        std.color.setHex(0xffffff);
+      }
 
-    const [normalMap, roughnessMap, metalnessMap, bumpMap] = await Promise.all([
-      loadRepeatWallTexture(mat.normalMapUrl, THREE.NoColorSpace),
-      loadRepeatWallTexture(mat.roughnessMapUrl, THREE.NoColorSpace),
-      mat.useMetalnessMap ? loadRepeatWallTexture(mat.metalnessMapUrl, THREE.NoColorSpace) : Promise.resolve(null),
-      mat.useHeightMap ? loadRepeatWallTexture(mat.bumpMapUrl, THREE.NoColorSpace) : Promise.resolve(null),
-    ]);
+      const [normalMap, roughnessMap, metalnessMap, bumpMap] = await Promise.all([
+        loadRepeatWallTexture(mat.normalMapUrl, THREE.NoColorSpace),
+        loadRepeatWallTexture(mat.roughnessMapUrl, THREE.NoColorSpace),
+        mat.useMetalnessMap
+          ? loadRepeatWallTexture(mat.metalnessMapUrl, THREE.NoColorSpace)
+          : Promise.resolve(null),
+        mat.useHeightMap
+          ? loadRepeatWallTexture(mat.bumpMapUrl, THREE.NoColorSpace)
+          : Promise.resolve(null),
+      ]);
 
-    if (!stillCurrent(mesh, std, gen)) {
-      map?.dispose();
-      normalMap?.dispose();
-      roughnessMap?.dispose();
-      metalnessMap?.dispose();
-      bumpMap?.dispose();
-      return;
-    }
+      if (!stillCurrent(mesh, std, gen)) {
+        map?.dispose();
+        normalMap?.dispose();
+        roughnessMap?.dispose();
+        metalnessMap?.dispose();
+        bumpMap?.dispose();
+        return;
+      }
 
-    if (normalMap) std.normalMap = normalMap;
-    if (roughnessMap) std.roughnessMap = roughnessMap;
-    if (metalnessMap) std.metalnessMap = metalnessMap;
-    if (bumpMap) {
-      std.bumpMap = bumpMap;
-      std.bumpScale = 0.02;
-    }
+      if (normalMap) std.normalMap = normalMap;
+      if (roughnessMap) std.roughnessMap = roughnessMap;
+      if (metalnessMap) std.metalnessMap = metalnessMap;
+      if (bumpMap) {
+        std.bumpMap = bumpMap;
+        std.bumpScale = 0.02;
+      }
 
-    std.needsUpdate = true;
-    mesh.updateMatrixWorld(true);
-    syncRepeats();
-  })();
+      std.needsUpdate = true;
+      mesh.updateMatrixWorld(true);
+      syncRepeats();
+    })();
+  });
 
   mesh.updateMatrixWorld(true);
   syncRepeats();
