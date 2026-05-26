@@ -1,4 +1,10 @@
 import * as THREE from "three";
+import {
+  FP_LOCOMOTION_AIRBORNE_SUBSTEP_SCALE,
+  FP_JUMP_ASCENT_SKIP_WALK_PROBE_VY,
+  resolveFpWalkProbePhase,
+  type FpWalkProbePhase,
+} from "./fpAirborneWalkPolicy.js";
 
 /** Match `apps/server` pose clamp lower bound so client physics does not fight the reducer. */
 const FLOOR_Y = 0.35;
@@ -41,10 +47,6 @@ export const FP_WALK_STEP_UP_MARGIN = 0.82;
 export const FP_LOCOMOTION_SUBSTEPS_PER_SECOND = 200;
 export const FP_WALK_PROBE_DY = 1.05;
 export const FP_WALK_MAX_SUPPORT_DROP_M = 3.1;
-/** Skip walk AABB probes while rising — landing only matters once vy <= 0. */
-export const FP_JUMP_ASCENT_SKIP_WALK_PROBE_VY = 0.08;
-/** Fewer integration substeps while airborne — walk probes are the hot path on descent. */
-export const FP_LOCOMOTION_AIRBORNE_SUBSTEP_SCALE = 0.35;
 /** Min horizontal substep travel (m²) before dual start/end walk probes. */
 const FP_WALK_DUAL_PROBE_MIN_XZ_TRAVEL_SQ = 0.0009;
 
@@ -62,6 +64,7 @@ export type WalkGroundSampler = (
   worldX: number,
   worldZ: number,
   probeTopY: number,
+  phase: FpWalkProbePhase,
   /** Monotonic wall-clock (ms) for moving walk surfaces (elevators); omit for static-only. */
   evalWallClockMs?: number,
 ) => number;
@@ -88,11 +91,8 @@ export type FpLocomotionWalkOptions = {
   jumpKinematicPlatformVyMps?: number;
   /** Override sprint cap (m/s) — e.g. fatigue slows sprint without disabling input. */
   sprintSpeedMps?: number;
-  /**
-   * Integrator toggles each substep while falling — walk sampler uses descent reach so jumps
-   * can land on elevated platforms/decks.
-   */
-  descentProbeRef?: { current: boolean };
+  /** Override substep count — wiring applies airborne scale + perf policy here. */
+  substepsForDt?: (dtSec: number, state: FpLocomotionState) => number;
 };
 
 export type FpLocomotionInput = {
@@ -127,6 +127,13 @@ export function createFpLocomotionState(): FpLocomotionState {
 
 export function queueFpJump(state: FpLocomotionState): void {
   state.jumpQueued = true;
+}
+
+function defaultSubstepsForDt(dtSec: number): number {
+  return Math.max(
+    1,
+    Math.min(50, Math.round(FP_LOCOMOTION_SUBSTEPS_PER_SECOND * dtSec)),
+  );
 }
 
 /**
@@ -198,35 +205,13 @@ export function stepFpLocomotion(
 
   const probeDy = walk?.probeDy ?? FP_WALK_PROBE_DY;
   const maxSupportDrop = walk?.maxSupportDropM ?? FP_WALK_MAX_SUPPORT_DROP_M;
-  const airborneStep = !state.grounded;
-  /**
-   * Scale substeps with `dt` so client frames and the 20 Hz server tick use similar ground
-   * resolution per second — avoids systematic drift that felt like rubber-banding.
-   */
-  const substepScale = airborneStep ? FP_LOCOMOTION_AIRBORNE_SUBSTEP_SCALE : 1;
   const substeps = walk?.sampleWalkGroundTopY
-    ? Math.max(1, Math.min(50, Math.round(FP_LOCOMOTION_SUBSTEPS_PER_SECOND * h * substepScale)))
+    ? (walk.substepsForDt ?? defaultSubstepsForDt)(h, state)
     : 1;
   const sh = h / substeps;
   const endWallMs = walk?.integrationEvalEndWallClockMs;
-  let lastWalkSampleKey = 0;
-  let lastWalkSampleTop = Number.NaN;
-  const sampleWalkTopCached = (
-    x: number,
-    z: number,
-    probeY: number,
-    probeClockMs?: number,
-  ): number => {
-    const qx = Math.round(x * 100);
-    const qz = Math.round(z * 100);
-    const qp = Math.round(probeY * 40);
-    const key = qx * 73856093 + qz * 19349663 + qp * 83492791;
-    if (key === lastWalkSampleKey) return lastWalkSampleTop;
-    lastWalkSampleKey = key;
-    lastWalkSampleTop = walk!.sampleWalkGroundTopY(x, z, probeY, probeClockMs);
-    return lastWalkSampleTop;
-  };
-    for (let i = 0; i < substeps; i++) {
+
+  for (let i = 0; i < substeps; i++) {
     const x0 = pos.x;
     const z0 = pos.z;
     state.velocity.y -= GRAVITY * sh;
@@ -237,13 +222,8 @@ export function stepFpLocomotion(
     pos.z += state.velocity.z * sh;
     pos.y += state.velocity.y * sh;
     if (walk?.sampleWalkGroundTopY) {
-      const ascendingAirborne =
-        !state.grounded && state.velocity.y > FP_JUMP_ASCENT_SKIP_WALK_PROBE_VY;
-      if (walk.descentProbeRef) {
-        walk.descentProbeRef.current =
-          !state.grounded && state.velocity.y <= FP_JUMP_ASCENT_SKIP_WALK_PROBE_VY;
-      }
-      if (ascendingAirborne) {
+      const phase = resolveFpWalkProbePhase(state.grounded, state.velocity.y);
+      if (phase === "skip") {
         state.grounded = false;
       } else {
         const probeY = pos.y + probeDy;
@@ -255,18 +235,29 @@ export function stepFpLocomotion(
         const dz = pos.z - z0;
         let walkTop: number;
         if (dx * dx + dz * dz < FP_WALK_DUAL_PROBE_MIN_XZ_TRAVEL_SQ) {
-          walkTop = sampleWalkTopCached(pos.x, pos.z, probeY, probeClockMs);
+          walkTop = walk.sampleWalkGroundTopY(
+            pos.x,
+            pos.z,
+            probeY,
+            phase,
+            probeClockMs,
+          );
         } else {
-          const w0 = sampleWalkTopCached(x0, z0, probeY, probeClockMs);
-          const w1 = sampleWalkTopCached(pos.x, pos.z, probeY, probeClockMs);
+          const w0 = walk.sampleWalkGroundTopY(x0, z0, probeY, phase, probeClockMs);
+          const w1 = walk.sampleWalkGroundTopY(
+            pos.x,
+            pos.z,
+            probeY,
+            phase,
+            probeClockMs,
+          );
           walkTop = w0;
           if (Number.isFinite(w1)) {
             walkTop = Number.isFinite(w0) ? Math.max(w0, w1) : w1;
           }
         }
         const snapEps = 0.006;
-        const descending =
-          !state.grounded && state.velocity.y <= FP_JUMP_ASCENT_SKIP_WALK_PROBE_VY;
+        const descending = phase === "descent";
         const snapAbove = descending
           ? Math.max(snapEps, 0.2, -state.velocity.y * sh * 2.5)
           : snapEps;

@@ -17,16 +17,24 @@ import {
   type DynamicCollisionQueryPose,
 } from "../fpPhysics/fpPlayerCollision.js";
 import {
-  createFpDynamicLocomotionBlockerChain,
-  type FpDynamicLocomotionBlockerHost,
-} from "../fpPhysics/fpDynamicLocomotionBlockerChain.js";
-import {
   clampAttachedBodyXZToKinematicSupportIfNeeded,
   getKinematicSupportVerticalVelocityMps,
   snapAttachedFeetToKinematicSupportIfNeeded,
   type FpKinematicSupportProvider,
   type FpKinematicSupportSampleOpts,
 } from "../fpPhysics/fpKinematicSupport.js";
+import type { SampleWalkGroundOpts } from "@the-mammoth/world";
+
+export type FpDynamicLocomotionBlockerHost = {
+  visitCollisionAabbsInXZ: (
+    x0: number,
+    x1: number,
+    z0: number,
+    z1: number,
+    visit: (aabb: CollisionAabb) => void,
+    queryPose?: DynamicCollisionQueryPose,
+  ) => void;
+};
 
 export type FpSessionPendingMoveIntent = {
   seq: bigint;
@@ -79,7 +87,12 @@ export type FpSessionLocalPredictionDeps = {
     "walkProbeDy" | "walkStepUpMargin" | "walkMaxSupportDropM" | "sprintSpeedMps"
   >;
   netDtSec: number;
-  sampleWalkTopBase: (worldX: number, worldZ: number, probeTopY: number) => number;
+  sampleWalkTopBase: (
+    worldX: number,
+    worldZ: number,
+    probeTopY: number,
+    sampleOpts?: SampleWalkGroundOpts,
+  ) => number;
   elevSupportEval: FpKinematicSupportSampleOpts;
   walkOpts: FpLocomotionWalkOptions;
   stepLocoStateRef: { current: ReturnType<typeof createFpLocomotionState> | null };
@@ -150,7 +163,12 @@ export function createFpSessionLocalPrediction(deps: FpSessionLocalPredictionDep
   ): number => {
     opts.prevPos.copy(opts.pos);
     const probeTopForElev = opts.pos.y + deps.fpLocomotionConstants.walkProbeDy;
-    const baseForElev = deps.sampleWalkTopBase(opts.pos.x, opts.pos.z, probeTopForElev);
+    const baseForElev = deps.sampleWalkTopBase(opts.pos.x, opts.pos.z, probeTopForElev, {
+      footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
+      stepUpMargin: deps.fpLocomotionConstants.walkStepUpMargin,
+      maxSupportDropBelowFeetM: deps.fpLocomotionConstants.walkMaxSupportDropM,
+      descentProbe: false,
+    });
     deps.elevSupportEval.worldX = opts.pos.x;
     deps.elevSupportEval.worldZ = opts.pos.z;
     deps.elevSupportEval.probeTopY = probeTopForElev;

@@ -1,4 +1,5 @@
 import {
+  FP_WALK_PROBE_DY_M,
   WALK_FALLBACK_FLOOR_TOP_Y,
   walkSurfaceTopIsReachable,
   type ExteriorWalkGroundOpts,
@@ -6,9 +7,6 @@ import {
   type WalkSurfaceAabb,
   type WalkSurfaceXzFootprint,
 } from "./walkSurfaceAABBs.js";
-
-/** Sync with `FP_WALK_PROBE_DY` in `packages/engine/src/fpLocomotion.ts` and server `movement.rs`. */
-const WALK_PROBE_DY_M = 1.05;
 
 export type WalkSurfaceSpatialIndex = {
   readonly sampleTopY: (
@@ -120,7 +118,7 @@ export function buildWalkSurfaceSpatialIndex(
     footR: number,
     opts?: SampleWalkGroundOpts,
   ): number => {
-    const feetY = probeTopY - WALK_PROBE_DY_M;
+    const feetY = probeTopY - FP_WALK_PROBE_DY_M;
     const fx0 = x - footR;
     const fx1 = x + footR;
     const fz0 = z - footR;

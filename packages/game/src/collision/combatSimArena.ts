@@ -1,5 +1,12 @@
 /** Combat-sim arena shell — keep `apps/server/src/generated_collision_constants.rs` aligned via codegen. */
 
+import {
+  FP_WALK_FOOT_RADIUS_XZ_M,
+  FP_WALK_PROBE_DY_M,
+  sampleGroundedWalkTopFromSlabs,
+  sampleWalkTopFromSlabs,
+} from "./walkSurfaceReach.js";
+
 export const COMBAT_SIM_FALLBACK_HALF_EXTENT_M = 14;
 export const COMBAT_SIM_ARENA_PAD_M = 6;
 export const COMBAT_SIM_WALL_HEIGHT_M = 4;
@@ -475,16 +482,14 @@ export function combatSimSampleWalkTopY(
   x: number,
   z: number,
   probeFeetY: number,
-  stepUpMarginM: number,
-  stepIgnoreBelowFeetM: number,
 ): number {
-  let best = bounds.footY;
-  for (const slab of combatSimArenaWalkSurfaceAabbs(bounds)) {
-    if (x < slab.min[0] || x > slab.max[0] || z < slab.min[2] || z > slab.max[2]) continue;
-    const top = slab.max[1];
-    if (top > probeFeetY + stepUpMarginM + 1e-4) continue;
-    if (top < probeFeetY - stepIgnoreBelowFeetM - 1e-4) continue;
-    if (top > best) best = top;
-  }
-  return best;
+  const slabs = combatSimArenaWalkSurfaceAabbs(bounds);
+  const probeTopY = probeFeetY + FP_WALK_PROBE_DY_M;
+  const top = sampleWalkTopFromSlabs(slabs, x, z, probeFeetY, probeTopY, {
+    footRadiusXZ: FP_WALK_FOOT_RADIUS_XZ_M,
+  });
+  if (Number.isFinite(top)) return top;
+  return sampleGroundedWalkTopFromSlabs(slabs, x, z, probeFeetY, bounds.footY, {
+    footRadiusXZ: FP_WALK_FOOT_RADIUS_XZ_M,
+  });
 }

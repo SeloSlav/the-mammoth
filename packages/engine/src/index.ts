@@ -4,6 +4,7 @@ import { fpLocomotionConstants } from "./fpLocomotion.js";
 export {
   createFpLocomotionState,
   FP_LOCOMOTION_FEET_SKIN_M,
+  FP_LOCOMOTION_SUBSTEPS_PER_SECOND,
   fpLocomotionConstants,
   queueFpJump,
   stepFpLocomotion,
@@ -12,6 +13,14 @@ export {
   type FpLocomotionWalkOptions,
   type WalkGroundSampler,
 } from "./fpLocomotion.js";
+export {
+  FP_ELEVATOR_WALK_MERGE_SKIP_VY,
+  FP_JUMP_ASCENT_SKIP_WALK_PROBE_VY,
+  FP_LOCOMOTION_AIRBORNE_SUBSTEP_SCALE,
+  resolveFpWalkProbePhase,
+  shouldMergeElevatorWalkSupport,
+  type FpWalkProbePhase,
+} from "./fpAirborneWalkPolicy.js";
 
 /** @deprecated Prefer {@link createFPRig} — keeps camera parented to the body. */
 export function createFPCamera(): THREE.PerspectiveCamera {

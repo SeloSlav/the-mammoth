@@ -249,7 +249,8 @@ import {
 } from "./fpSession/fpLoadingDebug.js";
 import lobbyCentralInteriorAuthoringDoc from "../../../../content/interiors/lobby_central.json";
 import { createFpInteriorPartitionSolidCollision } from "./fpPhysics/fpInteriorPartitionSolidCollision.js";
-import { createFpDynamicLocomotionBlockerChain } from "./fpPhysics/fpDynamicLocomotionBlockerChain.js";
+import { visitLocomotionDynamicBlockersInOrder } from "@the-mammoth/game";
+import type { FpDynamicLocomotionBlockerHost } from "./fpSession/fpSessionLocalPrediction.js";
 import {
   partitionPosesFromWallRows,
   scheduleSyncApartmentPartitionBlockers,
@@ -492,18 +493,37 @@ export async function mountFpSession(
 
   const fpInteriorPartitionSolids = createFpInteriorPartitionSolidCollision();
   const fpNpcCollision = isCombatSim ? createFpNpcCollisionSource() : null;
-  const fpDynamicLocomotionBlockers = createFpDynamicLocomotionBlockerChain({
-    elevators: (x0, x1, z0, z1, visit, queryPose) =>
-      fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose),
-    apartmentDoors: (x0, x1, z0, z1, visit, queryPose) =>
-      fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose),
-    interiorPartitions: (x0, x1, z0, z1, visit, queryPose) =>
-      fpInteriorPartitionSolids.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose),
-    peerNpcCapsules: fpNpcCollision
-      ? (x0, x1, z0, z1, visit, queryPose) =>
-          fpNpcCollision.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose)
-      : undefined,
-  });
+  const fpDynamicLocomotionBlockers: FpDynamicLocomotionBlockerHost = {
+    visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose) {
+      visitLocomotionDynamicBlockersInOrder(
+        {
+          elevators: (ix0, ix1, iz0, iz1, ivisit, iqueryPose) =>
+            fpElevators.visitCollisionAabbsInXZ(ix0, ix1, iz0, iz1, ivisit, iqueryPose),
+          apartmentDoors: (ix0, ix1, iz0, iz1, ivisit, iqueryPose) =>
+            fpApartmentDoors.visitCollisionAabbsInXZ(ix0, ix1, iz0, iz1, ivisit, iqueryPose),
+          interiorPartitions: (ix0, ix1, iz0, iz1, ivisit, iqueryPose) =>
+            fpInteriorPartitionSolids.visitCollisionAabbsInXZ(
+              ix0,
+              ix1,
+              iz0,
+              iz1,
+              ivisit,
+              iqueryPose,
+            ),
+          peerNpcCapsules: fpNpcCollision
+            ? (ix0, ix1, iz0, iz1, ivisit, iqueryPose) =>
+                fpNpcCollision.visitCollisionAabbsInXZ(ix0, ix1, iz0, iz1, ivisit, iqueryPose)
+            : undefined,
+        },
+        x0,
+        x1,
+        z0,
+        z1,
+        (aabb) => visit({ min: aabb.min, max: aabb.max }),
+        queryPose,
+      );
+    },
+  };
   function rebuildFpInteriorPartitionSolidMeshes(
     wallRows: import("./fpApartment/fpApartmentDecorRebuild.js").VisibleWallPlacement[],
   ): void {

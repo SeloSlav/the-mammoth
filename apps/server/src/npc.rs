@@ -2,7 +2,6 @@
 
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 
-use crate::apartments::apartment_unit;
 use crate::combat_stub::{
     body_height_from_crouch_bit, body_hit_torso_height_m, eye_y_above_feet, head_hit_box_aabb,
     melee_headshot_from_aim_ray, ray_aabb_intersect_enter, vertical_overlap,
@@ -492,7 +491,7 @@ pub fn step_all_world_npcs(ctx: &ReducerContext, dt_sec: f32) {
     babushka_resolve_player_overlaps(&mut npcs, &player_snapshot);
     for npc in npcs.iter_mut() {
         if npc.state != NPC_STATE_DEAD && npc.session_key.starts_with("combat_sim:") {
-            clamp_babushka_to_combat_arena(ctx, npc);
+            crate::npc_combat_sim::clamp_babushka_to_combat_arena(ctx, npc);
         }
     }
     for npc in npcs {
@@ -575,24 +574,6 @@ fn babushka_cap_planar_speed(vx: f32, vz: f32, max_speed: f32) -> (f32, f32) {
     (vx * scale, vz * scale)
 }
 
-fn snap_babushka_combat_sim_feet_y(ctx: &ReducerContext, npc: &mut WorldNpc) {
-    if !npc.session_key.starts_with("combat_sim:") {
-        return;
-    }
-    let Some(unit_key) = npc.session_key.strip_prefix("combat_sim:") else {
-        return;
-    };
-    let Some(unit) = ctx
-        .db
-        .apartment_unit()
-        .iter()
-        .find(|u| u.unit_key == unit_key)
-    else {
-        return;
-    };
-    npc.y = crate::combat_sim::combat_sim_sample_walk_top_y(&unit, npc.x, npc.z, npc.y);
-}
-
 fn babushka_apply_planar_motion(
     ctx: &ReducerContext,
     npc: &mut WorldNpc,
@@ -623,7 +604,7 @@ fn babushka_apply_planar_motion(
     npc.z = tz;
     npc.vel_x = vel_x;
     npc.vel_z = vel_z;
-    snap_babushka_combat_sim_feet_y(ctx, npc);
+    crate::npc_combat_sim::snap_babushka_combat_sim_feet_y(ctx, npc);
     let speed_sq = vx * vx + vz * vz;
     npc.locomotion = if speed_sq > 0.04 {
         if locomotion_run {
@@ -867,24 +848,6 @@ fn babushka_idle_wander_heading(npc_id: u64, now_us: i64) -> (f32, f32, bool) {
     (angle.sin(), angle.cos(), true)
 }
 
-fn clamp_babushka_to_combat_arena(ctx: &ReducerContext, npc: &mut WorldNpc) {
-    let Some(unit_key) = npc.session_key.strip_prefix("combat_sim:") else {
-        return;
-    };
-    let Some(unit) = ctx
-        .db
-        .apartment_unit()
-        .iter()
-        .find(|u| u.unit_key == unit_key)
-    else {
-        return;
-    };
-    let (x, z) = crate::combat_sim::clamp_babushka_xz_in_combat_arena(&unit, npc.x, npc.z);
-    npc.x = x;
-    npc.z = z;
-}
-
-/// True when babushka's body capsule overlaps the target player's capsule (same rules as PvP melee).
 fn babushka_melee_vertical_overlap_with_player(
     ctx: &ReducerContext,
     npc_y: f32,

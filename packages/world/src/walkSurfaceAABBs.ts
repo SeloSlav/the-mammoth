@@ -29,6 +29,10 @@ import {
 } from "./stairWellGeometry.js";
 import { buildUnitExteriorWindowSillLedgeAABBsForBuilding } from "./unitExteriorWindowBlockers.js";
 import { residentialBalconyHollowShellExtras } from "./residentialUnitBalconyShell.js";
+import {
+  FP_WALK_PROBE_DY_M,
+  walkSurfaceTopIsReachable as reachWalkSurfaceTop,
+} from "@the-mammoth/game";
 
 /**
  * Axis-aligned walk volume in **world** metres. `max[1]` is the top of the walk surface
@@ -38,8 +42,7 @@ export type WalkSurfaceAabb = CollisionAabb;
 
 /** Infinite prototype slab used outside authored geometry (sync with `fpLocomotion` FLOOR_Y). */
 export const WALK_FALLBACK_FLOOR_TOP_Y = 0.35;
-/** Sync with `FP_WALK_PROBE_DY` in `packages/engine/src/fpLocomotion.ts` and server `movement.rs`. */
-const WALK_PROBE_DY_M = 1.05;
+export { FP_WALK_PROBE_DY_M };
 
 function pushBox(
   out: WalkSurfaceAabb[],
@@ -470,19 +473,23 @@ export type SampleWalkGroundOpts = {
   maxSupportDropBelowFeetM?: number;
 };
 
-/** Shared reach rule for walk AABB queries — keep spatial index + brute sampler aligned. */
+function toReachOpts(opts?: SampleWalkGroundOpts) {
+  if (!opts) return undefined;
+  return {
+    stepUpMarginM: opts.stepUpMargin,
+    descentProbe: opts.descentProbe,
+    maxSupportDropBelowFeetM: opts.maxSupportDropBelowFeetM,
+  };
+}
+
+/** Shared reach rule for walk AABB queries — canonical impl in `@the-mammoth/game`. */
 export function walkSurfaceTopIsReachable(
   top: number,
   feetY: number,
   probeTopY: number,
   opts?: SampleWalkGroundOpts,
 ): boolean {
-  if (opts?.descentProbe) {
-    const maxDrop = opts.maxSupportDropBelowFeetM ?? 3.1;
-    return top <= probeTopY + 1e-3 && top >= feetY - maxDrop;
-  }
-  const stepUpMargin = opts?.stepUpMargin ?? 0.82;
-  return top <= feetY + stepUpMargin;
+  return reachWalkSurfaceTop(top, feetY, probeTopY, toReachOpts(opts));
 }
 
 /**
@@ -500,7 +507,7 @@ export function sampleWalkGroundTopY(
   /** Defaults match `FP_WALK_*` in `@the-mammoth/engine` / server `movement.rs`. */
   const stepUpMargin = opts?.stepUpMargin ?? 0.82;
   const footR = opts?.footRadiusXZ ?? 0.22;
-  const feetY = probeTopY - WALK_PROBE_DY_M;
+  const feetY = probeTopY - FP_WALK_PROBE_DY_M;
   const fx0 = x - footR;
   const fx1 = x + footR;
   const fz0 = z - footR;

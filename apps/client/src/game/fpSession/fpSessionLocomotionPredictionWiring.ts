@@ -1,32 +1,30 @@
 import * as THREE from "three";
 import {
   createFpLocomotionState,
+  FP_ELEVATOR_WALK_MERGE_SKIP_VY,
+  FP_LOCOMOTION_AIRBORNE_SUBSTEP_SCALE,
+  FP_LOCOMOTION_SUBSTEPS_PER_SECOND,
   fpLocomotionConstants,
   type FpLocomotionInput,
   type FpLocomotionWalkOptions,
 } from "@the-mammoth/engine";
 import type { PlayerPose } from "../../module_bindings/types";
-import {
-  mergeKinematicSupportTop,
-  type FpKinematicSupportSampleOpts,
-} from "../fpPhysics/fpKinematicSupport.js";
+import type { SampleWalkGroundOpts } from "@the-mammoth/world";
+import type { FpKinematicSupportSampleOpts } from "../fpPhysics/fpKinematicSupport.js";
 import type { MountFpApartmentDoorsResult } from "../fpApartment/fpApartmentDoors.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 import type { FpSessionStaticWorld } from "./fpSessionWorldMount.js";
-import type { FpDynamicLocomotionBlockerHost } from "../fpPhysics/fpDynamicLocomotionBlockerChain.js";
+import type { FpDynamicLocomotionBlockerHost } from "./fpSessionLocalPrediction.js";
 import {
   createFpSessionLocalPrediction,
   type FpSessionMoveIntentQueue,
 } from "./fpSessionLocalPrediction.js";
 import type { FpSessionDoorDebugState } from "./fpSessionDevDebugApis.js";
 import type { FpSessionMainRafState, FpSessionMainStepOpts } from "./fpSessionMainRafFrame.js";
-
-/**
- * While rising from a real jump, skip elevator cab walk merge — otherwise `mergeWalkTop` keeps the
- * cab as the highest support and locomotion snaps feet back to the floor every substep.
- * Must stay **well above** upward velocity from a rising cab (~3 m/s) or merge drops for whole frames.
- */
-const ELEVATOR_WALK_MERGE_SKIP_VY = 2.0;
+import {
+  createQuantizedWalkSampleCache,
+  createSessionWalkGroundSampler,
+} from "./fpSessionWalkGroundSampler.js";
 
 export type WireFpSessionLocomotionPredictionArgs = {
   pos: THREE.Vector3;
@@ -47,7 +45,7 @@ export type WireFpSessionLocomotionPredictionArgs = {
     worldX: number,
     worldZ: number,
     probeTopY: number,
-    sampleOpts?: import("@the-mammoth/world").SampleWalkGroundOpts,
+    sampleOpts?: SampleWalkGroundOpts,
   ) => number;
   fpElevators: MountFpElevatorWorldResult;
   fpApartmentDoors: MountFpApartmentDoorsResult;
@@ -134,44 +132,22 @@ export function wireFpSessionLocomotionPrediction(
     current: ReturnType<typeof createFpLocomotionState> | null;
   } = { current: null };
 
-  const _walkDescentProbeRef = { current: false };
-  const _walkSampleOpts = {
-    footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
-    stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
-    maxSupportDropBelowFeetM: fpLocomotionConstants.walkMaxSupportDropM,
-    descentProbe: false,
-  };
-
-  const sampleWalkTopForVelocityY = (
-    velocityY: number,
-    worldX: number,
-    worldZ: number,
-    probeTopY: number,
-    evalWallClockMs?: number,
-  ) => {
-    _walkSampleOpts.descentProbe = _walkDescentProbeRef.current;
-    const base = sampleWalkTopBase(worldX, worldZ, probeTopY, _walkSampleOpts);
-    if (velocityY > ELEVATOR_WALK_MERGE_SKIP_VY || _walkDescentProbeRef.current) {
-      return base;
-    }
-    _walkSupportEval.worldX = worldX;
-    _walkSupportEval.worldZ = worldZ;
-    _walkSupportEval.probeTopY = probeTopY;
-    _walkSupportEval.baseTop = base;
-    _walkSupportEval.evalWallClockMs = evalWallClockMs;
-    return mergeKinematicSupportTop(fpElevators.kinematicSupport, _walkSupportEval);
-  };
+  const sessionWalkSampler = createSessionWalkGroundSampler({
+    sampleWalkTopBase,
+    kinematicSupport: fpElevators.kinematicSupport,
+    kinematicSupportEval: _walkSupportEval,
+    velocityYMps: () => _stepLocoStateRef.current?.velocity.y ?? 0,
+  });
 
   const _walkOpts: FpLocomotionWalkOptions = {
-    descentProbeRef: _walkDescentProbeRef,
-    sampleWalkGroundTopY: (worldX, worldZ, probeTopY, evalWallClockMs) =>
-      sampleWalkTopForVelocityY(
-        _stepLocoStateRef.current!.velocity.y,
-        worldX,
-        worldZ,
-        probeTopY,
-        evalWallClockMs,
-      ),
+    sampleWalkGroundTopY: createQuantizedWalkSampleCache(sessionWalkSampler),
+    substepsForDt: (dtSec, state) => {
+      const scale = state.grounded ? 1 : FP_LOCOMOTION_AIRBORNE_SUBSTEP_SCALE;
+      return Math.max(
+        1,
+        Math.min(50, Math.round(FP_LOCOMOTION_SUBSTEPS_PER_SECOND * dtSec * scale)),
+      );
+    },
     probeDy: fpLocomotionConstants.walkProbeDy,
     maxSupportDropM: fpLocomotionConstants.walkMaxSupportDropM,
     jumpKinematicPlatformVyMps: 0,
@@ -230,7 +206,7 @@ export function wireFpSessionLocomotionPrediction(
       staticCollisionIndex,
       fpElevators,
       fpDynamicLocomotionBlockers,
-      elevatorWalkMergeSkipVy: ELEVATOR_WALK_MERGE_SKIP_VY,
+      elevatorWalkMergeSkipVy: FP_ELEVATOR_WALK_MERGE_SKIP_VY,
       elevatorRiderLockSkipUpwardVyMps,
       intentQueue: moveIntentQueue,
       keys,

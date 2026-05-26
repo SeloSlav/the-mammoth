@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@the-mammoth/game": "workspace:*",
     "@the-mammoth/schemas": "workspace:*"
   },
   "peerDependencies": {

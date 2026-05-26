@@ -663,6 +663,9 @@ importers:
 
   packages/world:
     dependencies:
+      '@the-mammoth/game':
+        specifier: workspace:*
+        version: link:../game
       '@the-mammoth/schemas':
         specifier: workspace:*
         version: link:../schemas

@@ -54,7 +54,7 @@ describe("combatSimArena", () => {
       cz + stair.centerOffsetZ - stair.depthZ * 0.5 + treadDepth * 0.5;
     const firstTreadTop = bounds.footY + stair.stepRiseM;
     expect(
-      combatSimSampleWalkTopY(bounds, cx + stair.centerOffsetX, firstTreadCenterZ, bounds.footY, 0.82, 0.2),
+      combatSimSampleWalkTopY(bounds, cx + stair.centerOffsetX, firstTreadCenterZ, bounds.footY),
     ).toBeCloseTo(firstTreadTop + COMBAT_SIM_WALK_SEAM_PAD_Y_HI_M, 3);
 
     const deck = COMBAT_SIM_DECKS[0]!;
@@ -65,8 +65,6 @@ describe("combatSimArena", () => {
         cx + deck.centerOffsetX,
         cz + deck.centerOffsetZ,
         deckTop,
-        0.82,
-        0.2,
       ),
     ).toBeCloseTo(deckTop + COMBAT_SIM_WALK_SEAM_PAD_Y_HI_M, 3);
   });

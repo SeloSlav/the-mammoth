@@ -41,6 +41,7 @@ mod movement;
 mod npc;
 mod npc_blockers;
 mod npc_collision;
+mod npc_combat_sim;
 mod player_vitals;
 mod pose;
 mod spawn_routing;

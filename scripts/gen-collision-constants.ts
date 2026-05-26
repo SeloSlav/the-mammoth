@@ -1,6 +1,6 @@
 /**
  * Emits `apps/server/src/generated_collision_constants.rs` from `@the-mammoth/game`
- * collision modules — single source of truth for body capsules + combat-sim arena tuning.
+ * collision modules — single source of truth for body capsules + combat-sim arena geometry.
  *
  * Re-run from repo root: pnpm content:gen-collision-constants
  */
@@ -29,92 +29,93 @@ import {
 } from "../packages/game/src/collision/fpCapsuleLocomotion.ts";
 import {
   COMBAT_SIM_ARENA_PAD_M,
-  COMBAT_SIM_AUTHORED_OBSTACLES,
-  COMBAT_SIM_DECKS,
   COMBAT_SIM_FALLBACK_HALF_EXTENT_M,
-  COMBAT_SIM_LOW_WALLS,
-  COMBAT_SIM_RAMPS,
-  COMBAT_SIM_STEP_STACKS,
-  COMBAT_SIM_WALK_SEAM_PAD_XZ_M,
-  COMBAT_SIM_WALK_SEAM_PAD_Y_HI_M,
-  COMBAT_SIM_WALK_TREAD_THICK_M,
   COMBAT_SIM_WALL_HEIGHT_M,
   COMBAT_SIM_WALL_THICKNESS_M,
+  combatSimArenaBoundsFromUnitFootprint,
+  combatSimArenaObstacleAabbs,
+  combatSimArenaObstacleWalkAabbs,
+  combatSimArenaTerrainCollisionAabbs,
+  combatSimArenaWalkSurfaceAabbs,
+  type CollisionAabbLike,
 } from "../packages/game/src/collision/combatSimArena.ts";
+import {
+  FP_WALK_FOOT_RADIUS_XZ_M,
+  FP_WALK_MAX_SUPPORT_DROP_BELOW_FEET_M,
+  FP_WALK_PROBE_DY_M,
+} from "../packages/game/src/collision/walkSurfaceReach.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const outPath = join(root, "apps/server/src/generated_collision_constants.rs");
+
+/** Floor walk slab feet inset — matches TS `combatSimArenaCollisionAabbs`. */
+const COMBAT_SIM_FLOOR_WALK_INSET_Y_M = 0.12;
 
 function f32(n: number): string {
   const s = n.toFixed(5);
   return s.includes(".") ? s : `${s}.0`;
 }
 
-const obstacleRows = COMBAT_SIM_AUTHORED_OBSTACLES.map(
-  (o) =>
-    `    CombatSimObstacleSpec {
-        center_off_x: ${f32(o.centerOffsetX)},
-        center_off_z: ${f32(o.centerOffsetZ)},
-        size_x: ${f32(o.sizeX)},
-        size_y: ${f32(o.sizeY)},
-        size_z: ${f32(o.sizeZ)},
-    },`,
-).join("\n");
+function formatAabbConst(name: string, aabbs: readonly CollisionAabbLike[]): string {
+  if (aabbs.length === 0) {
+    return `pub const ${name}: &[([f32; 3], [f32; 3])] = &[];`;
+  }
+  const rows = aabbs
+    .map(
+      (a) =>
+        `    ([${f32(a.min[0])}, ${f32(a.min[1])}, ${f32(a.min[2])}], [${f32(a.max[0])}, ${f32(a.max[1])}, ${f32(a.max[2])}]),`,
+    )
+    .join("\n");
+  return `pub const ${name}: &[([f32; 3], [f32; 3])] = &[\n${rows}\n];`;
+}
 
-const stepStackRows = COMBAT_SIM_STEP_STACKS.map(
-  (s) =>
-    `    CombatSimStepStackSpec {
-        center_off_x: ${f32(s.centerOffsetX)},
-        center_off_z: ${f32(s.centerOffsetZ)},
-        width_x: ${f32(s.widthX)},
-        depth_z: ${f32(s.depthZ)},
-        step_count: ${s.stepCount},
-        step_rise_m: ${f32(s.stepRiseM)},
-        climb_dir_x: ${f32(s.climbDirX)},
-        climb_dir_z: ${f32(s.climbDirZ)},
-    },`,
-).join("\n");
+function relativeAabbs(
+  aabbs: readonly CollisionAabbLike[],
+  cx: number,
+  footY: number,
+  cz: number,
+): CollisionAabbLike[] {
+  return aabbs.map((a) => ({
+    min: [a.min[0] - cx, a.min[1] - footY, a.min[2] - cz] as const,
+    max: [a.max[0] - cx, a.max[1] - footY, a.max[2] - cz] as const,
+  }));
+}
 
-const rampRows = COMBAT_SIM_RAMPS.map(
-  (r) =>
-    `    CombatSimRampSpec {
-        center_off_x: ${f32(r.centerOffsetX)},
-        center_off_z: ${f32(r.centerOffsetZ)},
-        width_x: ${f32(r.widthX)},
-        length_z: ${f32(r.lengthZ)},
-        rise_m: ${f32(r.riseM)},
-        climb_dir_x: ${f32(r.climbDirX)},
-        climb_dir_z: ${f32(r.climbDirZ)},
-        segment_count: ${r.segmentCount},
-    },`,
-).join("\n");
+/** Canonical arena at origin — geometry offsets are translated per unit at runtime. */
+const canonBounds = combatSimArenaBoundsFromUnitFootprint({
+  boundMinX: -COMBAT_SIM_FALLBACK_HALF_EXTENT_M,
+  boundMaxX: COMBAT_SIM_FALLBACK_HALF_EXTENT_M,
+  boundMinZ: -COMBAT_SIM_FALLBACK_HALF_EXTENT_M,
+  boundMaxZ: COMBAT_SIM_FALLBACK_HALF_EXTENT_M,
+  footY: 0,
+});
+const canonCx = (canonBounds.minX + canonBounds.maxX) * 0.5;
+const canonCz = (canonBounds.minZ + canonBounds.maxZ) * 0.5;
 
-const deckRows = COMBAT_SIM_DECKS.map(
-  (d) =>
-    `    CombatSimDeckSpec {
-        center_off_x: ${f32(d.centerOffsetX)},
-        center_off_z: ${f32(d.centerOffsetZ)},
-        width_x: ${f32(d.widthX)},
-        depth_z: ${f32(d.depthZ)},
-        top_above_foot_y_m: ${f32(d.topAboveFootYM)},
-    },`,
-).join("\n");
-
-const lowWallRows = COMBAT_SIM_LOW_WALLS.map(
-  (w) =>
-    `    CombatSimLowWallSpec {
-        center_off_x: ${f32(w.centerOffsetX)},
-        center_off_z: ${f32(w.centerOffsetZ)},
-        length_m: ${f32(w.lengthM)},
-        height_m: ${f32(w.heightM)},
-        thickness_m: ${f32(w.thicknessM)},
-        yaw_rad: ${f32(w.yawRad)},
-    },`,
-).join("\n");
+const canonWalk = combatSimArenaWalkSurfaceAabbs(canonBounds);
+const terrainWalkRel = relativeAabbs(canonWalk.slice(1), canonCx, 0, canonCz);
+const obstacleWalkRel = relativeAabbs(
+  combatSimArenaObstacleWalkAabbs(canonBounds),
+  canonCx,
+  0,
+  canonCz,
+);
+const terrainCollisionRel = relativeAabbs(
+  combatSimArenaTerrainCollisionAabbs(canonBounds),
+  canonCx,
+  0,
+  canonCz,
+);
+const obstacleCollisionRel = relativeAabbs(
+  combatSimArenaObstacleAabbs(canonBounds),
+  canonCx,
+  0,
+  canonCz,
+);
 
 const rs = `// AUTO-GENERATED by scripts/gen-collision-constants.ts — do not hand-edit.
-// Source: packages/game/src/collision/{bodyCapsules,combatSimArena}.ts
+// Source: packages/game/src/collision/{bodyCapsules,combatSimArena,walkSurfaceReach}.ts
 // Re-run from repo root: pnpm content:gen-collision-constants
 
 // --- Body capsules (packages/game/src/collision/bodyCapsules.ts) ---
@@ -142,350 +143,95 @@ pub const HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M: f32 = ${f32(HEAD_CLEAR
 pub const LOCOMOTION_BLOCKER_QUERY_PAD_M: f32 = ${f32(LOCOMOTION_BLOCKER_QUERY_PAD_M)};
 pub const LOCOMOTION_STATIC_MIN_BLOCKER_HEIGHT_M: f32 = ${f32(LOCOMOTION_STATIC_MIN_BLOCKER_HEIGHT_M)};
 
+// --- Walk surface reach (packages/game/src/collision/walkSurfaceReach.ts) ---
+
+pub const FP_WALK_FOOT_RADIUS_XZ_M: f32 = ${f32(FP_WALK_FOOT_RADIUS_XZ_M)};
+pub const FP_WALK_PROBE_DY_M: f32 = ${f32(FP_WALK_PROBE_DY_M)};
+pub const FP_WALK_MAX_SUPPORT_DROP_BELOW_FEET_M: f32 = ${f32(FP_WALK_MAX_SUPPORT_DROP_BELOW_FEET_M)};
+
 // --- Combat sim arena (packages/game/src/collision/combatSimArena.ts) ---
 
 pub const COMBAT_SIM_FALLBACK_HALF_EXTENT_M: f32 = ${f32(COMBAT_SIM_FALLBACK_HALF_EXTENT_M)};
 pub const COMBAT_SIM_ARENA_PAD_M: f32 = ${f32(COMBAT_SIM_ARENA_PAD_M)};
 pub const COMBAT_SIM_WALL_HEIGHT_M: f32 = ${f32(COMBAT_SIM_WALL_HEIGHT_M)};
 pub const COMBAT_SIM_WALL_THICKNESS_M: f32 = ${f32(COMBAT_SIM_WALL_THICKNESS_M)};
-pub const COMBAT_SIM_WALK_TREAD_THICK_M: f32 = ${f32(COMBAT_SIM_WALK_TREAD_THICK_M)};
-pub const COMBAT_SIM_WALK_SEAM_PAD_XZ_M: f32 = ${f32(COMBAT_SIM_WALK_SEAM_PAD_XZ_M)};
-pub const COMBAT_SIM_WALK_SEAM_PAD_Y_HI_M: f32 = ${f32(COMBAT_SIM_WALK_SEAM_PAD_Y_HI_M)};
+pub const COMBAT_SIM_FLOOR_WALK_INSET_Y_M: f32 = ${f32(COMBAT_SIM_FLOOR_WALK_INSET_Y_M)};
 
-/// Floor walk slab feet inset — matches TS \`combatSimArenaCollisionAabbs\`.
-pub const COMBAT_SIM_FLOOR_WALK_INSET_Y_M: f32 = 0.12;
+${formatAabbConst("COMBAT_SIM_TERRAIN_WALK_AABBS_REL", terrainWalkRel)}
 
-#[derive(Clone, Copy, Debug)]
-pub struct CombatSimObstacleSpec {
-    pub center_off_x: f32,
-    pub center_off_z: f32,
-    pub size_x: f32,
-    pub size_y: f32,
-    pub size_z: f32,
-}
+${formatAabbConst("COMBAT_SIM_OBSTACLE_WALK_AABBS_REL", obstacleWalkRel)}
 
-#[derive(Clone, Copy, Debug)]
-pub struct CombatSimStepStackSpec {
-    pub center_off_x: f32,
-    pub center_off_z: f32,
-    pub width_x: f32,
-    pub depth_z: f32,
-    pub step_count: u32,
-    pub step_rise_m: f32,
-    pub climb_dir_x: f32,
-    pub climb_dir_z: f32,
-}
+${formatAabbConst("COMBAT_SIM_TERRAIN_COLLISION_AABBS_REL", terrainCollisionRel)}
 
-#[derive(Clone, Copy, Debug)]
-pub struct CombatSimRampSpec {
-    pub center_off_x: f32,
-    pub center_off_z: f32,
-    pub width_x: f32,
-    pub length_z: f32,
-    pub rise_m: f32,
-    pub climb_dir_x: f32,
-    pub climb_dir_z: f32,
-    pub segment_count: u32,
-}
+${formatAabbConst("COMBAT_SIM_OBSTACLE_COLLISION_AABBS_REL", obstacleCollisionRel)}
 
-#[derive(Clone, Copy, Debug)]
-pub struct CombatSimDeckSpec {
-    pub center_off_x: f32,
-    pub center_off_z: f32,
-    pub width_x: f32,
-    pub depth_z: f32,
-    pub top_above_foot_y_m: f32,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct CombatSimLowWallSpec {
-    pub center_off_x: f32,
-    pub center_off_z: f32,
-    pub length_m: f32,
-    pub height_m: f32,
-    pub thickness_m: f32,
-    pub yaw_rad: f32,
-}
-
-pub const COMBAT_SIM_AUTHORED_OBSTACLES: &[CombatSimObstacleSpec] = &[
-${obstacleRows}
-];
-
-pub const COMBAT_SIM_STEP_STACKS: &[CombatSimStepStackSpec] = &[
-${stepStackRows}
-];
-
-pub const COMBAT_SIM_RAMPS: &[CombatSimRampSpec] = &[
-${rampRows}
-];
-
-pub const COMBAT_SIM_DECKS: &[CombatSimDeckSpec] = &[
-${deckRows}
-];
-
-pub const COMBAT_SIM_LOW_WALLS: &[CombatSimLowWallSpec] = &[
-${lowWallRows}
-];
-
-fn normalize_climb_dir(x: f32, z: f32) -> (f32, f32) {
-    let len = (x * x + z * z).sqrt();
-    if len < 1e-6 {
-        return (0.0, 1.0);
-    }
-    (x / len, z / len)
-}
-
-fn push_oriented_footprint(
-    out: &mut Vec<([f32; 3], [f32; 3])>,
-    center_x: f32,
-    center_z: f32,
-    right_x: f32,
-    right_z: f32,
-    climb_x: f32,
-    climb_z: f32,
-    half_width: f32,
-    along_min: f32,
-    along_max: f32,
-    min_y: f32,
-    max_y: f32,
-) {
-    let corners = [
-        (-half_width, along_min),
-        (half_width, along_min),
-        (half_width, along_max),
-        (-half_width, along_max),
-    ];
-    let mut minx = f32::INFINITY;
-    let mut maxx = f32::NEG_INFINITY;
-    let mut minz = f32::INFINITY;
-    let mut maxz = f32::NEG_INFINITY;
-    for (right, along) in corners {
-        let wx = center_x + right_x * right + climb_x * along;
-        let wz = center_z + right_z * right + climb_z * along;
-        minx = minx.min(wx);
-        maxx = maxx.max(wx);
-        minz = minz.min(wz);
-        maxz = maxz.max(wz);
-    }
-    out.push(([minx, min_y, minz], [maxx, max_y, maxz]));
-}
-
-fn push_inflated_walk(
-    out: &mut Vec<([f32; 3], [f32; 3])>,
+#[inline]
+fn translate_aabb_rel(
     mn: [f32; 3],
     mx: [f32; 3],
-) {
-    let pad = COMBAT_SIM_WALK_SEAM_PAD_XZ_M;
-    out.push((
-        [mn[0] - pad, mn[1], mn[2] - pad],
-        [mx[0] + pad, mx[1] + COMBAT_SIM_WALK_SEAM_PAD_Y_HI_M, mx[2] + pad],
-    ));
+    cx: f32,
+    foot_y: f32,
+    cz: f32,
+) -> ([f32; 3], [f32; 3]) {
+    (
+        [mn[0] + cx, mn[1] + foot_y, mn[2] + cz],
+        [mx[0] + cx, mx[1] + foot_y, mx[2] + cz],
+    )
 }
 
-fn append_step_stack_geometry(
-    cx: f32,
-    cz: f32,
-    foot_y: f32,
-    spec: CombatSimStepStackSpec,
-    collision_out: &mut Vec<([f32; 3], [f32; 3])>,
-    walk_out: &mut Vec<([f32; 3], [f32; 3])>,
-) {
-    let center_x = cx + spec.center_off_x;
-    let center_z = cz + spec.center_off_z;
-    let (climb_x, climb_z) = normalize_climb_dir(spec.climb_dir_x, spec.climb_dir_z);
-    let right_x = -climb_z;
-    let right_z = climb_x;
-    let half_w = spec.width_x * 0.5;
-    let tread_depth = spec.depth_z / spec.step_count as f32;
-    for i in 0..spec.step_count {
-        let y_bottom = foot_y + i as f32 * spec.step_rise_m;
-        let y_top = foot_y + (i + 1) as f32 * spec.step_rise_m;
-        let along_min = -spec.depth_z * 0.5 + i as f32 * tread_depth;
-        let along_max = along_min + tread_depth;
-        push_oriented_footprint(
-            collision_out,
-            center_x,
-            center_z,
-            right_x,
-            right_z,
-            climb_x,
-            climb_z,
-            half_w,
-            along_min,
-            along_max,
-            y_bottom,
-            y_top,
-        );
-        let corners = [
-            (-half_w, along_min),
-            (half_w, along_min),
-            (half_w, along_max),
-            (-half_w, along_max),
-        ];
-        let mut minx = f32::INFINITY;
-        let mut maxx = f32::NEG_INFINITY;
-        let mut minz = f32::INFINITY;
-        let mut maxz = f32::NEG_INFINITY;
-        for (right, along) in corners {
-            let wx = center_x + right_x * right + climb_x * along;
-            let wz = center_z + right_z * right + climb_z * along;
-            minx = minx.min(wx);
-            maxx = maxx.max(wx);
-            minz = minz.min(wz);
-            maxz = maxz.max(wz);
+#[inline]
+fn walk_surface_top_is_reachable(
+    top: f32,
+    feet_y: f32,
+    probe_top_y: f32,
+    descent_probe: bool,
+) -> bool {
+    if descent_probe {
+        return top <= probe_top_y + 1e-3 && top >= feet_y - FP_WALK_MAX_SUPPORT_DROP_BELOW_FEET_M;
+    }
+    top <= feet_y + FP_WALK_STEP_UP_MARGIN_M
+}
+
+fn sample_walk_top_from_slabs(
+    slabs: &[([f32; 3], [f32; 3])],
+    x: f32,
+    z: f32,
+    probe_feet_y: f32,
+    probe_top_y: f32,
+    descent_probe: bool,
+) -> f32 {
+    let foot_r = FP_WALK_FOOT_RADIUS_XZ_M;
+    let fx0 = x - foot_r;
+    let fx1 = x + foot_r;
+    let fz0 = z - foot_r;
+    let fz1 = z + foot_r;
+    let mut best = f32::NAN;
+    for (mn, mx) in slabs {
+        if fx1 < mn[0] || fx0 > mx[0] || fz1 < mn[2] || fz0 > mx[2] {
+            continue;
         }
-        push_inflated_walk(
-            walk_out,
-            [minx, y_top - COMBAT_SIM_WALK_TREAD_THICK_M, minz],
-            [maxx, y_top, maxz],
-        );
-    }
-}
-
-fn append_ramp_geometry(
-    cx: f32,
-    cz: f32,
-    foot_y: f32,
-    spec: CombatSimRampSpec,
-    collision_out: &mut Vec<([f32; 3], [f32; 3])>,
-    walk_out: &mut Vec<([f32; 3], [f32; 3])>,
-) {
-    let center_x = cx + spec.center_off_x;
-    let center_z = cz + spec.center_off_z;
-    let (climb_x, climb_z) = normalize_climb_dir(spec.climb_dir_x, spec.climb_dir_z);
-    let right_x = -climb_z;
-    let right_z = climb_x;
-    let half_w = spec.width_x * 0.5;
-    for j in 0..spec.segment_count {
-        let t0 = j as f32 / spec.segment_count as f32;
-        let t1 = (j + 1) as f32 / spec.segment_count as f32;
-        let y0 = foot_y + t0 * spec.rise_m;
-        let y1 = foot_y + t1 * spec.rise_m;
-        let along_min = -spec.length_z * 0.5 + t0 * spec.length_z;
-        let along_max = -spec.length_z * 0.5 + t1 * spec.length_z;
-        push_oriented_footprint(
-            collision_out,
-            center_x,
-            center_z,
-            right_x,
-            right_z,
-            climb_x,
-            climb_z,
-            half_w,
-            along_min,
-            along_max,
-            y0,
-            y1,
-        );
-        let corners = [
-            (-half_w, along_min),
-            (half_w, along_min),
-            (half_w, along_max),
-            (-half_w, along_max),
-        ];
-        let mut minx = f32::INFINITY;
-        let mut maxx = f32::NEG_INFINITY;
-        let mut minz = f32::INFINITY;
-        let mut maxz = f32::NEG_INFINITY;
-        for (right, along) in corners {
-            let wx = center_x + right_x * right + climb_x * along;
-            let wz = center_z + right_z * right + climb_z * along;
-            minx = minx.min(wx);
-            maxx = maxx.max(wx);
-            minz = minz.min(wz);
-            maxz = maxz.max(wz);
+        let top = mx[1];
+        if !walk_surface_top_is_reachable(top, probe_feet_y, probe_top_y, descent_probe) {
+            continue;
         }
-        push_inflated_walk(
-            walk_out,
-            [minx, y1 - COMBAT_SIM_WALK_TREAD_THICK_M, minz],
-            [maxx, y1, maxz],
-        );
+        best = if best.is_nan() {
+            top
+        } else {
+            best.max(top)
+        };
     }
+    best
 }
 
-fn append_deck_geometry(
-    cx: f32,
-    cz: f32,
-    foot_y: f32,
-    spec: CombatSimDeckSpec,
-    collision_out: &mut Vec<([f32; 3], [f32; 3])>,
-    walk_out: &mut Vec<([f32; 3], [f32; 3])>,
-) {
-    let center_x = cx + spec.center_off_x;
-    let center_z = cz + spec.center_off_z;
-    let y_top = foot_y + spec.top_above_foot_y_m;
-    let half_x = spec.width_x * 0.5;
-    let half_z = spec.depth_z * 0.5;
-    collision_out.push((
-        [center_x - half_x, foot_y, center_z - half_z],
-        [center_x + half_x, y_top, center_z + half_z],
-    ));
-    push_inflated_walk(
-        walk_out,
-        [
-            center_x - half_x,
-            y_top - COMBAT_SIM_WALK_TREAD_THICK_M,
-            center_z - half_z,
-        ],
-        [center_x + half_x, y_top, center_z + half_z],
-    );
-}
-
-fn append_low_wall_geometry(
-    cx: f32,
-    cz: f32,
-    foot_y: f32,
-    spec: CombatSimLowWallSpec,
-    collision_out: &mut Vec<([f32; 3], [f32; 3])>,
-) {
-    let center_x = cx + spec.center_off_x;
-    let center_z = cz + spec.center_off_z;
-    let cos = spec.yaw_rad.cos();
-    let sin = spec.yaw_rad.sin();
-    let half_len = spec.length_m * 0.5;
-    let half_t = spec.thickness_m * 0.5;
-    let y_top = foot_y + spec.height_m;
-    let corners = [
-        (-half_len, -half_t),
-        (half_len, -half_t),
-        (half_len, half_t),
-        (-half_len, half_t),
-    ];
-    let mut minx = f32::INFINITY;
-    let mut maxx = f32::NEG_INFINITY;
-    let mut minz = f32::INFINITY;
-    let mut maxz = f32::NEG_INFINITY;
-    for (lx, lz) in corners {
-        let wx = center_x + lx * cos - lz * sin;
-        let wz = center_z + lx * sin + lz * cos;
-        minx = minx.min(wx);
-        maxx = maxx.max(wx);
-        minz = minz.min(wz);
-        maxz = maxz.max(wz);
-    }
-    collision_out.push(([minx, foot_y, minz], [maxx, y_top, maxz]));
-}
-
-fn append_combat_sim_terrain_collision(
-    cx: f32,
-    cz: f32,
-    foot_y: f32,
+fn append_translated_slabs(
     out: &mut Vec<([f32; 3], [f32; 3])>,
+    rel: &[([f32; 3], [f32; 3])],
+    cx: f32,
+    foot_y: f32,
+    cz: f32,
 ) {
-    for spec in COMBAT_SIM_STEP_STACKS {
-        let mut walk = Vec::new();
-        append_step_stack_geometry(cx, cz, foot_y, *spec, out, &mut walk);
-    }
-    for spec in COMBAT_SIM_RAMPS {
-        let mut walk = Vec::new();
-        append_ramp_geometry(cx, cz, foot_y, *spec, out, &mut walk);
-    }
-    for spec in COMBAT_SIM_DECKS {
-        let mut walk = Vec::new();
-        append_deck_geometry(cx, cz, foot_y, *spec, out, &mut walk);
-    }
-    for spec in COMBAT_SIM_LOW_WALLS {
-        append_low_wall_geometry(cx, cz, foot_y, *spec, out);
+    for (mn, mx) in rel {
+        out.push(translate_aabb_rel(*mn, *mx, cx, foot_y, cz));
     }
 }
 
@@ -506,15 +252,8 @@ fn combat_sim_arena_walk_surface_aabbs_for_unit_bounds(
         [min_x, foot_y - COMBAT_SIM_FLOOR_WALK_INSET_Y_M, min_z],
         [max_x, foot_y, max_z],
     )];
-    for spec in COMBAT_SIM_STEP_STACKS {
-        append_step_stack_geometry(cx, cz, foot_y, *spec, &mut Vec::new(), &mut out);
-    }
-    for spec in COMBAT_SIM_RAMPS {
-        append_ramp_geometry(cx, cz, foot_y, *spec, &mut Vec::new(), &mut out);
-    }
-    for spec in COMBAT_SIM_DECKS {
-        append_deck_geometry(cx, cz, foot_y, *spec, &mut Vec::new(), &mut out);
-    }
+    append_translated_slabs(&mut out, COMBAT_SIM_TERRAIN_WALK_AABBS_REL, cx, foot_y, cz);
+    append_translated_slabs(&mut out, COMBAT_SIM_OBSTACLE_WALK_AABBS_REL, cx, foot_y, cz);
     out
 }
 
@@ -532,6 +271,8 @@ pub fn combat_sim_arena_collision_aabbs_for_unit_bounds(
     let max_z = bound_max_z + COMBAT_SIM_ARENA_PAD_M;
     let wall_y1 = foot_y + COMBAT_SIM_WALL_HEIGHT_M;
     let t = COMBAT_SIM_WALL_THICKNESS_M;
+    let cx = (min_x + max_x) * 0.5;
+    let cz = (min_z + max_z) * 0.5;
     let mut out = vec![
         (
             [min_x, foot_y - COMBAT_SIM_FLOOR_WALK_INSET_Y_M, min_z],
@@ -542,24 +283,12 @@ pub fn combat_sim_arena_collision_aabbs_for_unit_bounds(
         ([min_x, foot_y, min_z], [max_x, wall_y1, min_z + t]),
         ([min_x, foot_y, max_z - t], [max_x, wall_y1, max_z]),
     ];
-    let cx = (min_x + max_x) * 0.5;
-    let cz = (min_z + max_z) * 0.5;
-    for spec in COMBAT_SIM_AUTHORED_OBSTACLES {
-        let ox = cx + spec.center_off_x;
-        let oz = cz + spec.center_off_z;
-        let hx = spec.size_x * 0.5;
-        let hy = spec.size_y;
-        let hz = spec.size_z * 0.5;
-        out.push((
-            [ox - hx, foot_y, oz - hz],
-            [ox + hx, foot_y + hy, oz + hz],
-        ));
-    }
-    append_combat_sim_terrain_collision(cx, cz, foot_y, &mut out);
+    append_translated_slabs(&mut out, COMBAT_SIM_OBSTACLE_COLLISION_AABBS_REL, cx, foot_y, cz);
+    append_translated_slabs(&mut out, COMBAT_SIM_TERRAIN_COLLISION_AABBS_REL, cx, foot_y, cz);
     out
 }
 
-/// Highest walk top under probe feet — mirrors client walk spatial index rules.
+/// Highest walk top under probe feet — mirrors client walk spatial index + foot radius.
 pub fn combat_sim_sample_walk_top_y_for_unit_bounds(
     bound_min_x: f32,
     bound_max_x: f32,
@@ -570,26 +299,29 @@ pub fn combat_sim_sample_walk_top_y_for_unit_bounds(
     z: f32,
     probe_feet_y: f32,
 ) -> f32 {
-    let mut best = foot_y;
-    for (mn, mx) in combat_sim_arena_walk_surface_aabbs_for_unit_bounds(
+    let slabs = combat_sim_arena_walk_surface_aabbs_for_unit_bounds(
         bound_min_x,
         bound_max_x,
         bound_min_z,
         bound_max_z,
         foot_y,
-    ) {
+    );
+    let probe_top_y = probe_feet_y + FP_WALK_PROBE_DY_M;
+    let top = sample_walk_top_from_slabs(&slabs, x, z, probe_feet_y, probe_top_y, false);
+    if top.is_finite() {
+        return top;
+    }
+    let mut best = foot_y;
+    for (mn, mx) in slabs {
         if x < mn[0] || x > mx[0] || z < mn[2] || z > mx[2] {
             continue;
         }
-        let top = mx[1];
-        if top > probe_feet_y + FP_WALK_STEP_UP_MARGIN_M + 1e-4 {
-            continue;
-        }
-        if top < probe_feet_y - STEP_IGNORE_BELOW_FEET_M - 1e-4 {
-            continue;
-        }
-        if top > best {
-            best = top;
+        let slab_top = mx[1];
+        if slab_top <= probe_feet_y + FP_WALK_STEP_UP_MARGIN_M + 1e-4
+            && slab_top >= probe_feet_y - STEP_IGNORE_BELOW_FEET_M - 1e-4
+            && slab_top > best
+        {
+            best = slab_top;
         }
     }
     best

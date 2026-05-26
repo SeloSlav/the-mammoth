@@ -69,6 +69,16 @@ export {
   type LocomotionDynamicBlockerVisitor,
 } from "./locomotionBlockers.js";
 export {
+  FP_WALK_FOOT_RADIUS_XZ_M,
+  FP_WALK_MAX_SUPPORT_DROP_BELOW_FEET_M,
+  FP_WALK_PROBE_DY_M,
+  sampleGroundedWalkTopFromSlabs,
+  sampleWalkTopFromSlabs,
+  walkSurfaceTopIsReachable,
+  type SampleWalkTopFromSlabsOpts,
+  type WalkSurfaceReachOpts,
+} from "./walkSurfaceReach.js";
+export {
   partitionWallLocalSlabAabbs,
   partitionWallWorldCollisionAabbs,
   type PartitionWallWorldPose,
