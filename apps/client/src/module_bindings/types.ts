@@ -33,6 +33,18 @@ export const ApartmentDoorGameplay = __t.object("ApartmentDoorGameplay", {
 });
 export type ApartmentDoorGameplay = __Infer<typeof ApartmentDoorGameplay>;
 
+export const ApartmentPartitionBlocker = __t.object("ApartmentPartitionBlocker", {
+  blockerId: __t.u64(),
+  unitKey: __t.string(),
+  minX: __t.f32(),
+  minY: __t.f32(),
+  minZ: __t.f32(),
+  maxX: __t.f32(),
+  maxY: __t.f32(),
+  maxZ: __t.f32(),
+});
+export type ApartmentPartitionBlocker = __Infer<typeof ApartmentPartitionBlocker>;
+
 export const ApartmentUnit = __t.object("ApartmentUnit", {
   unitKey: __t.string(),
   floorDocId: __t.string(),

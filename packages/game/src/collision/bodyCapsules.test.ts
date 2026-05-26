@@ -34,8 +34,12 @@ describe("bodyCapsules", () => {
       radiusM: 0.28,
       heightM: 1.55,
     });
-    expect(aabb.min).toEqual([0.72, 2, 2.72]);
-    expect(aabb.max).toEqual([1.28, 3.55, 3.28]);
+    expect(aabb.min[0]).toBeCloseTo(0.72, 6);
+    expect(aabb.min[1]).toBeCloseTo(2, 6);
+    expect(aabb.min[2]).toBeCloseTo(2.72, 6);
+    expect(aabb.max[0]).toBeCloseTo(1.28, 6);
+    expect(aabb.max[1]).toBeCloseTo(3.55, 6);
+    expect(aabb.max[2]).toBeCloseTo(3.28, 6);
   });
 
   it("capsuleMinCenterDistanceM sums radii and gap", () => {

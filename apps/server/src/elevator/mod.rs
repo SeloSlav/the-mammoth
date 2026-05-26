@@ -14,7 +14,9 @@ use crate::pose::{player_pose, PlayerPose};
 use crate::world_sound;
 
 mod collision_tuning;
+mod locomotion_blockers;
 use collision_tuning::*;
+pub(crate) use locomotion_blockers::{gather_elevator_locomotion_blockers, BlockerQuery as ElevatorBlockerQuery};
 
 /// Must match `apps/client/src/game/fpElevatorConstants.ts` `ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS`.
 const RIDER_LOCK_SKIP_UPWARD_VY_MPS: f32 = 0.85;
@@ -70,7 +72,7 @@ const CAB_CLAMP_DOOR_AXIS_INNER_FRAC: f32 = 0.92;
 /// Pad around clamp AABB for rider snap / clamp **gate** (m). Sync client `ELEVATOR_CAB_PHYS_GATE_PAD_M`.
 const RIDER_PHYS_GATE_PAD_M: f32 = 0.26;
 /// Sync client `ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN`.
-const DOOR_EXIT_CLAMP_MIN_OPEN: f32 = 0.22;
+pub(crate) const DOOR_EXIT_CLAMP_MIN_OPEN: f32 = 0.22;
 
 const PH_IDLE: u8 = 0;
 const PH_CLOSING: u8 = 1;
@@ -92,8 +94,6 @@ const CALL_Y_HALF: f32 = 2.2;
 const LANDING_HAIL_SUPPRESS_CAB_Y_TOL_M: f32 = 0.5;
 
 // --- Landing swing door (corridor side): collision literals in `collision_tuning.rs` / `@the-mammoth/world` ---
-const PLAYER_HEIGHT_STAND_M: f32 = 1.78;
-const PLAYER_HEIGHT_CROUCH_M: f32 = 1.2;
 
 #[spacetimedb::table(public, accessor = elevator_landing_door)]
 pub struct ElevatorLandingDoor {
@@ -106,7 +106,7 @@ pub struct ElevatorLandingDoor {
     pub swing_open_01: f32,
 }
 
-fn landing_door_row_key(shaft_key: &str, level: u32) -> String {
+pub(crate) fn landing_door_row_key(shaft_key: &str, level: u32) -> String {
     format!("{shaft_key}|{level}")
 }
 
@@ -151,7 +151,7 @@ fn door_face_from_u8(v: u8) -> DoorFace {
     }
 }
 
-fn support_y(level: u32) -> f32 {
+pub(crate) fn support_y(level: u32) -> f32 {
     elevator_layout::support_feet_y_for_level(level, BUILDING_ORIGIN_Y)
 }
 
@@ -1202,7 +1202,7 @@ fn landing_front_door_lane_local_ok(
 }
 
 #[inline]
-fn landing_front_passage_open(
+pub(crate) fn landing_front_passage_open(
     landing: &ElevatorLandingDoor,
     car: &ElevatorCar,
     landing_feet_y: f32,

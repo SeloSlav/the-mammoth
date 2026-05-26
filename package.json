@@ -18,6 +18,7 @@
     "content:gen-mamutica-floor": "node scripts/gen-mamutica-floor-doc.mjs",
     "content:gen-stair-runtime-overlay": "vite-node --config scripts/codegen.vite.config.ts scripts/gen-stair-runtime-overlay.ts",
     "content:gen-walk-aabbs": "vite-node --config scripts/codegen.vite.config.ts scripts/gen-walk-aabbs.ts",
+    "content:gen-collision-constants": "vite-node --config scripts/codegen.vite.config.ts scripts/gen-collision-constants.ts",
     "content:gen-exterior-tree-collision": "pnpm --filter @the-mammoth/world run gen-exterior-tree-collision",
     "content:gen-apartment-doors": "tsx scripts/gen-apartment-door-stock.ts",
     "content:normalize-footsteps": "tsx scripts/normalize-footsteps.ts",

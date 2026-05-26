@@ -170,7 +170,6 @@ import { LocalGameAudio } from "./audio/localGameAudio.js";
 import { createFpSessionCorridorPvsContext } from "./fpSession/fpSessionCorridorPvs.js";
 import { createFpNpcSession } from "./npc/fpNpcSession.js";
 import { createFpNpcCollisionSource } from "./fpPhysics/fpNpcCollision.js";
-import { createFpNpcRenderPvsGate } from "./npc/fpNpcRenderPvs.js";
 import { setFpCombatSimMode } from "./combatSim/fpCombatSimMode.js";
 import {
   primeHotbarConsumeAudio,
@@ -250,6 +249,12 @@ import {
 } from "./fpSession/fpLoadingDebug.js";
 import lobbyCentralInteriorAuthoringDoc from "../../../../content/interiors/lobby_central.json";
 import { createFpInteriorPartitionSolidCollision } from "./fpPhysics/fpInteriorPartitionSolidCollision.js";
+import { createFpDynamicLocomotionBlockerChain } from "./fpPhysics/fpDynamicLocomotionBlockerChain.js";
+import {
+  partitionPosesFromWallRows,
+  scheduleSyncApartmentPartitionBlockers,
+} from "./fpApartment/fpApartmentPartitionBlockerSync.js";
+import { apartmentUnitOwnerEqual, UNIT_STATE_CLAIMED } from "./fpApartment/fpApartmentGameplay.js";
 
 /**
  * Visual-only residential containment needs to be wider than gameplay containment: player feet can
@@ -487,12 +492,39 @@ export async function mountFpSession(
 
   const fpInteriorPartitionSolids = createFpInteriorPartitionSolidCollision();
   const fpNpcCollision = isCombatSim ? createFpNpcCollisionSource() : null;
-  function rebuildFpInteriorPartitionSolidMeshes(): void {
-    fpInteriorPartitionSolids.rebuildFromRoots(
-      fpLobbyInteriorAuthoringRoot !== null
-        ? [buildingRoot, fpLobbyInteriorAuthoringRoot]
-        : [buildingRoot],
-    );
+  const fpDynamicLocomotionBlockers = createFpDynamicLocomotionBlockerChain({
+    elevators: (x0, x1, z0, z1, visit, queryPose) =>
+      fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose),
+    apartmentDoors: (x0, x1, z0, z1, visit, queryPose) =>
+      fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose),
+    interiorPartitions: (x0, x1, z0, z1, visit, queryPose) =>
+      fpInteriorPartitionSolids.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose),
+    peerNpcCapsules: fpNpcCollision
+      ? (x0, x1, z0, z1, visit, queryPose) =>
+          fpNpcCollision.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose)
+      : undefined,
+  });
+  function rebuildFpInteriorPartitionSolidMeshes(
+    wallRows: import("./fpApartment/fpApartmentDecorRebuild.js").VisibleWallPlacement[],
+  ): void {
+    fpInteriorPartitionSolids.rebuildFromPartitionPoses(partitionPosesFromWallRows(wallRows));
+    if (isCombatSim) return;
+    const byUnit = new Map<string, typeof wallRows>();
+    for (const wall of wallRows) {
+      const list = byUnit.get(wall.unit.unitKey) ?? [];
+      list.push(wall);
+      byUnit.set(wall.unit.unitKey, list);
+    }
+    for (const [unitKey, rows] of byUnit) {
+      const unit = rows[0]?.unit;
+      if (!unit || unit.state !== UNIT_STATE_CLAIMED) continue;
+      if (!apartmentUnitOwnerEqual(unit.owner, conn.identity)) continue;
+      scheduleSyncApartmentPartitionBlockers(
+        conn,
+        unitKey,
+        partitionPosesFromWallRows(rows),
+      );
+    }
   }
 
   const fpFirearmImpactDecals = createFpFirearmImpactDecals({
@@ -508,10 +540,7 @@ export async function mountFpSession(
   const fpCollisionDebug = createFpCollisionDebugOverlay({
     staticCollisionIndex,
     visitDynamicCollisionAabbsInXZ: (x0, x1, z0, z1, visit, queryPose) => {
-      fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
-      fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
-      fpInteriorPartitionSolids.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
-      fpNpcCollision?.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
+      fpDynamicLocomotionBlockers.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
     },
   });
   scene.add(fpCollisionDebug.group);
@@ -687,7 +716,6 @@ export async function mountFpSession(
     }
     disableShadowsOnUnitInteriorMeshes();
     refreshPerfTrackedMeshes();
-    rebuildFpInteriorPartitionSolidMeshes();
     fpApartmentDecorMeshes.rebuildStashRayOcclusion();
   };
   let lastPerfSceneCounterSampleAtMs = -Infinity;
@@ -874,6 +902,7 @@ export async function mountFpSession(
         renderer,
         cabMirrorCollection,
         onRebuilt: refreshApartmentInteriorMeshes,
+        onPartitionWallsRebuilt: rebuildFpInteriorPartitionSolidMeshes,
         onRequestShadowMapUpdate: () => {
           ensureMammothApartmentDecorShadowRenderer(renderer);
         },
@@ -1416,24 +1445,8 @@ export async function mountFpSession(
           return tex instanceof THREE.Texture ? tex : null;
         },
         npcCollision: fpNpcCollision ?? undefined,
-        getRenderPvsGate: () =>
-          createFpNpcRenderPvsGate(() => ({
-            floorPlateBand: getActiveFloorPlateBandForFrame(),
-            storeyOpts: {
-              buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
-              floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
-              maxLevel: maxBuildingLevel,
-            },
-            insideResidentialUnit: isInsideResidentialUnitForFrame(),
-            insideApartmentInteriorLightingZone: isInsideApartmentInteriorLightingZoneForFrame(),
-            corridorPvsVisibleUnitKeys: getCorridorPvsVisibleUnitKeysForFrame(),
-            unitKeyContainingPoint: (x, y, z) =>
-              apartmentUnitContainingFeetSlack(conn, x, y, z, {
-                slackXZ: FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M,
-                slackYBelow: 1.25,
-                slackYAbove: 2.85,
-              })?.unitKey ?? null,
-          })),
+        /** Open arena has no megablock floor plates or corridor door PVS — always draw session NPCs. */
+        getRenderPvsGate: () => null,
       })
     : null;
 
@@ -1456,8 +1469,7 @@ export async function mountFpSession(
       sampleWalkTopBase,
       fpElevators,
       fpApartmentDoors,
-      fpInteriorPartitionSolids,
-      fpNpcCollision: fpNpcCollision ?? undefined,
+      fpDynamicLocomotionBlockers,
       staticCollisionIndex,
       doorDebugState: __mmDoorDebugState,
       logDoorDebugFrame,

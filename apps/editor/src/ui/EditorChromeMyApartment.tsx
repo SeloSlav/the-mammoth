@@ -69,6 +69,7 @@ import {
   parseMyApartmentDecorUniformScalePercentInput,
 } from "../editor/myApartment/editorMyApartmentDecorScale.js";
 import { EditorChromeMyApartmentModelOptimize } from "./EditorChromeMyApartmentModelOptimize.js";
+import { EditorChromeMyApartmentDecorDefaultScaleSync } from "./EditorChromeMyApartmentDecorDefaultScaleSync.js";
 import { postSyncApartmentDecorManifest } from "./editorApartmentDecorManifestNetwork.js";
 
 type ApartmentDecorCatalogEntry = {
@@ -838,6 +839,7 @@ export function EditorChromeMyApartment(props: {
         <EditorChromeMyApartmentModelOptimize
           selectedCatalogModelRelPath={selectedCatalogModelRelPath}
         />
+        <EditorChromeMyApartmentDecorDefaultScaleSync placedItems={placedItemsFromStore} />
         <div
           style={{ ...editorChromeSection, scrollMarginTop: 6 }}
           id={EDITOR_CHROME_SECTION.aptSceneGizmo}

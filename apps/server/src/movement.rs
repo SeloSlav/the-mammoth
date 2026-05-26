@@ -21,10 +21,6 @@ pub const BIT_CROUCH: u8 = 1 << 6;
 /// Space held — variable jump height while rising (`fpLocomotion.ts` `jumpHeld`).
 pub const BIT_JUMP_HELD: u8 = 1 << 7;
 
-/// Capsule / blocking heights — keep aligned with FP collision (`packages/engine`).
-pub const PLAYER_HEIGHT_STAND_M: f32 = 1.78;
-pub const PLAYER_HEIGHT_CROUCH_M: f32 = 1.2;
-
 /// Elevators + door animations advance at the same cadence the old integrated movement tick used.
 const TICK_DT: f32 = 0.05;
 

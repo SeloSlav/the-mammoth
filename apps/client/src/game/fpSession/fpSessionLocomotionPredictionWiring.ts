@@ -13,10 +13,9 @@ import {
 import type { MountFpApartmentDoorsResult } from "../fpApartment/fpApartmentDoors.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 import type { FpSessionStaticWorld } from "./fpSessionWorldMount.js";
+import type { FpDynamicLocomotionBlockerHost } from "../fpPhysics/fpDynamicLocomotionBlockerChain.js";
 import {
   createFpSessionLocalPrediction,
-  type ApartmentDoorCollisionHost,
-  type FpNpcCollisionHost,
   type FpSessionMoveIntentQueue,
 } from "./fpSessionLocalPrediction.js";
 import type { FpSessionDoorDebugState } from "./fpSessionDevDebugApis.js";
@@ -47,8 +46,7 @@ export type WireFpSessionLocomotionPredictionArgs = {
   sampleWalkTopBase: (worldX: number, worldZ: number, probeTopY: number) => number;
   fpElevators: MountFpElevatorWorldResult;
   fpApartmentDoors: MountFpApartmentDoorsResult;
-  fpInteriorPartitionSolids?: ApartmentDoorCollisionHost;
-  fpNpcCollision?: FpNpcCollisionHost;
+  fpDynamicLocomotionBlockers: FpDynamicLocomotionBlockerHost;
   staticCollisionIndex: FpSessionStaticWorld["staticCollisionIndex"];
   doorDebugState: FpSessionDoorDebugState;
   logDoorDebugFrame: (args: {
@@ -101,8 +99,7 @@ export function wireFpSessionLocomotionPrediction(
     sampleWalkTopBase,
     fpElevators,
     fpApartmentDoors,
-    fpInteriorPartitionSolids,
-    fpNpcCollision,
+    fpDynamicLocomotionBlockers,
     staticCollisionIndex,
     doorDebugState,
     logDoorDebugFrame,
@@ -216,8 +213,7 @@ export function wireFpSessionLocomotionPrediction(
       logDoorDebugReconcile,
       staticCollisionIndex,
       fpElevators,
-      fpApartmentDoors,
-      fpInteriorPartitionSolids,
+      fpDynamicLocomotionBlockers,
       elevatorWalkMergeSkipVy: ELEVATOR_WALK_MERGE_SKIP_VY,
       elevatorRiderLockSkipUpwardVyMps,
       intentQueue: moveIntentQueue,

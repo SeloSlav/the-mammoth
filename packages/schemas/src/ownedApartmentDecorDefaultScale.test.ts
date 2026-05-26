@@ -26,6 +26,10 @@ describe("ownedApartmentDecorDefaultScale", () => {
       uniformScale: 1.2905003590527768,
       verticalScaleMul: 1.2458761734189374,
     });
+    expect(defaultOwnedApartmentDecorScaleForModel("static/models/objects/fish-tank.glb")).toEqual({
+      uniformScale: 0.24004505933091325,
+      verticalScaleMul: 1,
+    });
   });
 
   it("stays aligned with first placement per model in owned_apartment_builtins.json", () => {

@@ -467,6 +467,7 @@ export type FpApartmentDecorFullRebuildContext = {
   getPracticalLightsContextUnitKey: () => string | null;
   cabMirrorCollection?: FpCabMirrorCollection;
   onRebuilt?: () => void;
+  onPartitionWallsRebuilt?: (wallRows: VisibleWallPlacement[]) => void;
   yieldToMain: typeof yieldToMain;
 };
 
@@ -844,5 +845,6 @@ export async function runFpApartmentDecorFullRebuild(
   ctx.rebuildStashRayOcclusion();
   ctx.cabMirrorCollection?.syncApartmentDecorRoot(ctx.root);
   requestOwnedApartmentStashDecorSync(ctx.conn);
+  ctx.onPartitionWallsRebuilt?.(wallRows);
   ctx.onRebuilt?.();
 }

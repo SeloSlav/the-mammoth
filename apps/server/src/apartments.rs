@@ -221,6 +221,23 @@ pub struct ApartmentUnitDecor {
     pub authored_id: String,
 }
 
+/// Client-synced interior partition wall collision slabs for authoritative NPC locomotion.
+#[spacetimedb::table(public, accessor = apartment_partition_blocker)]
+pub struct ApartmentPartitionBlocker {
+    #[primary_key]
+    #[auto_inc]
+    pub blocker_id: u64,
+    pub unit_key: String,
+    pub min_x: f32,
+    pub min_y: f32,
+    pub min_z: f32,
+    pub max_x: f32,
+    pub max_y: f32,
+    pub max_z: f32,
+}
+
+const PARTITION_BLOCKER_FLAT_LEN: usize = 6;
+
 /// Keep in sync with `@the-mammoth/schemas` `APARTMENT_UNIT_DECOR_ITEM_KIND_*`.
 pub(crate) const APARTMENT_DECOR_ITEM_KIND_PLAIN: u8 = 0;
 pub(crate) const APARTMENT_DECOR_ITEM_KIND_BED: u8 = 1;
@@ -1197,6 +1214,76 @@ pub fn sync_owned_apartment_stash_decor(ctx: &ReducerContext) {
         ensure_authored_fish_tank_filter_decor_for_unit(ctx, sender, unit.unit_key.as_str());
         try_bind_default_fish_filter_link(ctx, sender, unit.unit_key.as_str());
     }
+}
+
+/// Replace client-computed interior partition collision slabs for a claimed unit (6 floats per AABB).
+#[spacetimedb::reducer]
+pub fn sync_apartment_partition_blockers(
+    ctx: &ReducerContext,
+    unit_key: String,
+    aabb_flat: Vec<f32>,
+) {
+    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
+        log::debug!("sync_apartment_partition_blockers blocked: {e}");
+        return;
+    }
+    if player_vitals::is_player_dead(ctx, ctx.sender()) {
+        return;
+    }
+    let Some(unit) = player_may_layout_owned_apartment(ctx, &unit_key, true) else {
+        return;
+    };
+    if aabb_flat.len() % PARTITION_BLOCKER_FLAT_LEN != 0 {
+        log::warn!(
+            "sync_apartment_partition_blockers: bad flat len {} for {}",
+            aabb_flat.len(),
+            unit.unit_key
+        );
+        return;
+    }
+    let table = ctx.db.apartment_partition_blocker();
+    let stale: Vec<u64> = table
+        .iter()
+        .filter(|row| row.unit_key.as_str() == unit_key.as_str())
+        .map(|row| row.blocker_id)
+        .collect();
+    for id in stale {
+        table.blocker_id().delete(&id);
+    }
+    for chunk in aabb_flat.chunks(PARTITION_BLOCKER_FLAT_LEN) {
+        if chunk.len() != PARTITION_BLOCKER_FLAT_LEN {
+            continue;
+        }
+        let min_x = chunk[0];
+        let min_y = chunk[1];
+        let min_z = chunk[2];
+        let max_x = chunk[3];
+        let max_y = chunk[4];
+        let max_z = chunk[5];
+        if !min_x.is_finite()
+            || !min_y.is_finite()
+            || !min_z.is_finite()
+            || !max_x.is_finite()
+            || !max_y.is_finite()
+            || !max_z.is_finite()
+        {
+            continue;
+        }
+        if max_x <= min_x || max_y <= min_y || max_z <= min_z {
+            continue;
+        }
+        let _ = table.insert(ApartmentPartitionBlocker {
+            blocker_id: 0,
+            unit_key: unit_key.clone(),
+            min_x,
+            min_y,
+            min_z,
+            max_x,
+            max_y,
+            max_z,
+        });
+    }
+    let _ = unit;
 }
 
 fn authored_filter_world_pose(unit: &ApartmentUnit) -> (f32, f32, f32) {

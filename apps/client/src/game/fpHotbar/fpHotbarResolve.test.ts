@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Identity } from "spacetimedb";
 import type { DbConnection } from "../../module_bindings";
+import { getFpHotbarSelectedSlot, setFpHotbarSelectedSlot } from "./fpHotbarSelection";
 import {
   firearmAmmoDefIdForWeapon,
   hotbarDefIdSupportsMeleeAttack,
   localPlayerHasCarriedAmmoForWeapon,
+  unequipFpHotbarWeaponIfHeld,
 } from "./fpHotbarResolve";
 
 const testOwner = { isEqual: (other: unknown) => other === testOwner } as unknown as Identity;
@@ -62,6 +64,34 @@ describe("firearmAmmoDefIdForWeapon + localPlayerHasCarriedAmmoForWeapon", () =>
       },
     ]);
     expect(localPlayerHasCarriedAmmoForWeapon(conn, testOwner, "pistol")).toBe(false);
+  });
+});
+
+describe("unequipFpHotbarWeaponIfHeld", () => {
+  it("clears the rail when the selected slot holds a weapon", () => {
+    setFpHotbarSelectedSlot(2);
+    const conn = stubInventoryConn([
+      {
+        defId: "crowbar",
+        quantity: 1,
+        location: { tag: "Hotbar", value: { ownerId: testOwner, slotIndex: 2 } },
+      },
+    ]);
+    expect(unequipFpHotbarWeaponIfHeld(conn, testOwner)).toBe(true);
+    expect(getFpHotbarSelectedSlot()).toBeNull();
+  });
+
+  it("leaves selection when slot is empty or non-weapon", () => {
+    setFpHotbarSelectedSlot(1);
+    const conn = stubInventoryConn([
+      {
+        defId: "bandage",
+        quantity: 1,
+        location: { tag: "Hotbar", value: { ownerId: testOwner, slotIndex: 1 } },
+      },
+    ]);
+    expect(unequipFpHotbarWeaponIfHeld(conn, testOwner)).toBe(false);
+    expect(getFpHotbarSelectedSlot()).toBe(1);
   });
 });
 

@@ -46,6 +46,7 @@ import {
   handleApartmentDecorGlbRevert,
 } from "./apartmentDecorGlbOptimizeHandlers.js";
 import { handleSyncApartmentDecorManifest } from "./syncApartmentDecorManifestHandlers.js";
+import { handleSyncOwnedApartmentDecorDefaultScale } from "./syncOwnedApartmentDecorDefaultScaleHandlers.js";
 
 /**
  * IDs accepted by the save-consumable-presentation endpoint.
@@ -362,6 +363,11 @@ export function editorDevMiddleware(
       }
       if (path === "/__editor/sync-apartment-decor-manifest" && req.method === "POST") {
         return void (await handleSyncApartmentDecorManifest(repoRoot, res, ensureEditorSaveEnabled));
+      }
+      if (path === "/__editor/sync-owned-apartment-decor-default-scale" && req.method === "POST") {
+        return void (
+          await handleSyncOwnedApartmentDecorDefaultScale(repoRoot, req, res, ensureEditorSaveEnabled)
+        );
       }
       if (path === "/__editor/save-consumable-presentation" && req.method === "POST") {
         return void (await handleSaveConsumablePresentation(repoRoot, req, res, next));

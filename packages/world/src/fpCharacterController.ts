@@ -19,18 +19,10 @@ const COLLISION_EPS = 0.0015;
 const STEP_IGNORE_BELOW_FEET_M = 0.2;
 export const FP_CHARACTER_MAX_HORIZONTAL_SUBSTEP_M = 0.18;
 const SLIDE_PASSES = 4;
+const DEPENETRATE_PASSES = 8;
 const RAY_EPS = 1e-8;
 
-/**
- * Minimum height a blocker's bottom must sit above the feet for the post-depenetration
- * head-clearance clamp to fire. Below this, the blocker is a **tall vertical wall** (typical
- * bottom ≈ `feetY + 0..0.1`, top well above the head) rather than an overhead slab, and the
- * clamp — which would otherwise push `pos.y` down by a full `bodyHeight` — produces a full-storey
- * "shot-through-the-door" drop. The band between 0 m and this threshold is handled by the
- * horizontal depenetration pass; anything above it is a legitimate low duct / overhang / cab
- * roof where clamping is correct. Must stay in sync with server
- * `HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M` in `character_controller.rs`.
- */
+/** Sync `@the-mammoth/game` `HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M` + server codegen. */
 export const HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M = 0.5;
 
 function verticalOverlap(feetY: number, bodyH: number, b: CollisionAabb): boolean {

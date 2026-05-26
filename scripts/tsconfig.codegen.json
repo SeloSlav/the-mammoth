@@ -11,5 +11,10 @@
     "esModuleInterop": true,
     "resolveJsonModule": true
   },
-  "include": ["gen-exterior-tree-collision.ts", "gen-stair-runtime-overlay.ts", "gen-walk-aabbs.ts"]
+  "include": [
+    "gen-collision-constants.ts",
+    "gen-exterior-tree-collision.ts",
+    "gen-stair-runtime-overlay.ts",
+    "gen-walk-aabbs.ts"
+  ]
 }

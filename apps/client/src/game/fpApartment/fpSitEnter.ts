@@ -3,6 +3,7 @@ import { apartmentSittableSpecFromModelPath } from "@the-mammoth/schemas";
 import type { FpLocomotionInput, FpLocomotionState } from "@the-mammoth/engine";
 import type { ApartmentSittablePrompt } from "./fpApartmentSittableTypes.js";
 import { clientCanEnterApartmentSittable } from "./fpApartmentSittablePrompt.js";
+import { unequipFpHotbarWeaponIfHeld } from "../fpHotbar/fpHotbarResolve.js";
 import { computeApartmentSittableWorldPose } from "./fpApartmentSittablePose.js";
 import { enterFpSit } from "./fpSitSession.js";
 import type { DbConnection } from "../../module_bindings";
@@ -33,6 +34,9 @@ export function tryEnterFpSitFromPrompt(args: {
   args.mainRaf.headLookYaw = 0;
   if (spec.mode === "lie") {
     args.mainRaf.pitch = pose.defaultPitchRad;
+  }
+  if (args.conn.identity) {
+    unequipFpHotbarWeaponIfHeld(args.conn, args.conn.identity);
   }
   enterFpSit({
     active: true,

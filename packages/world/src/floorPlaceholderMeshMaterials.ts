@@ -263,10 +263,9 @@ export const exteriorConcreteWallMaterial = (() => {
 const APARTMENT_UNIT_EXTERIOR_BRICK_AUTHORING: StandardAuthoringSlot = {
   name: "apartment-unit-exterior-brick",
   roughness: 1,
-  metalness: 0.02,
+  metalness: 0,
   mapUrl: "/static/materials/apartment-unit-exterior-brick/basecolor.png",
   normalMapUrl: "/static/materials/apartment-unit-exterior-brick/normal.png",
-  roughnessMapUrl: "/static/materials/apartment-unit-exterior-brick/roughness.png",
 };
 
 export const unitExteriorBrickWallMaterial = (() => {
@@ -276,10 +275,10 @@ export const unitExteriorBrickWallMaterial = (() => {
     metalness: 0,
   });
   applyStandardAuthoringSlot(m, APARTMENT_UNIT_EXTERIOR_BRICK_AUTHORING);
-  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
+  stripArchitecturalDetailMaps(m, { metalness: 0 });
   /** Brick courses read tighter than slab concrete at the same world-metric wall UV scale. */
   const rep = 0.52;
-  for (const key of ["map", "normalMap", "roughnessMap"] as const) {
+  for (const key of ["map", "normalMap"] as const) {
     const t = m[key];
     if (t) {
       t.wrapS = THREE.RepeatWrapping;
@@ -288,9 +287,13 @@ export const unitExteriorBrickWallMaterial = (() => {
     }
   }
   applyShellTextureAnisotropy(m);
-  m.normalScale.set(1.05, 1.05);
-  /** Albedo multiply — dusty patina steer on authored PATINA brick (no texture regen). */
-  m.color.setRGB(0.68, 0.54, 0.46);
+  m.roughness = 1;
+  m.metalness = 0;
+  m.envMap = null;
+  m.envMapIntensity = 0;
+  m.normalScale.set(0.65, 0.65);
+  /** Albedo multiply — chalky UV-faded brick; high tint washes PATINA albedo toward sand-beige. */
+  m.color.setRGB(0.94, 0.89, 0.84);
   return m;
 })();
 

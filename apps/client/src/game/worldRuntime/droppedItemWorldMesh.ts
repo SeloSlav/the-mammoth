@@ -126,7 +126,6 @@ export function buildProceduralDropRoot(defId: string): THREE.Group | null {
 export function buildDropMeshLayersFromObject(root: THREE.Object3D, defId: string): DropMeshLayer[] {
   fitDroppedWorldItemModelToCatalog(root, defId);
   root.updateWorldMatrix(true, true);
-  const rootInv = new THREE.Matrix4().copy(root.matrixWorld).invert();
 
   const buckets = new Map<
     string,
@@ -140,8 +139,9 @@ export function buildDropMeshLayersFromObject(root: THREE.Object3D, defId: strin
     const material = (Array.isArray(matRaw) ? matRaw[0] : matRaw) as THREE.Material;
     if (!material) return;
     mesh.updateMatrixWorld(true);
-    const local = new THREE.Matrix4().multiplyMatrices(rootInv, mesh.matrixWorld);
-    const geo = cloneGeometryForMerge(mesh.geometry as THREE.BufferGeometry, local);
+    // Bake post-fit world transforms into geometry. Root-relative baking (rootInv × meshWorld)
+    // cancels uniform catalog scale when meshes are direct children of the fitted root.
+    const geo = cloneGeometryForMerge(mesh.geometry as THREE.BufferGeometry, mesh.matrixWorld);
     const key = material.uuid;
     let bucket = buckets.get(key);
     if (!bucket) {

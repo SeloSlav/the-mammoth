@@ -1,6 +1,14 @@
 import * as THREE from "three";
 import { fpLocomotionConstants } from "@the-mammoth/engine";
 import {
+  combatSimArenaBoundsFromUnitFootprint,
+  combatSimArenaCollisionAabbs,
+  combatSimArenaObstacleAabbs,
+  COMBAT_SIM_FALLBACK_HALF_EXTENT_M,
+  COMBAT_SIM_WALL_HEIGHT_M,
+  type CombatSimArenaBounds,
+} from "@the-mammoth/game";
+import {
   buildCollisionSpatialIndex,
   buildWalkSurfaceSpatialIndex,
   floorPlaceholderMeshMaterials,
@@ -12,10 +20,6 @@ import type { DbConnection } from "../../module_bindings";
 import type { FpSessionStaticWorld } from "../fpSession/fpSessionWorldMount.js";
 import { findOwnedApartmentUnitForIdentity } from "./combatSimEnter.js";
 
-const COMBAT_SIM_ARENA_PAD_M = 6;
-const COMBAT_SIM_FALLBACK_HALF_EXTENT_M = 14;
-const COMBAT_SIM_WALL_HEIGHT_M = 4;
-const COMBAT_SIM_WALL_THICKNESS_M = 0.35;
 /** Matches shell interior concrete tiling (~2.75 m per UV unit at repeat 0.3). */
 const COMBAT_SIM_CONCRETE_TILE_SPAN_M = 2.75 / 0.3;
 
@@ -40,6 +44,34 @@ function cloneTiledConcreteFloorMaterial(
   return mat;
 }
 
+function mountCombatSimObstacleMeshes(
+  root: THREE.Group,
+  bounds: CombatSimArenaBounds,
+): void {
+  const obstacleMat = new THREE.MeshStandardMaterial({
+    color: 0x8a8f96,
+    roughness: 0.92,
+    metalness: 0.02,
+  });
+  const obstacles = combatSimArenaObstacleAabbs(bounds);
+  for (let i = 0; i < obstacles.length; i++) {
+    const aabb = obstacles[i]!;
+    const sx = aabb.max[0] - aabb.min[0];
+    const sy = aabb.max[1] - aabb.min[1];
+    const sz = aabb.max[2] - aabb.min[2];
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), obstacleMat);
+    mesh.name = `combat_sim_obstacle:${i}`;
+    mesh.position.set(
+      (aabb.min[0] + aabb.max[0]) * 0.5,
+      (aabb.min[1] + aabb.max[1]) * 0.5,
+      (aabb.min[2] + aabb.max[2]) * 0.5,
+    );
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    root.add(mesh);
+  }
+}
+
 /**
  * Arena-only `FpSessionStaticWorld` for `combatSimMode`.
  *
@@ -52,19 +84,20 @@ export function createCombatSimStaticWorld(conn: DbConnection): FpSessionStaticW
   const unit = findOwnedApartmentUnitForIdentity(conn);
   const footY = unit?.footY ?? 0;
 
-  const minX =
-    (unit?.boundMinX ?? -COMBAT_SIM_FALLBACK_HALF_EXTENT_M) - COMBAT_SIM_ARENA_PAD_M;
-  const maxX =
-    (unit?.boundMaxX ?? COMBAT_SIM_FALLBACK_HALF_EXTENT_M) + COMBAT_SIM_ARENA_PAD_M;
-  const minZ =
-    (unit?.boundMinZ ?? -COMBAT_SIM_FALLBACK_HALF_EXTENT_M) - COMBAT_SIM_ARENA_PAD_M;
-  const maxZ =
-    (unit?.boundMaxZ ?? COMBAT_SIM_FALLBACK_HALF_EXTENT_M) + COMBAT_SIM_ARENA_PAD_M;
+  const bounds = combatSimArenaBoundsFromUnitFootprint({
+    boundMinX: unit?.boundMinX ?? -COMBAT_SIM_FALLBACK_HALF_EXTENT_M,
+    boundMaxX: unit?.boundMaxX ?? COMBAT_SIM_FALLBACK_HALF_EXTENT_M,
+    boundMinZ: unit?.boundMinZ ?? -COMBAT_SIM_FALLBACK_HALF_EXTENT_M,
+    boundMaxZ: unit?.boundMaxZ ?? COMBAT_SIM_FALLBACK_HALF_EXTENT_M,
+    footY,
+  });
 
+  const { minX, maxX, minZ, maxZ } = bounds;
   const cx = (minX + maxX) * 0.5;
   const cz = (minZ + maxZ) * 0.5;
   const width = maxX - minX;
   const depth = maxZ - minZ;
+  const wallY1 = footY + COMBAT_SIM_WALL_HEIGHT_M;
 
   const building = parseBuildingDoc(buildingDoc);
   const buildingRoot = new THREE.Group();
@@ -83,6 +116,8 @@ export function createCombatSimStaticWorld(conn: DbConnection): FpSessionStaticW
   plane.castShadow = false;
   buildingRoot.add(plane);
 
+  mountCombatSimObstacleMeshes(buildingRoot, bounds);
+
   const arenaFill = new THREE.HemisphereLight(0xd8e4f4, 0x4a5058, 0.62);
   arenaFill.name = "combat_sim_arena_fill";
   arenaFill.position.set(cx, footY + 6, cz);
@@ -98,22 +133,14 @@ export function createCombatSimStaticWorld(conn: DbConnection): FpSessionStaticW
   const cellRoot = new THREE.Group();
   cellRoot.name = "combat_sim_cell_root";
 
-  const floorWalk: CollisionAabb = {
-    min: [minX, footY - 0.12, minZ],
-    max: [maxX, footY, maxZ],
-  };
-  const wallY1 = footY + COMBAT_SIM_WALL_HEIGHT_M;
-  const t = COMBAT_SIM_WALL_THICKNESS_M;
-  const walls: CollisionAabb[] = [
-    { min: [minX, footY, minZ], max: [minX + t, wallY1, maxZ] },
-    { min: [maxX - t, footY, minZ], max: [maxX, wallY1, maxZ] },
-    { min: [minX, footY, minZ], max: [maxX, wallY1, minZ + t] },
-    { min: [minX, footY, maxZ - t], max: [maxX, wallY1, maxZ] },
-  ];
-  const staticCollisionSolids = [floorWalk, ...walls];
+  const staticCollisionSolids: CollisionAabb[] = combatSimArenaCollisionAabbs(bounds).map((aabb) => ({
+    min: aabb.min,
+    max: aabb.max,
+  }));
   const staticCollisionIndex = buildCollisionSpatialIndex(staticCollisionSolids);
 
   const walkFootprint = { minX, maxX, minZ, maxZ };
+  const floorWalk = staticCollisionSolids[0]!;
   const walkSpatialIndex = buildWalkSurfaceSpatialIndex([floorWalk]);
   const sampleWalkTopBase = (worldX: number, worldZ: number, probeTopY: number) =>
     walkSpatialIndex.sampleTopYWithExteriorGround(

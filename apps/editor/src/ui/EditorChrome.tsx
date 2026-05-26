@@ -11,6 +11,7 @@ import {
   faGripLinesVertical,
   faListUl,
   faObjectGroup,
+  faRulerCombined,
   faSitemap,
   faSliders,
   faTableCells,
@@ -388,6 +389,11 @@ export function EditorChrome() {
       items.push(
         { id: EDITOR_CHROME_SECTION.importDecor, label: "Import décor", icon: faCloudArrowDown },
         { id: EDITOR_CHROME_SECTION.modelOptimize, label: "Model optimize", icon: faWandMagicSparkles },
+        {
+          id: EDITOR_CHROME_SECTION.decorDefaultScale,
+          label: "Default scales",
+          icon: faRulerCombined,
+        },
         { id: EDITOR_CHROME_SECTION.aptSceneGizmo, label: "Scene & gizmo", icon: faArrowsRotate },
         { id: EDITOR_CHROME_SECTION.placedDecor, label: "Placed décor", icon: faTableCells },
         { id: EDITOR_CHROME_SECTION.savedGroups, label: "Saved groups", icon: faObjectGroup },

@@ -804,20 +804,6 @@
       "itemKind": "plain"
     },
     {
-      "id": "4e43a2ee-448f-4910-a766-89e153ced77a",
-      "modelRelPath": "static/models/objects/floor-mat.glb",
-      "fx": 0.03935844377339088,
-      "fz": 0.40775353235555,
-      "dy": 0.004534199287617339,
-      "yawRad": 1.5707963267948963,
-      "pitchRad": 0,
-      "rollRad": 0,
-      "uniformScale": 0.4633919950012853,
-      "verticalScaleMul": 1,
-      "ignoreSupportSurfaces": false,
-      "itemKind": "plain"
-    },
-    {
       "id": "91a2acd6-701e-4350-8494-3b382932b437",
       "modelRelPath": "static/models/objects/cushion.glb",
       "fx": 0.49208525297327216,

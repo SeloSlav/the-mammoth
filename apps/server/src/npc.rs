@@ -14,21 +14,20 @@ use crate::movement::player_input;
 use crate::movement::BIT_CROUCH;
 use crate::pose::player_pose;
 
+pub use crate::generated_collision_constants::{
+    BABUSHKA_BODY_HEIGHT_M, BABUSHKA_BODY_RADIUS_M, CAPSULE_PAIR_SURFACE_GAP_M, NPC_STATE_DEAD,
+};
+
 pub const NPC_ARCHETYPE_BABUSHKA: &str = "babushka";
 
 pub const NPC_STATE_IDLE: u8 = 0;
 pub const NPC_STATE_AGGRO: u8 = 1;
-pub const NPC_STATE_DEAD: u8 = 2;
 
 pub const NPC_LOCOMOTION_IDLE: u8 = 0;
 pub const NPC_LOCOMOTION_WALK: u8 = 1;
 pub const NPC_LOCOMOTION_RUN: u8 = 2;
 
 pub const BABUSHKA_MAX_HEALTH: f32 = 120.0;
-/// Keep aligned with `packages/game/src/collision/bodyCapsules.ts`.
-pub const BABUSHKA_BODY_RADIUS_M: f32 = 0.28;
-/// Keep aligned with `packages/game/src/collision/bodyCapsules.ts`.
-pub const BABUSHKA_BODY_HEIGHT_M: f32 = 1.55;
 pub const BABUSHKA_AGGRO_RANGE_M: f32 = 6.5;
 pub const BABUSHKA_MELEE_RANGE_M: f32 = 1.35;
 pub const BABUSHKA_WALK_SPEED_MPS: f32 = 1.45;
@@ -44,8 +43,6 @@ const NPC_HEAD_TRACE_INFLATE_M: f32 = 0.06;
 const BABUSHKA_PEER_SEPARATION_RADIUS_M: f32 = 1.55;
 const BABUSHKA_PEER_SEPARATION_STRENGTH: f32 = 3.4;
 const BABUSHKA_PEER_OVERLAP_RESOLVE_PASSES: usize = 2;
-/// Keep aligned with `packages/game/src/collision/bodyCapsules.ts` `CAPSULE_PAIR_SURFACE_GAP_M`.
-const CAPSULE_PAIR_SURFACE_GAP_M: f32 = 0.10;
 const BABUSHKA_PLAYER_SEPARATION_RADIUS_M: f32 = 1.55;
 const BABUSHKA_PLAYER_SEPARATION_STRENGTH: f32 = 3.4;
 const BABUSHKA_PLAYER_OVERLAP_RESOLVE_PASSES: usize = 2;
@@ -305,7 +302,7 @@ pub fn trace_best_npc_hit(
     best
 }
 
-fn body_dims_for_archetype(archetype: &str) -> (f32, f32) {
+pub(crate) fn body_dims_for_archetype(archetype: &str) -> (f32, f32) {
     match archetype {
         NPC_ARCHETYPE_BABUSHKA => (BABUSHKA_BODY_RADIUS_M, BABUSHKA_BODY_HEIGHT_M),
         _ => (0.25, 1.6),
@@ -579,16 +576,35 @@ fn babushka_cap_planar_speed(vx: f32, vz: f32, max_speed: f32) -> (f32, f32) {
 }
 
 fn babushka_apply_planar_motion(
+    ctx: &ReducerContext,
     npc: &mut WorldNpc,
     vx: f32,
     vz: f32,
     dt_sec: f32,
     locomotion_run: bool,
 ) {
+    let prev_x = npc.x;
+    let prev_z = npc.z;
     npc.vel_x = vx;
     npc.vel_z = vz;
-    npc.x += vx * dt_sec;
-    npc.z += vz * dt_sec;
+    let mut tx = npc.x + vx * dt_sec;
+    let mut tz = npc.z + vz * dt_sec;
+    let mut vel_x = vx;
+    let mut vel_z = vz;
+    crate::npc_collision::resolve_npc_planar_motion(
+        ctx,
+        npc,
+        &mut tx,
+        &mut tz,
+        &mut vel_x,
+        &mut vel_z,
+        prev_x,
+        prev_z,
+    );
+    npc.x = tx;
+    npc.z = tz;
+    npc.vel_x = vel_x;
+    npc.vel_z = vel_z;
     let speed_sq = vx * vx + vz * vz;
     npc.locomotion = if speed_sq > 0.04 {
         if locomotion_run {
@@ -754,7 +770,7 @@ fn step_one_world_npc(
                 planar_dz * inv * run_speed + peer_sep_z + player_sep_z,
                 run_speed,
             );
-            babushka_apply_planar_motion(npc, vx, vz, dt_sec, true);
+            babushka_apply_planar_motion(ctx, npc, vx, vz, dt_sec, true);
             if combat_sim {
                 npc.y = target_y;
             }
@@ -770,7 +786,7 @@ fn step_one_world_npc(
                 let spread_speed = BABUSHKA_WALK_SPEED_MPS;
                 let vx = (sep_x / sep_mag) * spread_speed.min(sep_mag);
                 let vz = (sep_z / sep_mag) * spread_speed.min(sep_mag);
-                babushka_apply_planar_motion(npc, vx, vz, dt_sec, false);
+                babushka_apply_planar_motion(ctx, npc, vx, vz, dt_sec, false);
             } else {
                 npc.vel_x = 0.0;
                 npc.vel_z = 0.0;
@@ -802,7 +818,7 @@ fn step_one_world_npc(
                 dir_z * BABUSHKA_WALK_SPEED_MPS + peer_sep_z + player_sep_z,
                 BABUSHKA_WALK_SPEED_MPS,
             );
-            babushka_apply_planar_motion(npc, vx, vz, dt_sec, false);
+            babushka_apply_planar_motion(ctx, npc, vx, vz, dt_sec, false);
             npc.yaw = dir_x.atan2(dir_z);
             let moved_x = npc.x - old_x;
             let moved_z = npc.z - old_z;

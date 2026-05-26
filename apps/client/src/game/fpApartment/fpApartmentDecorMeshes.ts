@@ -229,6 +229,7 @@ export function mountFpApartmentDecorMeshes(opts: {
   renderer: THREE.WebGPURenderer;
   cabMirrorCollection?: FpCabMirrorCollection;
   onRebuilt?: () => void;
+  onPartitionWallsRebuilt?: (wallRows: import("./fpApartmentDecorRebuild.js").VisibleWallPlacement[]) => void;
   onRequestShadowMapUpdate?: () => void;
 }): MountFpApartmentDecorMeshesResult {
   const root = new THREE.Group();
@@ -728,6 +729,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         getPracticalLightsContextUnitKey: () => practicalLightsContextUnitKey,
         cabMirrorCollection: opts.cabMirrorCollection,
         onRebuilt: opts.onRebuilt,
+        onPartitionWallsRebuilt: opts.onPartitionWallsRebuilt,
         yieldToMain,
       },
       epoch,

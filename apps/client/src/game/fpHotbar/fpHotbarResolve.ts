@@ -3,6 +3,7 @@ import type { HeldItemId } from "@the-mammoth/game";
 import type { Identity } from "spacetimedb";
 import type { DbConnection } from "../../module_bindings";
 import type { InventoryItem } from "../../module_bindings/types";
+import { getFpHotbarSelectedSlot, setFpHotbarSelectedSlot } from "./fpHotbarSelection.js";
 
 /** Matches `apps/server/src/loadout.rs` `ACTIVE_HOTBAR_SLOT_CLEARED`. */
 export const ACTIVE_HOTBAR_SLOT_CLEARED = 255;
@@ -80,4 +81,13 @@ export function resolveHeldItemFromHotbar(
   const row = getHotbarSlotInventoryItem(conn, owner, selectedSlot);
   if (!row) return "unarmed";
   return equippedHeldItemIdFromDefId(row.defId);
+}
+
+/** Clears the hotbar rail when the selected slot holds a weapon (melee or ranged). */
+export function unequipFpHotbarWeaponIfHeld(conn: DbConnection, owner: Identity): boolean {
+  const slot = getFpHotbarSelectedSlot();
+  if (slot === null) return false;
+  if (resolveHeldItemFromHotbar(conn, owner, slot) === "unarmed") return false;
+  setFpHotbarSelectedSlot(null);
+  return true;
 }

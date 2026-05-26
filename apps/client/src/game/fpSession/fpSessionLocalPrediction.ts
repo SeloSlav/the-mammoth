@@ -17,6 +17,10 @@ import {
   type DynamicCollisionQueryPose,
 } from "../fpPhysics/fpPlayerCollision.js";
 import {
+  createFpDynamicLocomotionBlockerChain,
+  type FpDynamicLocomotionBlockerHost,
+} from "../fpPhysics/fpDynamicLocomotionBlockerChain.js";
+import {
   clampAttachedBodyXZToKinematicSupportIfNeeded,
   getKinematicSupportVerticalVelocityMps,
   snapAttachedFeetToKinematicSupportIfNeeded,
@@ -115,11 +119,8 @@ export type FpSessionLocalPredictionDeps = {
   ) => void;
   staticCollisionIndex: CollisionSpatialIndex;
   fpElevators: ElevDoorCollisionHost;
-  fpApartmentDoors: ApartmentDoorCollisionHost;
-  /** Living world NPC capsules (combat sim today; live megablock when mounted). */
-  fpNpcCollision?: FpNpcCollisionHost;
-  /** Owned-apartment partition slabs + mounted interior authoring boxes (runtime meshes). */
-  fpInteriorPartitionSolids?: ApartmentDoorCollisionHost;
+  /** Shared dynamic blocker chain (elevators → doors → partitions → NPCs). */
+  fpDynamicLocomotionBlockers: FpDynamicLocomotionBlockerHost;
   elevatorWalkMergeSkipVy: number;
   elevatorRiderLockSkipUpwardVyMps: number;
   intentQueue: FpSessionMoveIntentQueue;
@@ -144,7 +145,6 @@ export type FpSessionPredictedPlayerStepOpts = {
 };
 
 export function createFpSessionLocalPrediction(deps: FpSessionLocalPredictionDeps) {
-  const { fpInteriorPartitionSolids } = deps;
   const simulatePredictedPlayerStep = (
     opts: FpSessionPredictedPlayerStepOpts,
   ): number => {
@@ -204,10 +204,14 @@ export function createFpSessionLocalPrediction(deps: FpSessionLocalPredictionDep
       deps.staticCollisionIndex,
       {
         visitAabbsInXZ: (x0, x1, z0, z1, visit, queryPose) => {
-          deps.fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
-          deps.fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
-          fpInteriorPartitionSolids?.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
-          deps.fpNpcCollision?.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
+          deps.fpDynamicLocomotionBlockers.visitCollisionAabbsInXZ(
+            x0,
+            x1,
+            z0,
+            z1,
+            visit,
+            queryPose,
+          );
         },
       },
       opts.locoState.grounded,

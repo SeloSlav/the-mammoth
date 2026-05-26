@@ -1,4 +1,18 @@
 export {
+  COMBAT_SIM_ARENA_PAD_M,
+  COMBAT_SIM_AUTHORED_OBSTACLES,
+  COMBAT_SIM_FALLBACK_HALF_EXTENT_M,
+  COMBAT_SIM_WALL_HEIGHT_M,
+  COMBAT_SIM_WALL_THICKNESS_M,
+  combatSimArenaBoundsFromUnitFootprint,
+  combatSimArenaCollisionAabbs,
+  combatSimArenaObstacleAabbs,
+  combatSimArenaPerimeterWallAabbs,
+  type CollisionAabbLike,
+  type CombatSimArenaBounds,
+  type CombatSimObstacleSpec,
+} from "./combatSimArena.js";
+export {
   BABUSHKA_BODY_HEIGHT_M,
   BABUSHKA_BODY_RADIUS_M,
   CAPSULE_PAIR_SURFACE_GAP_M,
@@ -16,3 +30,31 @@ export {
   verticalCapsuleOverlap,
   type NpcArchetypeBodyDims,
 } from "./bodyCapsules.js";
+export {
+  COLLISION_EPS,
+  DEPENETRATE_PASSES,
+  FP_CHARACTER_MAX_HORIZONTAL_SUBSTEP_M,
+  FP_WALK_STEP_UP_MARGIN_M,
+  HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M,
+  LOCOMOTION_BLOCKER_QUERY_PAD_M,
+  LOCOMOTION_STATIC_MIN_BLOCKER_HEIGHT_M,
+  SLIDE_PASSES,
+  STEP_IGNORE_BELOW_FEET_M,
+} from "./fpCapsuleLocomotion.js";
+export {
+  LOCOMOTION_DYNAMIC_BLOCKER_SOURCE_ORDER,
+  locomotionBlockerQueryDisjointAabb,
+  locomotionBlockerQueryFromCapsuleMove,
+  locomotionStaticBlockerHeightOk,
+  locomotionVerticalOverlapFeetBody,
+  visitLocomotionDynamicBlockersInOrder,
+  type LocomotionBlockerQuery,
+  type LocomotionDynamicBlockerSource,
+  type LocomotionDynamicBlockerSources,
+  type LocomotionDynamicBlockerVisitor,
+} from "./locomotionBlockers.js";
+export {
+  partitionWallLocalSlabAabbs,
+  partitionWallWorldCollisionAabbs,
+  type PartitionWallWorldPose,
+} from "./partitionWallCollision.js";

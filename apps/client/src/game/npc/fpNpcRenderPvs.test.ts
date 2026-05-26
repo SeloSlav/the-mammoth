@@ -66,4 +66,18 @@ describe("fpNpcPassesRenderPvsGate", () => {
     expect(fpNpcPassesRenderPvsGate({ snapshot: snap(0, 6.5, 0), ...base })).toBe(true);
     expect(fpNpcPassesRenderPvsGate({ snapshot: snap(2, 6.5, 0), ...base })).toBe(true);
   });
+
+  it("rejects every NPC when floor plate band is inverted (combat-sim stub regression)", () => {
+    expect(
+      fpNpcPassesRenderPvsGate({
+        snapshot: snap(0, 0, 0),
+        floorPlateBand: { lo: 1, hi: 0 },
+        storeyOpts: { buildingWorldOriginY: 0, floorSpacingM: 3.2, maxLevel: 0 },
+        insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: false,
+        corridorPvsVisibleUnitKeys: new Set(),
+        unitKeyContainingPoint: () => null,
+      }),
+    ).toBe(false);
+  });
 });

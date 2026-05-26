@@ -90,6 +90,7 @@ import SubmitFirearmShotReducer from "./submit_firearm_shot_reducer";
 import SubmitMeleeSwingReducer from "./submit_melee_swing_reducer";
 import SubmitPlayerLocomotionSnapshotReducer from "./submit_player_locomotion_snapshot_reducer";
 import SyncApartmentAuthoredStashLayoutReducer from "./sync_apartment_authored_stash_layout_reducer";
+import SyncApartmentPartitionBlockersReducer from "./sync_apartment_partition_blockers_reducer";
 import SyncOwnedApartmentStashDecorReducer from "./sync_owned_apartment_stash_decor_reducer";
 import TickCraftQueueStepReducer from "./tick_craft_queue_step_reducer";
 import TopOffFishTankFromBottleReducer from "./top_off_fish_tank_from_bottle_reducer";
@@ -100,6 +101,7 @@ import UpdateApartmentUnitDecorReducer from "./update_apartment_unit_decor_reduc
 // Import all table schema definitions
 import ApartmentDoorRow from "./apartment_door_table";
 import ApartmentDoorGameplayRow from "./apartment_door_gameplay_table";
+import ApartmentPartitionBlockerRow from "./apartment_partition_blocker_table";
 import ApartmentUnitRow from "./apartment_unit_table";
 import ApartmentUnitDecorRow from "./apartment_unit_decor_table";
 import ApartmentUnitUtilitiesRow from "./apartment_unit_utilities_table";
@@ -171,6 +173,17 @@ const tablesSchema = __schema({
       { name: 'apartment_door_gameplay_row_key_key', constraint: 'unique', columns: ['rowKey'] },
     ],
   }, ApartmentDoorGameplayRow),
+  apartment_partition_blocker: __table({
+    name: 'apartment_partition_blocker',
+    indexes: [
+      { name: 'blocker_id', algorithm: 'btree', columns: [
+        'blockerId',
+      ] },
+    ],
+    constraints: [
+      { name: 'apartment_partition_blocker_blocker_id_key', constraint: 'unique', columns: ['blockerId'] },
+    ],
+  }, ApartmentPartitionBlockerRow),
   apartment_unit: __table({
     name: 'apartment_unit',
     indexes: [
@@ -715,6 +728,7 @@ const reducersSchema = __reducers(
   __reducerSchema("submit_melee_swing", SubmitMeleeSwingReducer),
   __reducerSchema("submit_player_locomotion_snapshot", SubmitPlayerLocomotionSnapshotReducer),
   __reducerSchema("sync_apartment_authored_stash_layout", SyncApartmentAuthoredStashLayoutReducer),
+  __reducerSchema("sync_apartment_partition_blockers", SyncApartmentPartitionBlockersReducer),
   __reducerSchema("sync_owned_apartment_stash_decor", SyncOwnedApartmentStashDecorReducer),
   __reducerSchema("tick_craft_queue_step", TickCraftQueueStepReducer),
   __reducerSchema("top_off_fish_tank_from_bottle", TopOffFishTankFromBottleReducer),

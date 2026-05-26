@@ -5,6 +5,7 @@ export const EDITOR_CHROME_SECTION = {
   apartmentUnit: "editor-chrome-section-apartment-unit",
   importDecor: "editor-chrome-section-import-decor",
   modelOptimize: "editor-chrome-section-model-optimize",
+  decorDefaultScale: "editor-chrome-section-decor-default-scale",
   placedDecor: "editor-chrome-section-placed-decor",
   aptSceneGizmo: "editor-chrome-section-apt-scene-gizmo",
   savedGroups: "editor-chrome-section-saved-groups",

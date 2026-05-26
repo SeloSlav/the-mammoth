@@ -24,6 +24,10 @@ use spacetimedb::{Identity, ReducerContext, Table};
 use crate::apartments::{self, apartment_unit, ApartmentUnit, UNIT_STATE_CLAIMED};
 use crate::auth;
 use crate::combat_sim_npc_spawn;
+use crate::generated_collision_constants::{
+    combat_sim_arena_collision_aabbs_for_unit_bounds, COMBAT_SIM_ARENA_PAD_M,
+    COMBAT_SIM_FALLBACK_HALF_EXTENT_M,
+};
 use crate::inventory::{
     delete_all_player_inventory_and_hotbar_items, reset_player_loadout_for_respawn,
     try_grant_stack_to_player,
@@ -47,10 +51,6 @@ const COMBAT_SIM_LOADOUT: &[(&str, u32)] = &[
     ("ammo-shotgun-shell", 24),
     ("ammo-9mm", 60),
 ];
-
-/// Match client `combatSimStaticWorld.ts` fallback arena when no owned unit row is synced yet.
-const COMBAT_SIM_FALLBACK_HALF_EXTENT_M: f32 = 14.0;
-const COMBAT_SIM_ARENA_PAD_M: f32 = 6.0;
 
 /// Match live-world babushka aggro so combat sim behaves like the real apartment encounter.
 pub const COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M: f32 = npc::BABUSHKA_AGGRO_RANGE_M;
@@ -138,6 +138,17 @@ pub fn combat_sim_arena_center(unit: &ApartmentUnit) -> (f32, f32, f32) {
     let cx = (unit.bound_min_x + unit.bound_max_x) * 0.5;
     let cz = (unit.bound_min_z + unit.bound_max_z) * 0.5;
     (cx, unit.foot_y, cz)
+}
+
+/// Perimeter walls + authored cover volumes — shared with client `combatSimArenaCollisionAabbs`.
+pub fn combat_sim_arena_collision_aabbs(unit: &ApartmentUnit) -> Vec<([f32; 3], [f32; 3])> {
+    combat_sim_arena_collision_aabbs_for_unit_bounds(
+        unit.bound_min_x,
+        unit.bound_max_x,
+        unit.bound_min_z,
+        unit.bound_max_z,
+        unit.foot_y,
+    )
 }
 
 fn clamp_player_xz_in_combat_arena(unit: &ApartmentUnit, x: f32, z: f32) -> (f32, f32) {

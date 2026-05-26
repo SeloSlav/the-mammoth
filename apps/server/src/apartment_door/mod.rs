@@ -354,6 +354,10 @@ fn closed_slab_aabb(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
 
 /// Match `SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01`.
 const SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01: f32 = 0.025;
+/// Match `SWING_DOOR_PARKED_LEAF_MIN_OPEN_01`.
+const SWING_DOOR_PARKED_LEAF_MIN_OPEN_01: f32 = 0.97;
+/// Match `SWING_DOOR_DEFAULT_MAX_RAD`.
+const SWING_DOOR_DEFAULT_MAX_RAD: f32 = 1.55;
 /// Match `SWING_DOOR_OPEN_LEAF_HALF_THICK_M`.
 const SWING_DOOR_OPEN_LEAF_HALF_THICK_M: f32 = 0.07;
 /// Match `SWING_DOOR_OPEN_LEAF_XZ_PAD_M`.
@@ -364,6 +368,67 @@ const SWING_DOOR_FIREARM_PARKED_LEAF_UNIFORM_PAD_M: f32 = 0.22;
 #[inline]
 fn apartment_door_swing_inward_for_template(_template_id: &str) -> bool {
     false
+}
+
+#[inline]
+fn swing_door_base_yaw(face: SwingDoorFace) -> f32 {
+    match face {
+        SwingDoorFace::W | SwingDoorFace::E => 0.0,
+        SwingDoorFace::N | SwingDoorFace::S => std::f32::consts::FRAC_PI_2,
+    }
+}
+
+#[inline]
+fn swing_door_swing_sign(face: SwingDoorFace) -> f32 {
+    match face {
+        SwingDoorFace::W | SwingDoorFace::N => 1.0,
+        SwingDoorFace::E | SwingDoorFace::S => -1.0,
+    }
+}
+
+fn swing_door_yaw_rad(face: SwingDoorFace, open01: f32, max_rad: f32, swing_inward: bool) -> f32 {
+    let base = swing_door_base_yaw(face);
+    let sign = swing_door_swing_sign(face);
+    let effective = if swing_inward { -sign } else { sign };
+    base + effective * open01 * max_rad
+}
+
+fn swinging_leaf_enclosing_aabb(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
+    let face = SwingDoorFace::from_u8(row.face);
+    let swing_inward = apartment_door_swing_inward_for_template(&row.template_id);
+    let ht = SWING_DOOR_OPEN_LEAF_HALF_THICK_M;
+    let pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
+    let yaw = swing_door_yaw_rad(
+        face,
+        row.swing_open_01,
+        SWING_DOOR_DEFAULT_MAX_RAD,
+        swing_inward,
+    );
+    let ux = -yaw.sin();
+    let uz = -yaw.cos();
+    let vx = -uz;
+    let vz = ux;
+    let hx = row.hinge_x;
+    let hz = row.hinge_z;
+    let pw = row.panel_w_m;
+    let corners = [
+        (hx + vx * ht, hz + vz * ht),
+        (hx - vx * ht, hz - vz * ht),
+        (hx + vx * ht + ux * pw, hz + vz * ht + uz * pw),
+        (hx - vx * ht + ux * pw, hz - vz * ht + uz * pw),
+    ];
+    let mut min_x = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    let mut min_z = f32::INFINITY;
+    let mut max_z = f32::NEG_INFINITY;
+    for (x, z) in corners {
+        min_x = min_x.min(x - pad);
+        max_x = max_x.max(x + pad);
+        min_z = min_z.min(z - pad);
+        max_z = max_z.max(z + pad);
+    }
+    let top_y = row.feet_y + row.panel_h_m;
+    ([min_x, row.feet_y, min_z], [max_x, top_y, max_z])
 }
 
 #[inline]
@@ -404,6 +469,17 @@ pub(crate) fn parked_leaf_world_aabb(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]
             )
         }
     }
+}
+
+/// Locomotion capsule blocker — lockstep with `swingDoorMovementBlockingAabb` in `@the-mammoth/world`.
+pub fn apartment_door_movement_blocking_aabb(row: &ApartmentDoor) -> Option<([f32; 3], [f32; 3])> {
+    if row.swing_open_01 <= SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01 {
+        return Some(closed_slab_aabb(row));
+    }
+    if row.swing_open_01 >= SWING_DOOR_PARKED_LEAF_MIN_OPEN_01 {
+        return Some(parked_leaf_world_aabb(row));
+    }
+    Some(swinging_leaf_enclosing_aabb(row))
 }
 
 fn expanded_parked_leaf_firearm_barrier(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
