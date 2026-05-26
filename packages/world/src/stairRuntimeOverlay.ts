@@ -23,6 +23,7 @@ import {
   type StairTreadSpec,
 } from "./stairWellGeometry.js";
 import { stairwellLitterScatterSeed } from "./stairwellCigaretteLitter.js";
+import { walkSurfaceTopIsReachable, type SampleWalkGroundOpts } from "./walkSurfaceAABBs.js";
 
 type LandingPartId = Extract<StairWellEditorPartId, "stair_landing_lower" | "stair_landing_upper">;
 
@@ -532,7 +533,7 @@ export function sampleRuntimeStairSupportTopY(
   x: number,
   z: number,
   probeTopY: number,
-  opts?: { footRadiusXZ?: number; stepUpMargin?: number; probeDy?: number },
+  opts?: SampleWalkGroundOpts & { probeDy?: number },
 ): number {
   const stepUpMargin = opts?.stepUpMargin ?? 0.82;
   const footR = opts?.footRadiusXZ ?? 0.22;
@@ -587,7 +588,13 @@ export function sampleRuntimeStairSupportTopY(
       }
     }
     if (!Number.isFinite(top)) continue;
-    if (top <= feetY + stepUpMargin) {
+    if (
+      walkSurfaceTopIsReachable(top, feetY, probeTopY, {
+        stepUpMargin,
+        descentProbe: opts?.descentProbe,
+        maxSupportDropBelowFeetM: opts?.maxSupportDropBelowFeetM,
+      })
+    ) {
       best = Number.isFinite(best) ? Math.max(best, top) : top;
     }
   }

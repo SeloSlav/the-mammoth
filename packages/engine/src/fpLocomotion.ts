@@ -2,7 +2,8 @@ import * as THREE from "three";
 
 /** Match `apps/server` pose clamp lower bound so client physics does not fight the reducer. */
 const FLOOR_Y = 0.35;
-const SKIN = 0.034;
+export const FP_LOCOMOTION_FEET_SKIN_M = 0.034;
+const SKIN = FP_LOCOMOTION_FEET_SKIN_M;
 
 const GRAVITY = 21.5;
 const JUMP_SPEED = 5.7;
@@ -40,6 +41,12 @@ export const FP_WALK_STEP_UP_MARGIN = 0.82;
 export const FP_LOCOMOTION_SUBSTEPS_PER_SECOND = 200;
 export const FP_WALK_PROBE_DY = 1.05;
 export const FP_WALK_MAX_SUPPORT_DROP_M = 3.1;
+/** Skip walk AABB probes while rising — landing only matters once vy <= 0. */
+export const FP_JUMP_ASCENT_SKIP_WALK_PROBE_VY = 0.08;
+/** Fewer integration substeps while airborne — walk probes are the hot path on descent. */
+export const FP_LOCOMOTION_AIRBORNE_SUBSTEP_SCALE = 0.35;
+/** Min horizontal substep travel (m²) before dual start/end walk probes. */
+const FP_WALK_DUAL_PROBE_MIN_XZ_TRAVEL_SQ = 0.0009;
 
 const _forward = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -81,6 +88,11 @@ export type FpLocomotionWalkOptions = {
   jumpKinematicPlatformVyMps?: number;
   /** Override sprint cap (m/s) — e.g. fatigue slows sprint without disabling input. */
   sprintSpeedMps?: number;
+  /**
+   * Integrator toggles each substep while falling — walk sampler uses descent reach so jumps
+   * can land on elevated platforms/decks.
+   */
+  descentProbeRef?: { current: boolean };
 };
 
 export type FpLocomotionInput = {
@@ -186,15 +198,34 @@ export function stepFpLocomotion(
 
   const probeDy = walk?.probeDy ?? FP_WALK_PROBE_DY;
   const maxSupportDrop = walk?.maxSupportDropM ?? FP_WALK_MAX_SUPPORT_DROP_M;
+  const airborneStep = !state.grounded;
   /**
    * Scale substeps with `dt` so client frames and the 20 Hz server tick use similar ground
    * resolution per second — avoids systematic drift that felt like rubber-banding.
    */
+  const substepScale = airborneStep ? FP_LOCOMOTION_AIRBORNE_SUBSTEP_SCALE : 1;
   const substeps = walk?.sampleWalkGroundTopY
-    ? Math.max(1, Math.min(50, Math.round(FP_LOCOMOTION_SUBSTEPS_PER_SECOND * h)))
+    ? Math.max(1, Math.min(50, Math.round(FP_LOCOMOTION_SUBSTEPS_PER_SECOND * h * substepScale)))
     : 1;
   const sh = h / substeps;
   const endWallMs = walk?.integrationEvalEndWallClockMs;
+  let lastWalkSampleKey = 0;
+  let lastWalkSampleTop = Number.NaN;
+  const sampleWalkTopCached = (
+    x: number,
+    z: number,
+    probeY: number,
+    probeClockMs?: number,
+  ): number => {
+    const qx = Math.round(x * 100);
+    const qz = Math.round(z * 100);
+    const qp = Math.round(probeY * 40);
+    const key = qx * 73856093 + qz * 19349663 + qp * 83492791;
+    if (key === lastWalkSampleKey) return lastWalkSampleTop;
+    lastWalkSampleKey = key;
+    lastWalkSampleTop = walk!.sampleWalkGroundTopY(x, z, probeY, probeClockMs);
+    return lastWalkSampleTop;
+  };
     for (let i = 0; i < substeps; i++) {
     const x0 = pos.x;
     const z0 = pos.z;
@@ -206,31 +237,53 @@ export function stepFpLocomotion(
     pos.z += state.velocity.z * sh;
     pos.y += state.velocity.y * sh;
     if (walk?.sampleWalkGroundTopY) {
-      const probeY = pos.y + probeDy;
-      const probeClockMs =
-        endWallMs === undefined
-          ? undefined
-          : endWallMs - 1000 * h + (1000 * h * (i + 1)) / substeps;
-      const w0 = walk.sampleWalkGroundTopY(x0, z0, probeY, probeClockMs);
-      const w1 = walk.sampleWalkGroundTopY(pos.x, pos.z, probeY, probeClockMs);
-      let walkTop = w0;
-      if (Number.isFinite(w1)) {
-        walkTop = Number.isFinite(w0) ? Math.max(w0, w1) : w1;
+      const ascendingAirborne =
+        !state.grounded && state.velocity.y > FP_JUMP_ASCENT_SKIP_WALK_PROBE_VY;
+      if (walk.descentProbeRef) {
+        walk.descentProbeRef.current =
+          !state.grounded && state.velocity.y <= FP_JUMP_ASCENT_SKIP_WALK_PROBE_VY;
       }
-      const snapEps = 0.006;
-      if (
-        Number.isFinite(walkTop) &&
-        walkTop > pos.y - maxSupportDrop &&
-        pos.y <= walkTop + SKIN + snapEps
-      ) {
-        pos.y = walkTop + SKIN;
-        state.velocity.y = 0;
-        state.grounded = true;
-      } else if (
-        !Number.isFinite(walkTop) ||
-        walkTop <= pos.y - maxSupportDrop
-      ) {
+      if (ascendingAirborne) {
         state.grounded = false;
+      } else {
+        const probeY = pos.y + probeDy;
+        const probeClockMs =
+          endWallMs === undefined
+            ? undefined
+            : endWallMs - 1000 * h + (1000 * h * (i + 1)) / substeps;
+        const dx = pos.x - x0;
+        const dz = pos.z - z0;
+        let walkTop: number;
+        if (dx * dx + dz * dz < FP_WALK_DUAL_PROBE_MIN_XZ_TRAVEL_SQ) {
+          walkTop = sampleWalkTopCached(pos.x, pos.z, probeY, probeClockMs);
+        } else {
+          const w0 = sampleWalkTopCached(x0, z0, probeY, probeClockMs);
+          const w1 = sampleWalkTopCached(pos.x, pos.z, probeY, probeClockMs);
+          walkTop = w0;
+          if (Number.isFinite(w1)) {
+            walkTop = Number.isFinite(w0) ? Math.max(w0, w1) : w1;
+          }
+        }
+        const snapEps = 0.006;
+        const descending =
+          !state.grounded && state.velocity.y <= FP_JUMP_ASCENT_SKIP_WALK_PROBE_VY;
+        const snapAbove = descending
+          ? Math.max(snapEps, 0.2, -state.velocity.y * sh * 2.5)
+          : snapEps;
+        if (
+          Number.isFinite(walkTop) &&
+          walkTop > pos.y - maxSupportDrop &&
+          pos.y <= walkTop + SKIN + snapAbove
+        ) {
+          pos.y = walkTop + SKIN;
+          state.velocity.y = 0;
+          state.grounded = true;
+        } else if (
+          !Number.isFinite(walkTop) ||
+          walkTop <= pos.y - maxSupportDrop
+        ) {
+          state.grounded = false;
+        }
       }
     } else if (pos.y <= FLOOR_Y + SKIN) {
       pos.y = FLOOR_Y + SKIN;
@@ -281,6 +334,8 @@ export const fpLocomotionConstants = {
   walkProbeDy: FP_WALK_PROBE_DY,
   walkMaxSupportDropM: FP_WALK_MAX_SUPPORT_DROP_M,
   locomotionSubstepsPerSecond: FP_LOCOMOTION_SUBSTEPS_PER_SECOND,
+  jumpAscentSkipWalkProbeVyMps: FP_JUMP_ASCENT_SKIP_WALK_PROBE_VY,
+  locomotionAirborneSubstepScale: FP_LOCOMOTION_AIRBORNE_SUBSTEP_SCALE,
   /** Narrower vertical FOV reads closer to eye-level photography and deepens rooms slightly. */
   cameraFovDeg: 62,
 } as const;

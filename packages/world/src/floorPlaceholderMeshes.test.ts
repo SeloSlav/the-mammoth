@@ -85,6 +85,40 @@ describe("classifyPrefab", () => {
       expect(leafMeshes).toBeGreaterThan(0);
     }
 
+    const exteriorJambs: THREE.Object3D[] = [];
+    root.traverse((obj) => {
+      if (/^shell_lobby_frame_ext_(e|w|n|s)_\d+_jamb_lo$/.test(obj.name)) {
+        exteriorJambs.push(obj);
+      }
+    });
+    expect(exteriorJambs.length).toBeGreaterThan(0);
+    for (const door of closedDoors) {
+      door.updateMatrixWorld(true);
+      const doorPos = new THREE.Vector3();
+      door.getWorldPosition(doorPos);
+      const face = door.name.match(/^shell_lobby_closed_door_([ewns])_/)?.[1];
+      expect(face).toBeTruthy();
+      const sameFaceJambs = exteriorJambs.filter((j) => j.name.includes(`_${face}_`));
+      expect(sameFaceJambs.length).toBeGreaterThan(0);
+      let bestDist = Infinity;
+      let bestJamb: THREE.Object3D | null = null;
+      for (const jamb of sameFaceJambs) {
+        jamb.updateMatrixWorld(true);
+        const jambPos = new THREE.Vector3();
+        jamb.getWorldPosition(jambPos);
+        const dist =
+          face === "e" || face === "w"
+            ? Math.abs(doorPos.x - jambPos.x)
+            : Math.abs(doorPos.z - jambPos.z);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestJamb = jamb;
+        }
+      }
+      expect(bestJamb, door.name).not.toBeNull();
+      expect(bestDist).toBeLessThan(0.04);
+    }
+
     const collisionAabbs = collectCollisionAabbsFromObject3D(root);
     const doorCollision = collisionAabbs.filter((b) => {
       const cy = (b.min[1] + b.max[1]) * 0.5;

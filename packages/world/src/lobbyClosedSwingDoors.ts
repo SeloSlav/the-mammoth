@@ -10,19 +10,24 @@ import { resolveLandingDims } from "./exteriorLandingDoorSwing.js";
 import {
   createSwingDoorMaterials,
   populateSwingDoorLeaf,
+  SWING_DOOR_PANEL_THICK_M,
 } from "./swingDoorMesh.js";
 import {
   swingDoorOrientationForFace,
   type SwingDoorFace,
 } from "./swingDoorCollision.js";
 import {
-  entryDoorYRangeForShell,
   UNIT_ENTRY_DOOR_H,
   UNIT_ENTRY_DOOR_W,
 } from "./unitEntryAdjacency.js";
+import {
+  doorFrameTrimPlaneConstantX,
+  doorFrameTrimPlaneConstantZ,
+  type CardinalFace,
+} from "./wallWithDoorCutout.js";
 
-/** Leaf plane inset from inner shell wall toward lobby volume (matches stair shaft convention). */
-const LOBBY_DOOR_PLANE_INSET_M = 0.015;
+/** Must match {@link addExteriorWallCladding} / lobby exterior trim in `hollowRoomShell`. */
+export const LOBBY_EXTERIOR_CLADDING_TH_M = 0.035;
 
 /** Mirrors `content/door/apartment_unit_kit.json` — solid corridor leaf. */
 export const APARTMENT_CORRIDOR_DOOR_KIT = {
@@ -55,14 +60,60 @@ export type LobbyClosedSwingDoorArgs = {
   hx: number;
   hz: number;
   wt: number;
-  sy: number;
   /** East interior wall bays (subset of full Z spine). */
   czListEast: readonly number[];
   /** West interior wall bays (full Z spine). */
   czListWest: readonly number[];
   /** North/south end bays (shared X centers). */
   cxListNs: readonly number[];
+  /** Which lobby shell faces are exterior façades (black trim + closed leaf on street side). */
+  exteriorFaces: readonly CardinalFace[];
+  yDoor0: number;
+  yDoor1: number;
+  exteriorCladT?: number;
 };
+
+function exteriorFaceSet(faces: readonly CardinalFace[]): Set<CardinalFace> {
+  return new Set(faces);
+}
+
+/** Hinge X on east/west walls — leaf center sits on the same trim plane as `addDoorFrameTrimConstantX`. */
+export function lobbyClosedDoorHingeXForEastWestWall(args: {
+  face: "e" | "w";
+  hx: number;
+  wt: number;
+  exterior: boolean;
+  exteriorCladT: number;
+}): number {
+  const { face, hx, wt, exterior, exteriorCladT } = args;
+  if (face === "e") {
+    const xInner = exterior ? hx + exteriorCladT : hx - wt;
+    const framePlaneX = doorFrameTrimPlaneConstantX(xInner, -1);
+    return framePlaneX - SWING_DOOR_PANEL_THICK_M * 0.5;
+  }
+  const xInner = exterior ? -hx - exteriorCladT : -hx + wt;
+  const framePlaneX = doorFrameTrimPlaneConstantX(xInner, 1);
+  return framePlaneX - SWING_DOOR_PANEL_THICK_M * 0.5;
+}
+
+/** Hinge Z on north/south walls — leaf center sits on the same trim plane as `addDoorFrameTrimConstantZ`. */
+export function lobbyClosedDoorHingeZForNorthSouthWall(args: {
+  face: "n" | "s";
+  hz: number;
+  wt: number;
+  exterior: boolean;
+  exteriorCladT: number;
+}): number {
+  const { face, hz, wt, exterior, exteriorCladT } = args;
+  if (face === "n") {
+    const zInner = exterior ? hz + exteriorCladT : hz - wt;
+    const framePlaneZ = doorFrameTrimPlaneConstantZ(zInner, -1);
+    return framePlaneZ + SWING_DOOR_PANEL_THICK_M * 0.5;
+  }
+  const zInner = exterior ? -hz - exteriorCladT : -hz + wt;
+  const framePlaneZ = doorFrameTrimPlaneConstantZ(zInner, 1);
+  return framePlaneZ + SWING_DOOR_PANEL_THICK_M * 0.5;
+}
 
 function addClosedLeaf(
   group: THREE.Group,
@@ -93,10 +144,22 @@ export function addLobbyClosedApartmentSwingDoors(
   group: THREE.Group,
   args: LobbyClosedSwingDoorArgs,
 ): void {
-  const { hx, hz, wt, sy, czListEast, czListWest, cxListNs } = args;
-  const { yDoor0 } = entryDoorYRangeForShell(sy);
+  const {
+    hx,
+    hz,
+    wt,
+    czListEast,
+    czListWest,
+    cxListNs,
+    exteriorFaces,
+    yDoor0,
+    yDoor1,
+    exteriorCladT = LOBBY_EXTERIOR_CLADDING_TH_M,
+  } = args;
+  const ext = exteriorFaceSet(exteriorFaces);
   const panelW = UNIT_ENTRY_DOOR_W;
   const panelH = UNIT_ENTRY_DOOR_H;
+  const feetY = yDoor0 + Math.max(0, (yDoor1 - yDoor0 - panelH) * 0.5);
   const kit = APARTMENT_CORRIDOR_DOOR_KIT;
   const { frameMat, glassMat } = createSwingDoorMaterials(kit);
   let idx = 0;
@@ -105,9 +168,15 @@ export function addLobbyClosedApartmentSwingDoors(
     addClosedLeaf(
       group,
       "e",
-      hx - wt - LOBBY_DOOR_PLANE_INSET_M,
+      lobbyClosedDoorHingeXForEastWestWall({
+        face: "e",
+        hx,
+        wt,
+        exterior: ext.has("e"),
+        exteriorCladT,
+      }),
       zc + panelW * 0.5,
-      yDoor0,
+      feetY,
       panelH,
       kit,
       frameMat,
@@ -119,9 +188,15 @@ export function addLobbyClosedApartmentSwingDoors(
     addClosedLeaf(
       group,
       "w",
-      -hx + wt + LOBBY_DOOR_PLANE_INSET_M,
+      lobbyClosedDoorHingeXForEastWestWall({
+        face: "w",
+        hx,
+        wt,
+        exterior: ext.has("w"),
+        exteriorCladT,
+      }),
       zc + panelW * 0.5,
-      yDoor0,
+      feetY,
       panelH,
       kit,
       frameMat,
@@ -134,8 +209,14 @@ export function addLobbyClosedApartmentSwingDoors(
       group,
       "n",
       xc + panelW * 0.5,
-      hz - wt - LOBBY_DOOR_PLANE_INSET_M,
-      yDoor0,
+      lobbyClosedDoorHingeZForNorthSouthWall({
+        face: "n",
+        hz,
+        wt,
+        exterior: ext.has("n"),
+        exteriorCladT,
+      }),
+      feetY,
       panelH,
       kit,
       frameMat,
@@ -146,8 +227,14 @@ export function addLobbyClosedApartmentSwingDoors(
       group,
       "s",
       xc + panelW * 0.5,
-      -hz + wt + LOBBY_DOOR_PLANE_INSET_M,
-      yDoor0,
+      lobbyClosedDoorHingeZForNorthSouthWall({
+        face: "s",
+        hz,
+        wt,
+        exterior: ext.has("s"),
+        exteriorCladT,
+      }),
+      feetY,
       panelH,
       kit,
       frameMat,

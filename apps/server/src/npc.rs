@@ -575,6 +575,24 @@ fn babushka_cap_planar_speed(vx: f32, vz: f32, max_speed: f32) -> (f32, f32) {
     (vx * scale, vz * scale)
 }
 
+fn snap_babushka_combat_sim_feet_y(ctx: &ReducerContext, npc: &mut WorldNpc) {
+    if !npc.session_key.starts_with("combat_sim:") {
+        return;
+    }
+    let Some(unit_key) = npc.session_key.strip_prefix("combat_sim:") else {
+        return;
+    };
+    let Some(unit) = ctx
+        .db
+        .apartment_unit()
+        .iter()
+        .find(|u| u.unit_key == unit_key)
+    else {
+        return;
+    };
+    npc.y = crate::combat_sim::combat_sim_sample_walk_top_y(&unit, npc.x, npc.z, npc.y);
+}
+
 fn babushka_apply_planar_motion(
     ctx: &ReducerContext,
     npc: &mut WorldNpc,
@@ -605,6 +623,7 @@ fn babushka_apply_planar_motion(
     npc.z = tz;
     npc.vel_x = vel_x;
     npc.vel_z = vel_z;
+    snap_babushka_combat_sim_feet_y(ctx, npc);
     let speed_sq = vx * vx + vz * vz;
     npc.locomotion = if speed_sq > 0.04 {
         if locomotion_run {
@@ -771,9 +790,6 @@ fn step_one_world_npc(
                 run_speed,
             );
             babushka_apply_planar_motion(ctx, npc, vx, vz, dt_sec, true);
-            if combat_sim {
-                npc.y = target_y;
-            }
             npc.yaw = planar_dx.atan2(planar_dz);
         } else {
             let (peer_sep_x, peer_sep_z) = babushka_peer_separation_steering(npc, peers);

@@ -291,9 +291,13 @@ export const unitExteriorBrickWallMaterial = (() => {
   m.metalness = 0;
   m.envMap = null;
   m.envMapIntensity = 0;
-  m.normalScale.set(0.65, 0.65);
-  /** Albedo multiply — chalky UV-faded brick; high tint washes PATINA albedo toward sand-beige. */
-  m.color.setRGB(0.94, 0.89, 0.84);
+  /** Softer normals — sun-bleached mortar reads flatter than fresh brick relief. */
+  m.normalScale.set(0.42, 0.42);
+  /**
+   * Albedo multiply above 1.0 lifts the dark PATINA basecolor toward dusty salmon-beige.
+   * Warm bias (R > G > B) keeps a hint of brick without the deep burgundy read outdoors.
+   */
+  m.color.setRGB(1.62, 1.52, 1.42);
   return m;
 })();
 

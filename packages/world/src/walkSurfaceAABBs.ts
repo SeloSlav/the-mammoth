@@ -461,7 +461,29 @@ export type SampleWalkGroundOpts = {
    * single-point (x,z) sits in a crack between treads (set 0 to restore point sampling).
    */
   footRadiusXZ?: number;
+  /**
+   * When true (airborne descent), accept walk tops up to `probeTopY` instead of only
+   * `feetY + stepUpMargin` — enables landing on elevated platforms after a jump.
+   */
+  descentProbe?: boolean;
+  /** With {@link descentProbe}, ignore surfaces more than this far below probe feet (m). */
+  maxSupportDropBelowFeetM?: number;
 };
+
+/** Shared reach rule for walk AABB queries — keep spatial index + brute sampler aligned. */
+export function walkSurfaceTopIsReachable(
+  top: number,
+  feetY: number,
+  probeTopY: number,
+  opts?: SampleWalkGroundOpts,
+): boolean {
+  if (opts?.descentProbe) {
+    const maxDrop = opts.maxSupportDropBelowFeetM ?? 3.1;
+    return top <= probeTopY + 1e-3 && top >= feetY - maxDrop;
+  }
+  const stepUpMargin = opts?.stepUpMargin ?? 0.82;
+  return top <= feetY + stepUpMargin;
+}
 
 /**
  * Highest walk surface under `probeTopY` for a **foot rectangle** around (x,z).
@@ -487,7 +509,7 @@ export function sampleWalkGroundTopY(
   for (const b of aabbs) {
     if (fx1 < b.min[0] || fx0 > b.max[0] || fz1 < b.min[2] || fz0 > b.max[2]) continue;
     const top = b.max[1];
-    if (top <= feetY + stepUpMargin) {
+    if (walkSurfaceTopIsReachable(top, feetY, probeTopY, opts)) {
       best = Number.isFinite(best) ? Math.max(best, top) : top;
     }
   }

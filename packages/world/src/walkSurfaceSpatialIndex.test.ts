@@ -66,4 +66,21 @@ describe("buildWalkSurfaceSpatialIndex", () => {
     const idx = buildWalkSurfaceSpatialIndex(aabbs);
     expect(idx.sampleTopY(1, 1, probeTopY)).toBeCloseTo(2.336, 6);
   });
+
+  it("finds elevated landing tops while descending even when above step-up walk margin", () => {
+    const aabbs: WalkSurfaceAabb[] = [
+      { min: [0, 0.29, 0], max: [4, 0.4, 4] },
+      { min: [0, 1.25, 0], max: [4, 1.36, 4] },
+    ];
+    const probeTopY = 1.55;
+    expect(
+      sampleWalkGroundTopY(aabbs, 2, 2, probeTopY, { descentProbe: true }),
+    ).toBeCloseTo(1.36, 6);
+    expect(sampleWalkGroundTopY(aabbs, 2, 2, probeTopY)).toBeCloseTo(0.4, 6);
+
+    const idx = buildWalkSurfaceSpatialIndex(aabbs);
+    expect(
+      idx.sampleTopY(2, 2, probeTopY, { descentProbe: true }),
+    ).toBeCloseTo(1.36, 6);
+  });
 });

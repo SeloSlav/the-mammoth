@@ -369,6 +369,21 @@ export function addWallConstantZWithHoles(
   }
 }
 
+export const DOOR_FRAME_TRIM_LEG_M = 0.075;
+export const DOOR_FRAME_TRIM_TH_M = 0.05;
+/** Matches `th * 0.5 + 0.02` in {@link addDoorFrameTrimConstantX}. */
+export const DOOR_FRAME_TRIM_PLANE_INSET_M = 0.02;
+
+/** Trim mesh plane X for an east/west wall opening — shared with swing-door hinge placement. */
+export function doorFrameTrimPlaneConstantX(xInner: number, inwardX: number): number {
+  return xInner + inwardX * (DOOR_FRAME_TRIM_TH_M * 0.5 + DOOR_FRAME_TRIM_PLANE_INSET_M);
+}
+
+/** Trim mesh plane Z for a north/south wall opening — shared with swing-door hinge placement. */
+export function doorFrameTrimPlaneConstantZ(zInner: number, inwardZ: number): number {
+  return zInner + inwardZ * (DOOR_FRAME_TRIM_TH_M * 0.5 + DOOR_FRAME_TRIM_PLANE_INSET_M);
+}
+
 /** Trim around a single opening on an east/west wall (YZ plane), slightly inside the volume. */
 export function addDoorFrameTrimConstantX(
   group: THREE.Group,
@@ -385,9 +400,9 @@ export function addDoorFrameTrimConstantX(
   const hz1 = Math.max(z0, z1);
   const hy0 = Math.min(y0, y1);
   const hy1 = Math.max(y0, y1);
-  const leg = 0.075;
-  const th = 0.05;
-  const xc = xInner + inwardX * (th * 0.5 + 0.02);
+  const leg = DOOR_FRAME_TRIM_LEG_M;
+  const th = DOOR_FRAME_TRIM_TH_M;
+  const xc = doorFrameTrimPlaneConstantX(xInner, inwardX);
   const yc = (hy0 + hy1) * 0.5;
   const zc = (hz0 + hz1) * 0.5;
 
@@ -444,9 +459,9 @@ export function addDoorFrameTrimConstantZ(
   const hx1 = Math.max(x0, x1);
   const hy0 = Math.min(y0, y1);
   const hy1 = Math.max(y0, y1);
-  const leg = 0.075;
-  const th = 0.05;
-  const zc = zInner + inwardZ * (th * 0.5 + 0.02);
+  const leg = DOOR_FRAME_TRIM_LEG_M;
+  const th = DOOR_FRAME_TRIM_TH_M;
+  const zc = doorFrameTrimPlaneConstantZ(zInner, inwardZ);
   const yc = (hy0 + hy1) * 0.5;
   const xc = (hx0 + hx1) * 0.5;
 

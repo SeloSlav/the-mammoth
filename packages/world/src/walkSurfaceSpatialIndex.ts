@@ -1,5 +1,6 @@
 import {
   WALK_FALLBACK_FLOOR_TOP_Y,
+  walkSurfaceTopIsReachable,
   type ExteriorWalkGroundOpts,
   type SampleWalkGroundOpts,
   type WalkSurfaceAabb,
@@ -117,7 +118,7 @@ export function buildWalkSurfaceSpatialIndex(
     z: number,
     probeTopY: number,
     footR: number,
-    stepUpMargin: number,
+    opts?: SampleWalkGroundOpts,
   ): number => {
     const feetY = probeTopY - WALK_PROBE_DY_M;
     const fx0 = x - footR;
@@ -146,7 +147,7 @@ export function buildWalkSurfaceSpatialIndex(
           const b = aabbs[j]!;
           if (fx1 < b.min[0] || fx0 > b.max[0] || fz1 < b.min[2] || fz0 > b.max[2]) continue;
           const top = b.max[1];
-          if (top <= feetY + stepUpMargin) {
+          if (walkSurfaceTopIsReachable(top, feetY, probeTopY, opts)) {
             best = Number.isFinite(best) ? Math.max(best, top) : top;
           }
         }
@@ -156,9 +157,8 @@ export function buildWalkSurfaceSpatialIndex(
   };
 
   const sampleTopY = (x: number, z: number, probeTopY: number, o?: SampleWalkGroundOpts) => {
-    const stepUpMargin = o?.stepUpMargin ?? 0.82;
     const footR = o?.footRadiusXZ ?? 0.22;
-    const best = sampleSubsetRaw(x, z, probeTopY, footR, stepUpMargin);
+    const best = sampleSubsetRaw(x, z, probeTopY, footR, o);
     return finalizeWalkTopY(best);
   };
 

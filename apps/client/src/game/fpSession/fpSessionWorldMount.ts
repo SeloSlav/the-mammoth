@@ -22,6 +22,7 @@ import {
   sampleRuntimeStairSupportTopY,
   walkSurfaceAabbXZFootprint,
   type BuildingStairShaftSpec,
+  type SampleWalkGroundOpts,
 } from "@the-mammoth/world";
 import type { BuildingDoc } from "@the-mammoth/schemas";
 import buildingDoc from "../../../../../content/building/mammoth.json";
@@ -61,6 +62,45 @@ function stairShaftInteriorLightBoundsFromSpec(s: BuildingStairShaftSpec): FpSta
   };
 }
 
+function sampleMegablockWalkTopBase(
+  walkSpatialIndex: ReturnType<typeof buildWalkSurfaceSpatialIndex>,
+  walkFootprint: { minX: number; maxX: number; minZ: number; maxZ: number },
+  stairSupportSurfaces: Parameters<typeof sampleRuntimeStairSupportTopY>[0],
+  worldX: number,
+  worldZ: number,
+  probeTopY: number,
+  sampleOpts?: SampleWalkGroundOpts,
+): number {
+  const walkSampleOpts: SampleWalkGroundOpts = {
+    footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
+    stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+    ...sampleOpts,
+  };
+  const bakedTop = walkSpatialIndex.sampleTopYWithExteriorGround(
+    worldX,
+    worldZ,
+    probeTopY,
+    walkFootprint,
+    walkSampleOpts,
+  );
+  const stairTop = sampleRuntimeStairSupportTopY(
+    stairSupportSurfaces,
+    worldX,
+    worldZ,
+    probeTopY,
+    {
+      footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
+      stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+      probeDy: fpLocomotionConstants.walkProbeDy,
+      descentProbe: sampleOpts?.descentProbe,
+      maxSupportDropBelowFeetM: sampleOpts?.maxSupportDropBelowFeetM,
+    },
+  );
+  if (!Number.isFinite(stairTop)) return bakedTop;
+  if (!Number.isFinite(bakedTop)) return stairTop;
+  return Math.max(bakedTop, stairTop);
+}
+
 export type FpSessionStaticWorld = {
   building: BuildingDoc;
   buildingRoot: THREE.Group;
@@ -72,7 +112,12 @@ export type FpSessionStaticWorld = {
     max: readonly [number, number, number];
   }[];
   staticCollisionIndex: ReturnType<typeof buildCollisionSpatialIndex>;
-  sampleWalkTopBase: (worldX: number, worldZ: number, probeTopY: number) => number;
+  sampleWalkTopBase: (
+    worldX: number,
+    worldZ: number,
+    probeTopY: number,
+    sampleOpts?: SampleWalkGroundOpts,
+  ) => number;
   /** World boxes for stair shafts (+ corridor threshold) — FP dims fill lights when camera is inside. */
   stairShaftInteriorLightBounds: readonly FpStairShaftInteriorLightBounds[];
   /** Stair column specs (ids, segment counts) for client-only features such as stairwell decals. */
@@ -127,32 +172,21 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
     ({ minX: 0, maxX: 0, minZ: 0, maxZ: 0 } as const);
   const walkSpatialIndex = buildWalkSurfaceSpatialIndex(walkSupportAABBs);
 
-  const sampleWalkTopBase = (worldX: number, worldZ: number, probeTopY: number) => {
-    const bakedTop = walkSpatialIndex.sampleTopYWithExteriorGround(
-      worldX,
-      worldZ,
-      probeTopY,
+  const sampleWalkTopBase = (
+    worldX: number,
+    worldZ: number,
+    probeTopY: number,
+    sampleOpts?: SampleWalkGroundOpts,
+  ) =>
+    sampleMegablockWalkTopBase(
+      walkSpatialIndex,
       walkFootprint,
-      {
-        footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
-        stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
-      },
-    );
-    const stairTop = sampleRuntimeStairSupportTopY(
       stairRuntimeOverlay.supportSurfaces,
       worldX,
       worldZ,
       probeTopY,
-      {
-        footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
-        stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
-        probeDy: fpLocomotionConstants.walkProbeDy,
-      },
+      sampleOpts,
     );
-    if (!Number.isFinite(stairTop)) return bakedTop;
-    if (!Number.isFinite(bakedTop)) return stairTop;
-    return Math.max(bakedTop, stairTop);
-  };
 
   const buildingRoot = instantiateBuildingFloorStack(building, getFloorDoc, {
     stairWellDef,
@@ -231,32 +265,21 @@ export async function createFpSessionStaticWorldAsync(
   const walkSpatialIndex = buildWalkSurfaceSpatialIndex(walkSupportAABBs);
   await yieldToMain();
 
-  const sampleWalkTopBase = (worldX: number, worldZ: number, probeTopY: number) => {
-    const bakedTop = walkSpatialIndex.sampleTopYWithExteriorGround(
-      worldX,
-      worldZ,
-      probeTopY,
+  const sampleWalkTopBase = (
+    worldX: number,
+    worldZ: number,
+    probeTopY: number,
+    sampleOpts?: SampleWalkGroundOpts,
+  ) =>
+    sampleMegablockWalkTopBase(
+      walkSpatialIndex,
       walkFootprint,
-      {
-        footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
-        stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
-      },
-    );
-    const stairTop = sampleRuntimeStairSupportTopY(
       stairRuntimeOverlay.supportSurfaces,
       worldX,
       worldZ,
       probeTopY,
-      {
-        footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
-        stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
-        probeDy: fpLocomotionConstants.walkProbeDy,
-      },
+      sampleOpts,
     );
-    if (!Number.isFinite(stairTop)) return bakedTop;
-    if (!Number.isFinite(bakedTop)) return stairTop;
-    return Math.max(bakedTop, stairTop);
-  };
 
   const buildingRoot = await instantiateBuildingFloorStackAsync(building, getFloorDoc, {
     stairWellDef,

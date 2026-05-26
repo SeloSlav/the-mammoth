@@ -76,7 +76,7 @@ export type FpNpcCollisionHost = {
 export type FpSessionLocalPredictionDeps = {
   fpLocomotionConstants: Pick<
     typeof fpLocomotionConstants,
-    "walkProbeDy" | "walkStepUpMargin" | "sprintSpeedMps"
+    "walkProbeDy" | "walkStepUpMargin" | "walkMaxSupportDropM" | "sprintSpeedMps"
   >;
   netDtSec: number;
   sampleWalkTopBase: (worldX: number, worldZ: number, probeTopY: number) => number;

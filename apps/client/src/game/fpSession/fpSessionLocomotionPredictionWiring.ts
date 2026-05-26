@@ -43,7 +43,12 @@ export type WireFpSessionLocomotionPredictionArgs = {
   mainRaf: FpSessionMainRafState;
   displayOffset: THREE.Vector3;
   netDtSec: number;
-  sampleWalkTopBase: (worldX: number, worldZ: number, probeTopY: number) => number;
+  sampleWalkTopBase: (
+    worldX: number,
+    worldZ: number,
+    probeTopY: number,
+    sampleOpts?: import("@the-mammoth/world").SampleWalkGroundOpts,
+  ) => number;
   fpElevators: MountFpElevatorWorldResult;
   fpApartmentDoors: MountFpApartmentDoorsResult;
   fpDynamicLocomotionBlockers: FpDynamicLocomotionBlockerHost;
@@ -129,6 +134,14 @@ export function wireFpSessionLocomotionPrediction(
     current: ReturnType<typeof createFpLocomotionState> | null;
   } = { current: null };
 
+  const _walkDescentProbeRef = { current: false };
+  const _walkSampleOpts = {
+    footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
+    stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+    maxSupportDropBelowFeetM: fpLocomotionConstants.walkMaxSupportDropM,
+    descentProbe: false,
+  };
+
   const sampleWalkTopForVelocityY = (
     velocityY: number,
     worldX: number,
@@ -136,8 +149,9 @@ export function wireFpSessionLocomotionPrediction(
     probeTopY: number,
     evalWallClockMs?: number,
   ) => {
-    const base = sampleWalkTopBase(worldX, worldZ, probeTopY);
-    if (velocityY > ELEVATOR_WALK_MERGE_SKIP_VY) {
+    _walkSampleOpts.descentProbe = _walkDescentProbeRef.current;
+    const base = sampleWalkTopBase(worldX, worldZ, probeTopY, _walkSampleOpts);
+    if (velocityY > ELEVATOR_WALK_MERGE_SKIP_VY || _walkDescentProbeRef.current) {
       return base;
     }
     _walkSupportEval.worldX = worldX;
@@ -149,6 +163,7 @@ export function wireFpSessionLocomotionPrediction(
   };
 
   const _walkOpts: FpLocomotionWalkOptions = {
+    descentProbeRef: _walkDescentProbeRef,
     sampleWalkGroundTopY: (worldX, worldZ, probeTopY, evalWallClockMs) =>
       sampleWalkTopForVelocityY(
         _stepLocoStateRef.current!.velocity.y,
@@ -194,6 +209,7 @@ export function wireFpSessionLocomotionPrediction(
       fpLocomotionConstants: {
         walkProbeDy: fpLocomotionConstants.walkProbeDy,
         walkStepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+        walkMaxSupportDropM: fpLocomotionConstants.walkMaxSupportDropM,
         sprintSpeedMps: fpLocomotionConstants.sprintSpeedMps,
       },
       netDtSec,

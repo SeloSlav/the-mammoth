@@ -26,10 +26,6 @@ import {
   FP_SESSION_WEBGPU_ANTIALIAS,
 } from "../game/fpSession/fpSessionConstants.js";
 import { yieldToMain } from "../game/fpSession/yieldToMain.js";
-import {
-  hideUnitInteriorMeshesForExteriorAuthView,
-  restoreUnitInteriorMeshVisibilityAfterAuthView,
-} from "./mammothAuthBackdropInteriorVisibility.js";
 
 const AUTH_BACKDROP_CAMERA_FOV_DEG = 38;
 const AUTH_BACKDROP_ORBIT_WOBBLE_AMPLITUDE_RAD = 0.045;
@@ -151,8 +147,6 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
   void waitMegablockStaticWorldMeshReady()
     .then(async (world) => {
       if (disposed) return;
-      hideUnitInteriorMeshesForExteriorAuthView(world.buildingRoot);
-      await yieldToMain();
       if (world.buildingRoot.parent !== scene) scene.add(world.buildingRoot);
       if (world.cellRoot.parent !== scene) scene.add(world.cellRoot);
       await yieldToMain();
@@ -220,9 +214,6 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
     cancelAnimationFrame(raf);
     ro.disconnect();
     fpEnvironment.dispose();
-    if (worldAttached && buildingRootForDispose) {
-      restoreUnitInteriorMeshVisibilityAfterAuthView(buildingRootForDispose);
-    }
     if (authShutterRootForDispose) {
       disposeStandardApartmentWindowShuttersRoot(authShutterRootForDispose);
       authShutterRootForDispose = null;

@@ -733,10 +733,13 @@ export function addHollowRoomShell(
     hx,
     hz,
     wt,
-    sy,
     czListEast,
     czListWest: czList,
     cxListNs: cxList,
+    exteriorFaces: exteriorFaces,
+    yDoor0,
+    yDoor1,
+    exteriorCladT: lobbyExteriorCladT,
   });
   addKoncarElevatorSignMeshes(
     group,

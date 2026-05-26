@@ -151,6 +151,25 @@ pub fn combat_sim_arena_collision_aabbs(unit: &ApartmentUnit) -> Vec<([f32; 3], 
     )
 }
 
+/// Highest authored walk top under probe feet — used by combat-sim babushka vertical follow.
+pub fn combat_sim_sample_walk_top_y(
+    unit: &ApartmentUnit,
+    x: f32,
+    z: f32,
+    probe_feet_y: f32,
+) -> f32 {
+    crate::generated_collision_constants::combat_sim_sample_walk_top_y_for_unit_bounds(
+        unit.bound_min_x,
+        unit.bound_max_x,
+        unit.bound_min_z,
+        unit.bound_max_z,
+        unit.foot_y,
+        x,
+        z,
+        probe_feet_y,
+    )
+}
+
 fn clamp_player_xz_in_combat_arena(unit: &ApartmentUnit, x: f32, z: f32) -> (f32, f32) {
     clamp_babushka_xz_in_combat_arena(unit, x, z)
 }

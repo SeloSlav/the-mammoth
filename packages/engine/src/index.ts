@@ -3,6 +3,7 @@ import { fpLocomotionConstants } from "./fpLocomotion.js";
 
 export {
   createFpLocomotionState,
+  FP_LOCOMOTION_FEET_SKIN_M,
   fpLocomotionConstants,
   queueFpJump,
   stepFpLocomotion,

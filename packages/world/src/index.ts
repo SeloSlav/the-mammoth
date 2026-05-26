@@ -137,6 +137,7 @@ export {
   walkSurfaceAabbXZFootprint,
   walkSurfaceAABBsForBuilding,
   walkSurfaceAABBsForFloorDoc,
+  walkSurfaceTopIsReachable,
   WALK_FALLBACK_FLOOR_TOP_Y,
   type ExteriorWalkGroundOpts,
   type SampleWalkGroundOpts,

@@ -4,8 +4,12 @@ import {
   combatSimArenaBoundsFromUnitFootprint,
   combatSimArenaCollisionAabbs,
   combatSimArenaObstacleAabbs,
+  combatSimArenaPerimeterWallAabbs,
+  combatSimArenaTerrainCollisionAabbs,
+  combatSimArenaWalkSurfaceAabbs,
   COMBAT_SIM_FALLBACK_HALF_EXTENT_M,
   COMBAT_SIM_WALL_HEIGHT_M,
+  type CollisionAabbLike,
   type CombatSimArenaBounds,
 } from "@the-mammoth/game";
 import {
@@ -14,6 +18,7 @@ import {
   floorPlaceholderMeshMaterials,
   parseBuildingDoc,
   type CollisionAabb,
+  type SampleWalkGroundOpts,
 } from "@the-mammoth/world";
 import buildingDoc from "../../../../../content/building/mammoth.json";
 import type { DbConnection } from "../../module_bindings";
@@ -44,23 +49,20 @@ function cloneTiledConcreteFloorMaterial(
   return mat;
 }
 
-function mountCombatSimObstacleMeshes(
+function mountCombatSimAabbMeshes(
   root: THREE.Group,
-  bounds: CombatSimArenaBounds,
+  aabbs: readonly CollisionAabbLike[],
+  material: THREE.MeshStandardMaterial,
+  namePrefix: string,
 ): void {
-  const obstacleMat = new THREE.MeshStandardMaterial({
-    color: 0x8a8f96,
-    roughness: 0.92,
-    metalness: 0.02,
-  });
-  const obstacles = combatSimArenaObstacleAabbs(bounds);
-  for (let i = 0; i < obstacles.length; i++) {
-    const aabb = obstacles[i]!;
+  for (let i = 0; i < aabbs.length; i++) {
+    const aabb = aabbs[i]!;
     const sx = aabb.max[0] - aabb.min[0];
     const sy = aabb.max[1] - aabb.min[1];
     const sz = aabb.max[2] - aabb.min[2];
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), obstacleMat);
-    mesh.name = `combat_sim_obstacle:${i}`;
+    if (sx < 1e-4 || sy < 1e-4 || sz < 1e-4) continue;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), material);
+    mesh.name = `${namePrefix}:${i}`;
     mesh.position.set(
       (aabb.min[0] + aabb.max[0]) * 0.5,
       (aabb.min[1] + aabb.max[1]) * 0.5,
@@ -70,6 +72,36 @@ function mountCombatSimObstacleMeshes(
     mesh.receiveShadow = true;
     root.add(mesh);
   }
+}
+
+function mountCombatSimArenaGeometry(
+  root: THREE.Group,
+  bounds: CombatSimArenaBounds,
+): void {
+  const obstacleMat = new THREE.MeshStandardMaterial({
+    color: 0x8a8f96,
+    roughness: 0.92,
+    metalness: 0.02,
+  });
+  const terrainMat = new THREE.MeshStandardMaterial({
+    color: 0x9a9590,
+    roughness: 0.9,
+    metalness: 0.015,
+  });
+  const perimeterMat = new THREE.MeshStandardMaterial({
+    color: 0x6e737a,
+    roughness: 0.96,
+    metalness: 0.01,
+  });
+
+  mountCombatSimAabbMeshes(root, combatSimArenaObstacleAabbs(bounds), obstacleMat, "combat_sim_obstacle");
+  mountCombatSimAabbMeshes(
+    root,
+    combatSimArenaTerrainCollisionAabbs(bounds),
+    terrainMat,
+    "combat_sim_terrain",
+  );
+  mountCombatSimAabbMeshes(root, combatSimArenaPerimeterWallAabbs(bounds), perimeterMat, "combat_sim_wall");
 }
 
 /**
@@ -116,7 +148,7 @@ export function createCombatSimStaticWorld(conn: DbConnection): FpSessionStaticW
   plane.castShadow = false;
   buildingRoot.add(plane);
 
-  mountCombatSimObstacleMeshes(buildingRoot, bounds);
+  mountCombatSimArenaGeometry(buildingRoot, bounds);
 
   const arenaFill = new THREE.HemisphereLight(0xd8e4f4, 0x4a5058, 0.62);
   arenaFill.name = "combat_sim_arena_fill";
@@ -140,9 +172,17 @@ export function createCombatSimStaticWorld(conn: DbConnection): FpSessionStaticW
   const staticCollisionIndex = buildCollisionSpatialIndex(staticCollisionSolids);
 
   const walkFootprint = { minX, maxX, minZ, maxZ };
-  const floorWalk = staticCollisionSolids[0]!;
-  const walkSpatialIndex = buildWalkSurfaceSpatialIndex([floorWalk]);
-  const sampleWalkTopBase = (worldX: number, worldZ: number, probeTopY: number) =>
+  const walkSurfaces = combatSimArenaWalkSurfaceAabbs(bounds).map((aabb) => ({
+    min: aabb.min,
+    max: aabb.max,
+  }));
+  const walkSpatialIndex = buildWalkSurfaceSpatialIndex(walkSurfaces);
+  const sampleWalkTopBase = (
+    worldX: number,
+    worldZ: number,
+    probeTopY: number,
+    sampleOpts?: SampleWalkGroundOpts,
+  ) =>
     walkSpatialIndex.sampleTopYWithExteriorGround(
       worldX,
       worldZ,
@@ -151,6 +191,8 @@ export function createCombatSimStaticWorld(conn: DbConnection): FpSessionStaticW
       {
         footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
         stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+        maxSupportDropBelowFeetM: fpLocomotionConstants.walkMaxSupportDropM,
+        ...sampleOpts,
       },
     );
 

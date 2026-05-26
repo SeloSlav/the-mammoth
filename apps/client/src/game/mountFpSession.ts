@@ -401,7 +401,7 @@ export async function mountFpSession(
       ? null
       : mountFpFloor19CorridorCeilingLights({ buildingRoot });
   if (!isCombatSim) {
-    // Auth backdrop may hide unit shells on the shared megablock cache; FP visibility owns them again.
+    // Reset any stale shell visibility on the shared megablock cache; FP visibility owns them again.
     restoreUnitInteriorMeshVisibilityAfterAuthView(buildingRoot);
     const authShutterRoot = buildingRoot.getObjectByName(
       MAMMOTH_AUTH_STANDARD_WINDOW_SHUTTERS_ROOT_NAME,
