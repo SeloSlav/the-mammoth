@@ -62,10 +62,10 @@ Before merging GPU- or RAF-heavy work:
 
 | Flag | Effect |
 |------|--------|
-| `?fpdebug=1` / `mammothFpDebug` | Perf HUD + export |
+| `?fpdebug=1` / `mammothFpDebug` | Extra **console** perf log once/sec (`[fpSessionPerf]`); the top-right FPS card works without this |
 | `?fpnpc=1` / `mammothFpWorldNpcs` | Mount `fpNpcSession` in Mamutica (dev only; see [fp-world-npc-readiness.md](fp-world-npc-readiness.md)) |
 
-**Decor cross-placement instancing** (`applyApartmentDecorCrossPlacementInstancing` in `@the-mammoth/engine`): apartment unit rebuilds, floor-19 corridor ceiling fixtures (`fp_floor_19_corridor_decor`), and stairwell ceiling lights (batched under `buildingRoot` when GLBs finish loading). ≥3 identical non-pick props; no visual change. Dev builds log `[apartmentDecorInstancing]`. With `?fpdebug=1`, the FPS profiler shows batch/instance counts, hidden placement roots, est. draw-call savings, and `decorInstanced` in the scene-graph breakdown.
+**Decor cross-placement instancing** (`applyApartmentDecorCrossPlacementInstancing` in `@the-mammoth/engine`): apartment unit rebuilds, floor-19 corridor ceiling fixtures (`fp_floor_19_corridor_decor`), and stairwell ceiling lights (batched under `buildingRoot` when GLBs finish loading). ≥3 identical non-pick props; no visual change. Dev builds log `[apartmentDecorInstancing]`. The **top-right FPS card** (`MammothFpsHud`) shows `Ninst` + expanded **decor inst** lines when batching is active; `?fpdebug=1` is only for console logging.
 
 ---
 

@@ -267,6 +267,12 @@ export function MammothFpsHud(props: { conn: DbConnection | null }) {
     getFpSessionDisplayedFps,
     getFpSessionDisplayedFps,
   );
+  /** Live draw calls / decor instancing on the collapsed card (~10 Hz, no `?fpdebug=1`). */
+  const rendererInfo = useSyncExternalStore(
+    subscribeFpPerf,
+    getLastRendererInfo,
+    getLastRendererInfo,
+  );
 
   const [open, setOpen] = useState(false);
   const [windowSec, setWindowSec] = useState<WindowSec>(5);
@@ -480,43 +486,40 @@ export function MammothFpsHud(props: { conn: DbConnection | null }) {
         >
           {fps === null ? "…" : `${fps} FPS`}
         </span>
-        {!open && (() => {
-          const ri = getLastRendererInfo();
-          return (
+        {!open && (
             <>
-              {ri.drawCalls > 0 ? (
+              {rendererInfo.drawCalls > 0 ? (
                 <span style={{ ...monoStyle, fontSize: 10, color: THEME_TEXT_FAINT }}>
-                  {ri.drawCalls}dc
+                  {rendererInfo.drawCalls}dc
                 </span>
               ) : null}
-              {ri.frustumPracticalDecorLights > 0 ? (
+              {rendererInfo.frustumPracticalDecorLights > 0 ? (
                 <span
                   style={{
                     ...monoStyle,
                     fontSize: 10,
                     color:
-                      ri.frustumPracticalDecorLights > 12
+                      rendererInfo.frustumPracticalDecorLights > 12
                         ? THEME_ERROR
-                        : ri.frustumPracticalDecorLights > 6
+                        : rendererInfo.frustumPracticalDecorLights > 6
                           ? "#e8c47a"
                           : THEME_TEXT_FAINT,
                   }}
-                  title={`Active decor lights: ${ri.visiblePracticalDecorLights} visible / ${ri.frustumPracticalDecorLights} in frustum\nvis: ${ri.practicalDecorLightBreakdownVis}\nfr: ${ri.practicalDecorLightBreakdownFr}`}
+                  title={`Active decor lights: ${rendererInfo.visiblePracticalDecorLights} visible / ${rendererInfo.frustumPracticalDecorLights} in frustum\nvis: ${rendererInfo.practicalDecorLightBreakdownVis}\nfr: ${rendererInfo.practicalDecorLightBreakdownFr}`}
                 >
-                  {ri.frustumPracticalDecorLights}L
+                  {rendererInfo.frustumPracticalDecorLights}L
                 </span>
               ) : null}
-              {ri.decorInstancedBatchesVisible > 0 ? (
+              {rendererInfo.decorInstancedBatchesVisible > 0 ? (
                 <span
                   style={{ ...monoStyle, fontSize: 10, color: THEME_SUCCESS }}
-                  title={`Decor instancing: ${ri.decorInstancedBatchesVisible} batches, ${ri.decorInstancedInstancesVisible} instances\nhidden placements: ${ri.decorInstancedHiddenPlacements}\nest. draw savings: ~${ri.decorInstancedEstDrawSavings}\nlast rebuild: ${ri.decorInstancingLastRebuild || "(n/a)"}`}
+                  title={`Decor instancing: ${rendererInfo.decorInstancedBatchesVisible} batches, ${rendererInfo.decorInstancedInstancesVisible} instances\nhidden placements: ${rendererInfo.decorInstancedHiddenPlacements}\nest. draw savings: ~${rendererInfo.decorInstancedEstDrawSavings}\nlast rebuild: ${rendererInfo.decorInstancingLastRebuild || "(n/a)"}`}
                 >
-                  {ri.decorInstancedInstancesVisible}inst
+                  {rendererInfo.decorInstancedInstancesVisible}inst
                 </span>
               ) : null}
             </>
-          );
-        })()}
+        )}
         <span style={{ color: THEME_TEXT_FAINT, fontSize: 10 }}>
           {open ? "▲" : "▼"}
         </span>
@@ -717,66 +720,61 @@ export function MammothFpsHud(props: { conn: DbConnection | null }) {
           ) : (
             <>
               {/* Renderer counters */}
-              {(() => {
-                const ri = getLastRendererInfo();
-                return (
-                  <>
+              <>
                     <div style={{ ...monoStyle, ...dimStyle, fontSize: 11, marginBottom: 2 }}>
                       <span
                         style={{
                           color:
-                            ri.drawCalls > 200 ? THEME_ERROR : ri.drawCalls > 80 ? "#e8c47a" : THEME_SUCCESS,
+                            rendererInfo.drawCalls > 200 ? THEME_ERROR : rendererInfo.drawCalls > 80 ? "#e8c47a" : THEME_SUCCESS,
                         }}
                       >
-                        {ri.drawCalls} draw calls
+                        {rendererInfo.drawCalls} draw calls
                       </span>
                       {"  "}
-                      <span>{(ri.triangles / 1000).toFixed(1)}k tris</span>
+                      <span>{(rendererInfo.triangles / 1000).toFixed(1)}k tris</span>
                     </div>
                     <div style={{ ...monoStyle, ...dimStyle, fontSize: 10, marginBottom: 4 }}>
-                      plates {ri.visibleFloorPlates}/{ri.frustumFloorPlates}
+                      plates {rendererInfo.visibleFloorPlates}/{rendererInfo.frustumFloorPlates}
                       {"  "}
-                      interior {ri.visibleUnitInteriorMeshes}/{ri.frustumUnitInteriorMeshes}
+                      interior {rendererInfo.visibleUnitInteriorMeshes}/{rendererInfo.frustumUnitInteriorMeshes}
                       {"  "}
-                      props {ri.visibleApartmentPropMeshes}/{ri.frustumApartmentPropMeshes}
+                      props {rendererInfo.visibleApartmentPropMeshes}/{rendererInfo.frustumApartmentPropMeshes}
                       {"  "}
-                      decorLights {ri.visiblePracticalDecorLights}/{ri.frustumPracticalDecorLights}
+                      decorLights {rendererInfo.visiblePracticalDecorLights}/{rendererInfo.frustumPracticalDecorLights}
                       {"  "}
-                      windowLights {ri.visiblePracticalWindowLights}/{ri.frustumPracticalWindowLights}
+                      windowLights {rendererInfo.visiblePracticalWindowLights}/{rendererInfo.frustumPracticalWindowLights}
                     </div>
                     <div style={{ ...monoStyle, ...dimStyle, fontSize: 10, marginBottom: 4 }}>
-                      kinds vis {ri.practicalDecorLightBreakdownVis}
+                      kinds vis {rendererInfo.practicalDecorLightBreakdownVis}
                     </div>
                     <div style={{ ...monoStyle, ...dimStyle, fontSize: 10, marginBottom: 4 }}>
-                      kinds fr {ri.practicalDecorLightBreakdownFr}
+                      kinds fr {rendererInfo.practicalDecorLightBreakdownFr}
                       {"  "}
-                      transparent {ri.visibleTransparentMeshes}/{ri.frustumTransparentMeshes}
+                      transparent {rendererInfo.visibleTransparentMeshes}/{rendererInfo.frustumTransparentMeshes}
                     </div>
-                    {ri.decorInstancedBatchesVisible > 0 || ri.decorInstancedHiddenPlacements > 0 ? (
+                    {rendererInfo.decorInstancedBatchesVisible > 0 || rendererInfo.decorInstancedHiddenPlacements > 0 ? (
                       <div style={{ ...monoStyle, ...dimStyle, fontSize: 10, marginBottom: 4 }}>
                         decor inst{" "}
                         <span style={{ color: THEME_SUCCESS }}>
-                          {ri.decorInstancedBatchesVisible} batches · {ri.decorInstancedInstancesVisible} inst
+                          {rendererInfo.decorInstancedBatchesVisible} batches · {rendererInfo.decorInstancedInstancesVisible} inst
                         </span>
                         {"  "}
-                        hidden {ri.decorInstancedHiddenPlacements}
+                        hidden {rendererInfo.decorInstancedHiddenPlacements}
                         {"  "}
-                        ~{ri.decorInstancedEstDrawSavings} dc saved
+                        ~{rendererInfo.decorInstancedEstDrawSavings} dc saved
                         {"  "}
-                        fr {ri.decorInstancedBatchesFrustum}/{ri.decorInstancedInstancesFrustum}
+                        fr {rendererInfo.decorInstancedBatchesFrustum}/{rendererInfo.decorInstancedInstancesFrustum}
                       </div>
                     ) : null}
-                    {ri.decorInstancingLastRebuild.length > 0 ? (
+                    {rendererInfo.decorInstancingLastRebuild.length > 0 ? (
                       <div
                         style={{ ...monoStyle, ...dimStyle, fontSize: 9, marginBottom: 4 }}
                         title="Last cross-placement instancing rebuild"
                       >
-                        inst rebuild: {ri.decorInstancingLastRebuild}
+                        inst rebuild: {rendererInfo.decorInstancingLastRebuild}
                       </div>
                     ) : null}
-                  </>
-                );
-              })()}
+              </>
 
               {/* FPS summary */}
               <div style={sectionHeaderStyle}>Performance</div>
