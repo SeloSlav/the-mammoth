@@ -79,13 +79,32 @@ fn hash_u64_to_unit(seed: u64) -> f32 {
     (mixed & 0xffff) as f32 / 65535.0
 }
 
+/// Play floor XZ (before perimeter pad) — fixed combat radius centered on the apartment unit.
+fn combat_sim_play_footprint(unit: &ApartmentUnit) -> (f32, f32, f32, f32) {
+    let cx = (unit.bound_min_x + unit.bound_max_x) * 0.5;
+    let cz = (unit.bound_min_z + unit.bound_max_z) * 0.5;
+    let h = COMBAT_SIM_FALLBACK_HALF_EXTENT_M;
+    (cx - h, cx + h, cz - h, cz + h)
+}
+
+fn combat_sim_padded_shell_xz(unit: &ApartmentUnit) -> (f32, f32, f32, f32) {
+    let (min_x, max_x, min_z, max_z) = combat_sim_play_footprint(unit);
+    (
+        min_x - COMBAT_SIM_ARENA_PAD_M,
+        max_x + COMBAT_SIM_ARENA_PAD_M,
+        min_z - COMBAT_SIM_ARENA_PAD_M,
+        max_z + COMBAT_SIM_ARENA_PAD_M,
+    )
+}
+
 /// Random babushka pose inside the combat arena (inset from bounds).
 pub fn random_babushka_pose_in_unit(unit: &ApartmentUnit, salt: u64) -> (f32, f32, f32, f32) {
     let inset = 0.75;
-    let min_x = unit.bound_min_x + inset;
-    let max_x = unit.bound_max_x - inset;
-    let min_z = unit.bound_min_z + inset;
-    let max_z = unit.bound_max_z - inset;
+    let (min_x, max_x, min_z, max_z) = combat_sim_play_footprint(unit);
+    let min_x = min_x + inset;
+    let max_x = max_x - inset;
+    let min_z = min_z + inset;
+    let max_z = max_z - inset;
     let x = min_x + hash_u64_to_unit(salt) * (max_x - min_x);
     let z = min_z + hash_u64_to_unit(salt.wrapping_mul(31)) * (max_z - min_z);
     let yaw = hash_u64_to_unit(salt.wrapping_mul(97)) * std::f32::consts::TAU;
@@ -142,11 +161,12 @@ pub fn combat_sim_arena_center(unit: &ApartmentUnit) -> (f32, f32, f32) {
 
 /// Perimeter walls + authored cover volumes — shared with client `combatSimArenaCollisionAabbs`.
 pub fn combat_sim_arena_collision_aabbs(unit: &ApartmentUnit) -> Vec<([f32; 3], [f32; 3])> {
+    let (min_x, max_x, min_z, max_z) = combat_sim_play_footprint(unit);
     combat_sim_arena_collision_aabbs_for_unit_bounds(
-        unit.bound_min_x,
-        unit.bound_max_x,
-        unit.bound_min_z,
-        unit.bound_max_z,
+        min_x,
+        max_x,
+        min_z,
+        max_z,
         unit.foot_y,
     )
 }
@@ -158,11 +178,12 @@ pub fn combat_sim_sample_walk_top_y(
     z: f32,
     probe_feet_y: f32,
 ) -> f32 {
+    let (min_x, max_x, min_z, max_z) = combat_sim_play_footprint(unit);
     crate::generated_collision_constants::combat_sim_sample_walk_top_y_for_unit_bounds(
-        unit.bound_min_x,
-        unit.bound_max_x,
-        unit.bound_min_z,
-        unit.bound_max_z,
+        min_x,
+        max_x,
+        min_z,
+        max_z,
         unit.foot_y,
         x,
         z,
@@ -191,10 +212,11 @@ fn separation_direction_toward_arena_edge(
     from_x: f32,
     from_z: f32,
 ) -> (f32, f32) {
-    let cx = (unit.bound_min_x + unit.bound_max_x) * 0.5;
-    let cz = (unit.bound_min_z + unit.bound_max_z) * 0.5;
-    let width = unit.bound_max_x - unit.bound_min_x;
-    let depth = unit.bound_max_z - unit.bound_min_z;
+    let (min_x, max_x, min_z, max_z) = combat_sim_play_footprint(unit);
+    let cx = (min_x + max_x) * 0.5;
+    let cz = (min_z + max_z) * 0.5;
+    let width = max_x - min_x;
+    let depth = max_z - min_z;
     if width >= depth {
         if from_x >= cx {
             (1.0, 0.0)
@@ -214,10 +236,11 @@ fn cardinal_player_spawn_candidates(
     threat_z: f32,
 ) -> [(f32, f32); 4] {
     let inset = 0.55;
-    let min_x = unit.bound_min_x - COMBAT_SIM_ARENA_PAD_M + inset;
-    let max_x = unit.bound_max_x + COMBAT_SIM_ARENA_PAD_M - inset;
-    let min_z = unit.bound_min_z - COMBAT_SIM_ARENA_PAD_M + inset;
-    let max_z = unit.bound_max_z + COMBAT_SIM_ARENA_PAD_M - inset;
+    let (min_x, max_x, min_z, max_z) = combat_sim_padded_shell_xz(unit);
+    let min_x = min_x + inset;
+    let max_x = max_x - inset;
+    let min_z = min_z + inset;
+    let max_z = max_z - inset;
     [
         clamp_player_xz_in_combat_arena(unit, max_x, threat_z),
         clamp_player_xz_in_combat_arena(unit, min_x, threat_z),
@@ -350,7 +373,7 @@ pub fn fallback_combat_sim_session_key(owner: Identity) -> String {
 }
 
 fn fallback_combat_sim_unit() -> ApartmentUnit {
-    let half = COMBAT_SIM_FALLBACK_HALF_EXTENT_M + COMBAT_SIM_ARENA_PAD_M;
+    let h = COMBAT_SIM_FALLBACK_HALF_EXTENT_M;
     ApartmentUnit {
         unit_key: "combat_sim:fallback".to_string(),
         floor_doc_id: String::new(),
@@ -375,12 +398,12 @@ fn fallback_combat_sim_unit() -> ApartmentUnit {
         wardrobe_z: 0.0,
         stove_x: 0.0,
         stove_z: 0.0,
-        bound_min_x: -half,
-        bound_max_x: half,
+        bound_min_x: -h,
+        bound_max_x: h,
         bound_min_y: 0.0,
         bound_max_y: 4.0,
-        bound_min_z: -half,
-        bound_max_z: half,
+        bound_min_z: -h,
+        bound_max_z: h,
     }
 }
 
@@ -462,33 +485,30 @@ fn planar_distance_sq(ax: f32, az: f32, bx: f32, bz: f32) -> f32 {
 
 fn clamp_babushka_xz_in_unit(unit: &ApartmentUnit, x: f32, z: f32) -> (f32, f32) {
     let inset = 0.55;
+    let (min_x, max_x, min_z, max_z) = combat_sim_play_footprint(unit);
     (
-        x.clamp(unit.bound_min_x + inset, unit.bound_max_x - inset),
-        z.clamp(unit.bound_min_z + inset, unit.bound_max_z - inset),
+        x.clamp(min_x + inset, max_x - inset),
+        z.clamp(min_z + inset, max_z - inset),
     )
 }
 
 /// Clamp NPC locomotion to the same padded combat arena shell authored on the client.
 pub fn clamp_babushka_xz_in_combat_arena(unit: &ApartmentUnit, x: f32, z: f32) -> (f32, f32) {
     let inset = 0.55;
+    let (min_x, max_x, min_z, max_z) = combat_sim_padded_shell_xz(unit);
     (
-        x.clamp(
-            unit.bound_min_x - COMBAT_SIM_ARENA_PAD_M + inset,
-            unit.bound_max_x + COMBAT_SIM_ARENA_PAD_M - inset,
-        ),
-        z.clamp(
-            unit.bound_min_z - COMBAT_SIM_ARENA_PAD_M + inset,
-            unit.bound_max_z + COMBAT_SIM_ARENA_PAD_M - inset,
-        ),
+        x.clamp(min_x + inset, max_x - inset),
+        z.clamp(min_z + inset, max_z - inset),
     )
 }
 
 /// Push babushka away from the player along the arena long axis fallback.
 fn babushka_spawn_xz(unit: &ApartmentUnit, player_x: f32, player_z: f32) -> (f32, f32, f32, f32) {
-    let cx = (unit.bound_min_x + unit.bound_max_x) * 0.5;
-    let cz = (unit.bound_min_z + unit.bound_max_z) * 0.5;
-    let width = unit.bound_max_x - unit.bound_min_x;
-    let depth = unit.bound_max_z - unit.bound_min_z;
+    let (min_x, max_x, min_z, max_z) = combat_sim_play_footprint(unit);
+    let cx = (min_x + max_x) * 0.5;
+    let cz = (min_z + max_z) * 0.5;
+    let width = max_x - min_x;
+    let depth = max_z - min_z;
     let mut dx = if width >= depth {
         if player_x >= cx {
             -1.0
@@ -624,10 +644,11 @@ pub fn enter_combat_sim(ctx: &ReducerContext) {
 
 fn player_at_combat_sim_arena(unit: &ApartmentUnit, pose: &pose::PlayerPose) -> bool {
     let inset = 0.55;
-    let min_x = unit.bound_min_x - COMBAT_SIM_ARENA_PAD_M + inset;
-    let max_x = unit.bound_max_x + COMBAT_SIM_ARENA_PAD_M - inset;
-    let min_z = unit.bound_min_z - COMBAT_SIM_ARENA_PAD_M + inset;
-    let max_z = unit.bound_max_z + COMBAT_SIM_ARENA_PAD_M - inset;
+    let (min_x, max_x, min_z, max_z) = combat_sim_padded_shell_xz(unit);
+    let min_x = min_x + inset;
+    let max_x = max_x - inset;
+    let min_z = min_z + inset;
+    let max_z = max_z - inset;
     let dy = (pose.y - unit.foot_y).abs();
     pose.x >= min_x && pose.x <= max_x && pose.z >= min_z && pose.z <= max_z && dy < 1.75
 }
@@ -778,9 +799,10 @@ mod tests {
     #[test]
     fn combat_arena_npc_clamp_matches_client_padded_bounds() {
         let unit = test_unit();
+        let (_, play_max_x, play_min_z, _) = combat_sim_play_footprint(&unit);
         let (x, z) = clamp_babushka_xz_in_combat_arena(&unit, 99.0, -99.0);
-        assert!((x - (unit.bound_max_x + COMBAT_SIM_ARENA_PAD_M - 0.55)).abs() < 1e-4);
-        assert!((z - (unit.bound_min_z - COMBAT_SIM_ARENA_PAD_M + 0.55)).abs() < 1e-4);
+        assert!((x - (play_max_x + COMBAT_SIM_ARENA_PAD_M - 0.55)).abs() < 1e-4);
+        assert!((z - (play_min_z - COMBAT_SIM_ARENA_PAD_M + 0.55)).abs() < 1e-4);
     }
 
     #[test]

@@ -7,7 +7,7 @@ import {
   sampleWalkTopFromSlabs,
 } from "./walkSurfaceReach.js";
 
-export const COMBAT_SIM_FALLBACK_HALF_EXTENT_M = 14;
+export const COMBAT_SIM_FALLBACK_HALF_EXTENT_M = 28;
 export const COMBAT_SIM_ARENA_PAD_M = 6;
 export const COMBAT_SIM_WALL_HEIGHT_M = 4;
 export const COMBAT_SIM_WALL_THICKNESS_M = 0.35;
@@ -16,6 +16,8 @@ export const COMBAT_SIM_WALL_THICKNESS_M = 0.35;
 export const COMBAT_SIM_WALK_TREAD_THICK_M = 0.11;
 export const COMBAT_SIM_WALK_SEAM_PAD_XZ_M = 0.075;
 export const COMBAT_SIM_WALK_SEAM_PAD_Y_HI_M = 0.095;
+/** Raised platform collision/visual thickness — open underneath (no pillar overlap with stairs). */
+export const COMBAT_SIM_DECK_SLAB_THICK_M = 0.22;
 
 export type CombatSimArenaBounds = {
   minX: number;
@@ -34,13 +36,14 @@ export type CombatSimObstacleSpec = {
   sizeZ: number;
 };
 
-/** Cover volumes in the combat arena — mirrored on the server for NPC locomotion. */
+/** Cover volumes — spread around the doubled arena; keep clear of stair/ramp lanes. */
 export const COMBAT_SIM_AUTHORED_OBSTACLES: readonly CombatSimObstacleSpec[] = [
-  { centerOffsetX: -5, centerOffsetZ: 0, sizeX: 1.2, sizeY: 2.4, sizeZ: 1.2 },
-  { centerOffsetX: 5, centerOffsetZ: -2.5, sizeX: 1, sizeY: 2, sizeZ: 2 },
-  { centerOffsetX: 0, centerOffsetZ: 5.5, sizeX: 2.5, sizeY: 2.2, sizeZ: 0.8 },
-  { centerOffsetX: -2, centerOffsetZ: 4, sizeX: 1.5, sizeY: 1.8, sizeZ: 1.5 },
-  { centerOffsetX: 3, centerOffsetZ: -6, sizeX: 2, sizeY: 1.5, sizeZ: 0.9 },
+  { centerOffsetX: -10, centerOffsetZ: -6, sizeX: 1.4, sizeY: 2.4, sizeZ: 1.4 },
+  { centerOffsetX: 12, centerOffsetZ: -14, sizeX: 1.2, sizeY: 2, sizeZ: 2.2 },
+  { centerOffsetX: 6, centerOffsetZ: 10, sizeX: 2.8, sizeY: 2.2, sizeZ: 1 },
+  { centerOffsetX: -14, centerOffsetZ: 12, sizeX: 1.8, sizeY: 1.8, sizeZ: 1.8 },
+  { centerOffsetX: 14, centerOffsetZ: 6, sizeX: 2, sizeY: 1.5, sizeZ: 1.1 },
+  { centerOffsetX: 0, centerOffsetZ: -22, sizeX: 2.4, sizeY: 1.6, sizeZ: 1.2 },
 ];
 
 export type CombatSimStepStackSpec = {
@@ -54,25 +57,25 @@ export type CombatSimStepStackSpec = {
   climbDirZ: number;
 };
 
-/** Narrow stair stacks — ladder-like vertical chase lines. */
+/** Stair stacks in arena corners — climb toward center; landings are separate thin decks. */
 export const COMBAT_SIM_STEP_STACKS: readonly CombatSimStepStackSpec[] = [
   {
-    centerOffsetX: -7.5,
-    centerOffsetZ: -5,
-    widthX: 1.6,
-    depthZ: 3.4,
-    stepCount: 5,
+    centerOffsetX: -20,
+    centerOffsetZ: -18,
+    widthX: 2.2,
+    depthZ: 6,
+    stepCount: 7,
     stepRiseM: 0.28,
     climbDirX: 0,
     climbDirZ: 1,
   },
   {
-    centerOffsetX: 5.5,
-    centerOffsetZ: 7,
-    widthX: 1.3,
-    depthZ: 2.6,
-    stepCount: 4,
-    stepRiseM: 0.3,
+    centerOffsetX: 18,
+    centerOffsetZ: 18,
+    widthX: 2,
+    depthZ: 5.5,
+    stepCount: 6,
+    stepRiseM: 0.28,
     climbDirX: 0,
     climbDirZ: -1,
   },
@@ -91,12 +94,22 @@ export type CombatSimRampSpec = {
 
 export const COMBAT_SIM_RAMPS: readonly CombatSimRampSpec[] = [
   {
-    centerOffsetX: 7.5,
-    centerOffsetZ: -2,
-    widthX: 2.8,
-    lengthZ: 5.2,
-    riseM: 1.3,
+    centerOffsetX: 20,
+    centerOffsetZ: -12,
+    widthX: 4,
+    lengthZ: 10,
+    riseM: 1.5,
     climbDirX: -1,
+    climbDirZ: 0,
+    segmentCount: 12,
+  },
+  {
+    centerOffsetX: -20,
+    centerOffsetZ: 14,
+    widthX: 3.5,
+    lengthZ: 9,
+    riseM: 1.25,
+    climbDirX: 1,
     climbDirZ: 0,
     segmentCount: 10,
   },
@@ -110,10 +123,16 @@ export type CombatSimDeckSpec = {
   topAboveFootYM: number;
 };
 
-/** Raised platforms at the top of ramps / stair stacks. */
+/** Thin landings past stair/ramp tops — 0.2 m clearance, no XZ overlap with climb geometry. */
 export const COMBAT_SIM_DECKS: readonly CombatSimDeckSpec[] = [
-  { centerOffsetX: -7.5, centerOffsetZ: -0.8, widthX: 3, depthZ: 2.8, topAboveFootYM: 1.4 },
-  { centerOffsetX: 7.5, centerOffsetZ: 2.5, widthX: 2.6, depthZ: 2.4, topAboveFootYM: 1.3 },
+  // NW: stair stack 0 climbs +Z; landing beyond top edge (Z = -15).
+  { centerOffsetX: -20, centerOffsetZ: -12.8, widthX: 4, depthZ: 4, topAboveFootYM: 1.96 },
+  // SE: stair stack 1 climbs −Z; landing beyond top edge (Z ≈ 15.25).
+  { centerOffsetX: 18, centerOffsetZ: 13.05, widthX: 4, depthZ: 4, topAboveFootYM: 1.68 },
+  // NE: ramp 0 climbs −X; landing beyond top edge (X = 15).
+  { centerOffsetX: 13.3, centerOffsetZ: -12, widthX: 3, depthZ: 3.5, topAboveFootYM: 1.5 },
+  // SW: ramp 1 climbs +X; landing beyond top edge (X = −15).
+  { centerOffsetX: -12.55, centerOffsetZ: 14, widthX: 4.5, depthZ: 3, topAboveFootYM: 1.25 },
 ];
 
 export type CombatSimLowWallSpec = {
@@ -126,8 +145,9 @@ export type CombatSimLowWallSpec = {
 };
 
 export const COMBAT_SIM_LOW_WALLS: readonly CombatSimLowWallSpec[] = [
-  { centerOffsetX: 0, centerOffsetZ: 8.5, lengthM: 6, heightM: 1.35, thicknessM: 0.35, yawRad: 0 },
-  { centerOffsetX: -9, centerOffsetZ: 5, lengthM: 4.5, heightM: 1.2, thicknessM: 0.35, yawRad: Math.PI / 2 },
+  { centerOffsetX: 0, centerOffsetZ: 0, lengthM: 10, heightM: 1.25, thicknessM: 0.35, yawRad: 0 },
+  { centerOffsetX: -14, centerOffsetZ: 8, lengthM: 7, heightM: 1.35, thicknessM: 0.35, yawRad: Math.PI / 2 },
+  { centerOffsetX: 10, centerOffsetZ: 14, lengthM: 6, heightM: 1.2, thicknessM: 0.35, yawRad: Math.PI / 4 },
 ];
 
 export type CollisionAabbLike = {
@@ -316,8 +336,9 @@ function appendDeckGeometry(
   const yTop = bounds.footY + spec.topAboveFootYM;
   const halfX = spec.widthX * 0.5;
   const halfZ = spec.depthZ * 0.5;
+  const slabBottom = yTop - COMBAT_SIM_DECK_SLAB_THICK_M;
   collisionOut.push({
-    min: [centerX - halfX, bounds.footY, centerZ - halfZ],
+    min: [centerX - halfX, slabBottom, centerZ - halfZ],
     max: [centerX + halfX, yTop, centerZ + halfZ],
   });
   walkOut.push(
@@ -381,6 +402,51 @@ export function combatSimArenaBoundsFromUnitFootprint(args: {
   };
 }
 
+/** Playable floor XZ (before perimeter pad) — fixed combat radius centered on the apartment unit. */
+export type CombatSimSessionPlayFootprint = {
+  boundMinX: number;
+  boundMaxX: number;
+  boundMinZ: number;
+  boundMaxZ: number;
+  footY: number;
+};
+
+/**
+ * Combat sim uses a dedicated arena size, **not** the apartment interior bounds from SpacetimeDB.
+ * Center stays on the owned unit; half-extent is {@link COMBAT_SIM_FALLBACK_HALF_EXTENT_M}.
+ */
+export function combatSimSessionPlayFootprint(args: {
+  boundMinX: number;
+  boundMaxX: number;
+  boundMinZ: number;
+  boundMaxZ: number;
+  footY: number;
+  halfExtentM?: number;
+}): CombatSimSessionPlayFootprint {
+  const cx = (args.boundMinX + args.boundMaxX) * 0.5;
+  const cz = (args.boundMinZ + args.boundMaxZ) * 0.5;
+  const half = args.halfExtentM ?? COMBAT_SIM_FALLBACK_HALF_EXTENT_M;
+  return {
+    boundMinX: cx - half,
+    boundMaxX: cx + half,
+    boundMinZ: cz - half,
+    boundMaxZ: cz + half,
+    footY: args.footY,
+  };
+}
+
+/** Padded shell used for rendering + collision (walls sit on the outer edge). */
+export function combatSimSessionArenaBounds(args: {
+  boundMinX: number;
+  boundMaxX: number;
+  boundMinZ: number;
+  boundMaxZ: number;
+  footY: number;
+  halfExtentM?: number;
+}): CombatSimArenaBounds {
+  return combatSimArenaBoundsFromUnitFootprint(combatSimSessionPlayFootprint(args));
+}
+
 export function combatSimArenaPerimeterWallAabbs(
   bounds: CombatSimArenaBounds,
 ): CollisionAabbLike[] {
@@ -428,16 +494,40 @@ export function combatSimArenaObstacleWalkAabbs(bounds: CombatSimArenaBounds): C
 }
 
 export function combatSimArenaTerrainCollisionAabbs(bounds: CombatSimArenaBounds): CollisionAabbLike[] {
+  return [
+    ...combatSimArenaStepCollisionAabbs(bounds),
+    ...combatSimArenaRampCollisionAabbs(bounds),
+    ...combatSimArenaDeckSlabAabbs(bounds),
+    ...combatSimArenaLowWallAabbs(bounds),
+  ];
+}
+
+export function combatSimArenaStepCollisionAabbs(bounds: CombatSimArenaBounds): CollisionAabbLike[] {
   const out: CollisionAabbLike[] = [];
   for (const spec of COMBAT_SIM_STEP_STACKS) {
     appendStepStackGeometry(bounds, spec, out, []);
   }
+  return out;
+}
+
+export function combatSimArenaRampCollisionAabbs(bounds: CombatSimArenaBounds): CollisionAabbLike[] {
+  const out: CollisionAabbLike[] = [];
   for (const spec of COMBAT_SIM_RAMPS) {
     appendRampGeometry(bounds, spec, out, []);
   }
+  return out;
+}
+
+export function combatSimArenaDeckSlabAabbs(bounds: CombatSimArenaBounds): CollisionAabbLike[] {
+  const out: CollisionAabbLike[] = [];
   for (const spec of COMBAT_SIM_DECKS) {
     appendDeckGeometry(bounds, spec, out, []);
   }
+  return out;
+}
+
+export function combatSimArenaLowWallAabbs(bounds: CombatSimArenaBounds): CollisionAabbLike[] {
+  const out: CollisionAabbLike[] = [];
   for (const spec of COMBAT_SIM_LOW_WALLS) {
     appendLowWallGeometry(bounds, spec, out);
   }
