@@ -20,10 +20,20 @@ export {
 } from "./remote/RemotePlayerPresenter.js";
 export {
   BabushkaNpcPresenter,
-  WorldNpcPresenterPool,
   preloadBabushkaNpcBody,
   BABUSHKA_NPC_GLB_URI,
-} from "../npc/BabushkaNpcPresenter.js";
+  BABUSHKA_NPC_DEATH_CLIP_SEC,
+} from "../npc/archetypes/babushka/BabushkaNpcPresenter.js";
+export {
+  WorldNpcPresenterPool,
+} from "../npc/WorldNpcPresenterPool.js";
+export {
+  MAMMOTH_FP_WORLD_NPC_UD,
+} from "../npc/npcConstants.js";
+export {
+  snapNpcModelFeetToLocalGround,
+  bindNpcOutdoorReadableEnv,
+} from "../npc/npcModelUtils.js";
 export { buildPrimitiveHumanoid, type PrimitiveHumanoidParts } from "./primitiveHumanoid.js";
 export {
   resolveSkinnedHumanoidHandBone,

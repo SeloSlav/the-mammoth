@@ -101,8 +101,16 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
   const syncHitDebugVolumes = (): void => {
     pool.setShowHitDebugVolumes(isFpDebugGameplayFeedbackEnabled("npcHitDebugVolumes"));
   };
+  const syncDetectionDebug = (): void => {
+    pool.setShowDetectionRadiusDebug(
+      isFpDebugGameplayFeedbackEnabled("npcDetectionRadiusDebug"),
+    );
+    pool.setShowVisionConeDebug(isFpDebugGameplayFeedbackEnabled("npcVisionConeDebug"));
+  };
   syncHitDebugVolumes();
+  syncDetectionDebug();
   const unsubHitDebug = subscribeFpDebugGameplayFeedback(syncHitDebugVolumes);
+  const unsubDetectionDebug = subscribeFpDebugGameplayFeedback(syncDetectionDebug);
   await pool.ensureReady();
 
   const bloodFx: FpBloodBurstFx = createFpBloodBurstFx(opts.fxScene);
@@ -302,6 +310,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
       }
       epitaphTimers.clear();
       unsubHitDebug();
+      unsubDetectionDebug();
       opts.conn.db.world_sound_event.removeOnInsert(onFleshImpact);
       opts.conn.db.world_npc.removeOnInsert(onInsertCb);
       opts.conn.db.world_npc.removeOnUpdate(onUpdateCb);

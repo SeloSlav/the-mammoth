@@ -28,6 +28,8 @@ pub const NPC_LOCOMOTION_RUN: u8 = 2;
 
 pub const BABUSHKA_MAX_HEALTH: f32 = 120.0;
 pub const BABUSHKA_AGGRO_RANGE_M: f32 = 6.5;
+const BABUSHKA_VISION_HALF_ANGLE_RAD: f32 = 60_f32.to_radians();
+const BABUSHKA_CROUCH_DETECTION_RANGE_MUL: f32 = 0.55;
 pub const BABUSHKA_MELEE_RANGE_M: f32 = 1.35;
 pub const BABUSHKA_WALK_SPEED_MPS: f32 = 1.45;
 /// Fast enough to punish backpedaling/walking, but below melee range per 250ms tick.
@@ -752,7 +754,21 @@ fn step_one_world_npc(
     };
 
     if npc.state == NPC_STATE_IDLE {
-        if dist_sq <= aggro_range_m * aggro_range_m {
+        let player_crouching = ctx
+            .db
+            .player_input()
+            .identity()
+            .find(&target_identity)
+            .map(|row| row.bits & BIT_CROUCH != 0)
+            .unwrap_or(false);
+        if crate::npc_perception::npc_player_detectable(
+            &babushka_perception_profile(aggro_range_m),
+            npc.yaw,
+            planar_dx,
+            planar_dz,
+            dist_sq,
+            player_crouching,
+        ) {
             npc.state = NPC_STATE_AGGRO;
         }
     }
@@ -829,6 +845,14 @@ fn step_one_world_npc(
             npc.vel_x = 0.0;
             npc.vel_z = 0.0;
         }
+    }
+}
+
+fn babushka_perception_profile(aggro_range_m: f32) -> crate::npc_perception::NpcPerceptionProfile {
+    crate::npc_perception::NpcPerceptionProfile {
+        aggro_range_m,
+        vision_half_angle_rad: BABUSHKA_VISION_HALF_ANGLE_RAD,
+        crouch_detection_range_mul: BABUSHKA_CROUCH_DETECTION_RANGE_MUL,
     }
 }
 
@@ -1037,6 +1061,62 @@ mod tests {
             BABUSHKA_BODY_HEIGHT_M,
             player_y_upper_floor,
             PLAYER_BODY_HEIGHT_STAND_M,
+        ));
+    }
+
+    #[test]
+    fn babushka_detects_player_in_front_within_range() {
+        let profile = babushka_perception_profile(BABUSHKA_AGGRO_RANGE_M);
+        assert!(crate::npc_perception::npc_player_detectable(
+            &profile,
+            0.0,
+            0.0,
+            3.0,
+            9.0,
+            false,
+        ));
+    }
+
+    #[test]
+    fn babushka_ignores_player_behind() {
+        let profile = babushka_perception_profile(BABUSHKA_AGGRO_RANGE_M);
+        assert!(!crate::npc_perception::npc_player_detectable(
+            &profile,
+            0.0,
+            0.0,
+            -3.0,
+            9.0,
+            false,
+        ));
+    }
+
+    #[test]
+    fn babushka_rejects_player_outside_vision_cone() {
+        let profile = babushka_perception_profile(BABUSHKA_AGGRO_RANGE_M);
+        let z = 3.0;
+        let x = z * (68_f32.to_radians()).tan();
+        assert!(!crate::npc_perception::npc_player_detectable(
+            &profile,
+            0.0,
+            x,
+            z,
+            x * x + z * z,
+            false,
+        ));
+    }
+
+    #[test]
+    fn babushka_crouch_reduces_detection_range() {
+        let profile = babushka_perception_profile(BABUSHKA_AGGRO_RANGE_M);
+        let dist = (profile.aggro_range_m
+            + profile.aggro_range_m * profile.crouch_detection_range_mul)
+            * 0.5;
+        let dist_sq = dist * dist;
+        assert!(crate::npc_perception::npc_player_detectable(
+            &profile, 0.0, 0.0, dist, dist_sq, false
+        ));
+        assert!(!crate::npc_perception::npc_player_detectable(
+            &profile, 0.0, 0.0, dist, dist_sq, true
         ));
     }
 }

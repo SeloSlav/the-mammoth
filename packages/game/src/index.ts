@@ -8,3 +8,6 @@ export * from "./apartmentInteriorAnchors.js";
 export * from "./collision/index.js";
 export * from "./player/index.js";
 export * from "./npc/replicatedNpcSnapshot.js";
+export * from "./npc/npcPerception.js";
+export * from "./npc/npcPerceptionProfiles.js";
+export * from "./npc/archetypes/babushka.js";

@@ -538,7 +538,7 @@ export function MammothDebugMenuHud() {
             {isFpCombatSimMode() ? (
               <>
                 <div style={{ fontSize: 12, fontWeight: 700, color: THEME_TEXT_MUTED, marginTop: 16 }}>
-                  Combat sim
+                  NPC AI debug
                 </div>
                 {rowToggle({
                   label: "NPC hit volumes",
@@ -549,6 +549,30 @@ export function MammothDebugMenuHud() {
                     setFpDebugGameplayFeedbackFlag(
                       "npcHitDebugVolumes",
                       !gameplayFeedback.npcHitDebugVolumes,
+                    );
+                  },
+                })}
+                {rowToggle({
+                  label: "Detection radius",
+                  description:
+                    "Gold standing ring + orange crouch ring (6.5 m / 3.6 m) around each babushka",
+                  on: gameplayFeedback.npcDetectionRadiusDebug,
+                  onToggle: () => {
+                    setFpDebugGameplayFeedbackFlag(
+                      "npcDetectionRadiusDebug",
+                      !gameplayFeedback.npcDetectionRadiusDebug,
+                    );
+                  },
+                })}
+                {rowToggle({
+                  label: "Vision cone",
+                  description:
+                    "120° forward wedge out to aggro range — approach from behind to stay hidden",
+                  on: gameplayFeedback.npcVisionConeDebug,
+                  onToggle: () => {
+                    setFpDebugGameplayFeedbackFlag(
+                      "npcVisionConeDebug",
+                      !gameplayFeedback.npcVisionConeDebug,
                     );
                   },
                 })}

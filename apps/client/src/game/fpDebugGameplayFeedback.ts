@@ -8,6 +8,10 @@ export type FpDebugGameplayFeedbackFlags = {
   starvationDamageFlashes: boolean;
   /** Authoritative NPC body/head AABBs + BODY/HEADSHOT flash labels (combat sim). */
   npcHitDebugVolumes: boolean;
+  /** Standing + crouch detection radius rings around babushkas. */
+  npcDetectionRadiusDebug: boolean;
+  /** Forward vision cone wedge out to aggro range. */
+  npcVisionConeDebug: boolean;
 };
 
 export type FpDebugGameplayFeedbackKey = keyof FpDebugGameplayFeedbackFlags;
@@ -15,6 +19,8 @@ export type FpDebugGameplayFeedbackKey = keyof FpDebugGameplayFeedbackFlags;
 const ALL_ON: FpDebugGameplayFeedbackFlags = {
   starvationDamageFlashes: true,
   npcHitDebugVolumes: false,
+  npcDetectionRadiusDebug: false,
+  npcVisionConeDebug: false,
 };
 
 const listeners = new Set<() => void>();

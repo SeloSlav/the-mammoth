@@ -160,12 +160,24 @@ export {
 } from "./playerPresentation/index.js";
 export {
   BabushkaNpcPresenter,
-  WorldNpcPresenterPool,
   preloadBabushkaNpcBody,
   BABUSHKA_NPC_GLB_URI,
   BABUSHKA_NPC_DEATH_CLIP_SEC,
+} from "./npc/archetypes/babushka/BabushkaNpcPresenter.js";
+export {
+  WorldNpcPresenterPool,
+} from "./npc/WorldNpcPresenterPool.js";
+export {
   MAMMOTH_FP_WORLD_NPC_UD,
-} from "./npc/BabushkaNpcPresenter.js";
+} from "./npc/npcConstants.js";
+export {
+  snapNpcModelFeetToLocalGround,
+  bindNpcOutdoorReadableEnv,
+} from "./npc/npcModelUtils.js";
+export {
+  type WorldNpcPresenter,
+  NpcPresenterFrame,
+} from "./npc/NpcPresenter.js";
 export {
   NpcHitDebugOverlay,
   BABUSHKA_HIT_BODY_RADIUS_M,
@@ -178,6 +190,9 @@ export {
   babushkaHeadHitBoxCenterY,
   babushkaBodyHitTorsoHeightM,
 } from "./npc/NpcHitDebugOverlay.js";
+export {
+  NpcDetectionDebugOverlay,
+} from "./npc/NpcDetectionDebugOverlay.js";
 export {
   createNpcVisualSmoothingState,
   ingestNpcAuthoritativeTransform,
