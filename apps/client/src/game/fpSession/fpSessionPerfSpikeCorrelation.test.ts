@@ -48,6 +48,9 @@ const baseSample = (
   visiblePracticalWindowLights: 0,
   frustumPracticalWindowLights: 0,
   cameraYawRad: 0,
+  decorInstancedBatchesVisible: 0,
+  decorInstancedInstancesVisible: 0,
+  decorInstancedHiddenPlacements: 0,
   ...emptyFpPracticalDecorLightKindFields(),
   ...overrides,
 });

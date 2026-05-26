@@ -85,6 +85,12 @@ function classifyMesh(mesh: THREE.Mesh): string {
   if (mesh.userData[MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD] === true) {
     return "apartmentDecorFloorShadow";
   }
+  if (
+    mesh instanceof THREE.InstancedMesh &&
+    typeof mesh.userData.mammothApartmentDecorInstancedBatch === "string"
+  ) {
+    return "decorInstanced";
+  }
   if (nearestTaggedAncestor(mesh, (obj) => obj.userData.mammothApartmentDecorProp === true)) {
     return "apartmentDecor";
   }

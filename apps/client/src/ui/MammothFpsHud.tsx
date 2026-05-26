@@ -506,6 +506,14 @@ export function MammothFpsHud(props: { conn: DbConnection | null }) {
                   {ri.frustumPracticalDecorLights}L
                 </span>
               ) : null}
+              {ri.decorInstancedBatchesVisible > 0 ? (
+                <span
+                  style={{ ...monoStyle, fontSize: 10, color: THEME_SUCCESS }}
+                  title={`Decor instancing: ${ri.decorInstancedBatchesVisible} batches, ${ri.decorInstancedInstancesVisible} instances\nhidden placements: ${ri.decorInstancedHiddenPlacements}\nest. draw savings: ~${ri.decorInstancedEstDrawSavings}\nlast rebuild: ${ri.decorInstancingLastRebuild || "(n/a)"}`}
+                >
+                  {ri.decorInstancedInstancesVisible}inst
+                </span>
+              ) : null}
             </>
           );
         })()}
@@ -744,6 +752,28 @@ export function MammothFpsHud(props: { conn: DbConnection | null }) {
                       {"  "}
                       transparent {ri.visibleTransparentMeshes}/{ri.frustumTransparentMeshes}
                     </div>
+                    {ri.decorInstancedBatchesVisible > 0 || ri.decorInstancedHiddenPlacements > 0 ? (
+                      <div style={{ ...monoStyle, ...dimStyle, fontSize: 10, marginBottom: 4 }}>
+                        decor inst{" "}
+                        <span style={{ color: THEME_SUCCESS }}>
+                          {ri.decorInstancedBatchesVisible} batches · {ri.decorInstancedInstancesVisible} inst
+                        </span>
+                        {"  "}
+                        hidden {ri.decorInstancedHiddenPlacements}
+                        {"  "}
+                        ~{ri.decorInstancedEstDrawSavings} dc saved
+                        {"  "}
+                        fr {ri.decorInstancedBatchesFrustum}/{ri.decorInstancedInstancesFrustum}
+                      </div>
+                    ) : null}
+                    {ri.decorInstancingLastRebuild.length > 0 ? (
+                      <div
+                        style={{ ...monoStyle, ...dimStyle, fontSize: 9, marginBottom: 4 }}
+                        title="Last cross-placement instancing rebuild"
+                      >
+                        inst rebuild: {ri.decorInstancingLastRebuild}
+                      </div>
+                    ) : null}
                   </>
                 );
               })()}

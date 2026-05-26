@@ -59,6 +59,12 @@ function classifySceneMesh(mesh: THREE.Mesh): string {
   if (mesh.userData.isSkyCloudMesh === true) return "environmentSky";
   if (mesh.name.includes("combat_sim")) return "combatArena";
   if (mesh.name === "fp_session_ground_plane") return "outdoorGround";
+  if (
+    mesh instanceof THREE.InstancedMesh &&
+    typeof mesh.userData.mammothApartmentDecorInstancedBatch === "string"
+  ) {
+    return "decorInstanced";
+  }
   if (mesh.userData.mammothUnitInterior === true) return "unitInterior";
   if (mesh.userData.mammothApartmentDecorProp === true) return "apartmentDecor";
   return "other";

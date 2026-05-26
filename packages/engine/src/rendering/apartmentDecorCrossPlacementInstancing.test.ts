@@ -3,6 +3,7 @@ import * as THREE from "three";
 import {
   applyApartmentDecorCrossPlacementInstancing,
   getLastApartmentDecorInstancingSummary,
+  summarizeApartmentDecorCrossPlacementInstancingInScene,
 } from "./apartmentDecorCrossPlacementInstancing.js";
 
 function decorPropGroup(modelRelPath: string, placedKind?: string): THREE.Group {
@@ -64,6 +65,21 @@ describe("applyApartmentDecorCrossPlacementInstancing", () => {
       buildingRoot.children.some((c) => c instanceof THREE.InstancedMesh),
     ).toBe(true);
     expect(getLastApartmentDecorInstancingSummary()?.instances).toBe(4);
+  });
+
+  it("summarizeApartmentDecorCrossPlacementInstancingInScene counts batches and hidden roots", () => {
+    const root = new THREE.Group();
+    const path = "static/models/objects/light-ceiling-2.glb";
+    for (let i = 0; i < 3; i++) {
+      root.add(decorPropGroup(path));
+    }
+    applyApartmentDecorCrossPlacementInstancing(root);
+    const snap = summarizeApartmentDecorCrossPlacementInstancingInScene(root);
+    expect(snap.visibleBatches).toBe(1);
+    expect(snap.visibleInstances).toBe(3);
+    expect(snap.hiddenPlacementRoots).toBe(3);
+    expect(snap.estDrawCallsSaved).toBe(2);
+    expect(snap.lastRebuildSummary).toContain("light-ceiling-2.glb");
   });
 
   it("skips stash and notebook paths", () => {

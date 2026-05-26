@@ -36,6 +36,64 @@ export function getLastApartmentDecorInstancingSummary(): ApartmentDecorInstanci
   return lastInstancingSummary;
 }
 
+export type ApartmentDecorInstancingSceneSnapshot = {
+  visibleBatches: number;
+  visibleInstances: number;
+  frustumBatches: number;
+  frustumInstances: number;
+  hiddenPlacementRoots: number;
+  /** Rough draw-call reduction: hidden sources minus visible instanced batches. */
+  estDrawCallsSaved: number;
+  /** Last rebuild paths from {@link getLastApartmentDecorInstancingSummary}. */
+  lastRebuildSummary: string;
+};
+
+function objectVisibleInSceneHierarchy(obj: THREE.Object3D): boolean {
+  for (let cur: THREE.Object3D | null = obj; cur; cur = cur.parent) {
+    if (!cur.visible) return false;
+  }
+  return true;
+}
+
+/** Live scene scan for profiler HUD / perf ring (cheap traverse). */
+export function summarizeApartmentDecorCrossPlacementInstancingInScene(
+  sceneRoot: THREE.Object3D,
+  frustum?: THREE.Frustum,
+): ApartmentDecorInstancingSceneSnapshot {
+  let visibleBatches = 0;
+  let visibleInstances = 0;
+  let frustumBatches = 0;
+  let frustumInstances = 0;
+  let hiddenPlacementRoots = 0;
+
+  sceneRoot.traverse((obj) => {
+    if (obj.userData.mammothApartmentDecorInstanced === true) {
+      if (!obj.visible) hiddenPlacementRoots += 1;
+      return;
+    }
+    if (!(obj instanceof THREE.InstancedMesh)) return;
+    if (typeof obj.userData.mammothApartmentDecorInstancedBatch !== "string") return;
+    if (!objectVisibleInSceneHierarchy(obj)) return;
+    visibleBatches += 1;
+    visibleInstances += obj.count;
+    if (frustum?.intersectsObject(obj)) {
+      frustumBatches += 1;
+      frustumInstances += obj.count;
+    }
+  });
+
+  const last = getLastApartmentDecorInstancingSummary();
+  return {
+    visibleBatches,
+    visibleInstances,
+    frustumBatches,
+    frustumInstances,
+    hiddenPlacementRoots,
+    estDrawCallsSaved: Math.max(0, hiddenPlacementRoots - visibleBatches),
+    lastRebuildSummary: last?.paths.join(", ") ?? "",
+  };
+}
+
 function apartmentDecorModelExtension(modelRelPath: string): string | null {
   const lower = modelRelPath.trim().toLowerCase();
   for (const ext of APARTMENT_DECOR_MODEL_EXTENSIONS) {

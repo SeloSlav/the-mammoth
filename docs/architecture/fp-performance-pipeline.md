@@ -65,7 +65,7 @@ Before merging GPU- or RAF-heavy work:
 | `?fpdebug=1` / `mammothFpDebug` | Perf HUD + export |
 | `?fpnpc=1` / `mammothFpWorldNpcs` | Mount `fpNpcSession` in Mamutica (dev only; see [fp-world-npc-readiness.md](fp-world-npc-readiness.md)) |
 
-**Decor cross-placement instancing** (`applyApartmentDecorCrossPlacementInstancing` in `@the-mammoth/engine`): apartment unit rebuilds, floor-19 corridor ceiling fixtures (`fp_floor_19_corridor_decor`), and stairwell ceiling lights (batched under `buildingRoot` when GLBs finish loading). ≥3 identical non-pick props; no visual change. Dev builds log `[apartmentDecorInstancing]`; compare draw calls with `?fpdebug=1`.
+**Decor cross-placement instancing** (`applyApartmentDecorCrossPlacementInstancing` in `@the-mammoth/engine`): apartment unit rebuilds, floor-19 corridor ceiling fixtures (`fp_floor_19_corridor_decor`), and stairwell ceiling lights (batched under `buildingRoot` when GLBs finish loading). ≥3 identical non-pick props; no visual change. Dev builds log `[apartmentDecorInstancing]`. With `?fpdebug=1`, the FPS profiler shows batch/instance counts, hidden placement roots, est. draw-call savings, and `decorInstanced` in the scene-graph breakdown.
 
 ---
 

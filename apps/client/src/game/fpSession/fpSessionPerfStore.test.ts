@@ -71,6 +71,13 @@ const dummyRi = {
   frustumPracticalDecorStandingLights: 0,
   visiblePracticalDecorGrowOpLights: 0,
   frustumPracticalDecorGrowOpLights: 0,
+  decorInstancedBatchesVisible: 0,
+  decorInstancedInstancesVisible: 0,
+  decorInstancedBatchesFrustum: 0,
+  decorInstancedInstancesFrustum: 0,
+  decorInstancedHiddenPlacements: 0,
+  decorInstancedEstDrawSavings: 0,
+  decorInstancingLastRebuild: "",
 } as const;
 
 describe("fpSessionPerfStore", () => {
@@ -133,6 +140,13 @@ describe("fpSessionPerfStore", () => {
         frustumPracticalDecorStandingLights: 0,
         visiblePracticalDecorGrowOpLights: 0,
         frustumPracticalDecorGrowOpLights: 0,
+        decorInstancedBatchesVisible: 1,
+        decorInstancedInstancesVisible: 13,
+        decorInstancedBatchesFrustum: 1,
+        decorInstancedInstancesFrustum: 11,
+        decorInstancedHiddenPlacements: 13,
+        decorInstancedEstDrawSavings: 12,
+        decorInstancingLastRebuild: "static/models/objects/light-ceiling-2.glb×13",
       },
     );
 

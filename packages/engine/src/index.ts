@@ -345,7 +345,9 @@ export {
   clearApartmentDecorCrossPlacementBatches,
   collectApartmentDecorPlacementRoots,
   getLastApartmentDecorInstancingSummary,
+  summarizeApartmentDecorCrossPlacementInstancingInScene,
   type ApartmentDecorInstancingBatchSummary,
+  type ApartmentDecorInstancingSceneSnapshot,
   type ApplyApartmentDecorCrossPlacementInstancingOptions,
 } from "./rendering/apartmentDecorCrossPlacementInstancing.js";
 export {

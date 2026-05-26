@@ -26,6 +26,7 @@ import {
   MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD,
   prepareMammothApartmentInteriorContentRoots,
   applyApartmentDecorCrossPlacementInstancing,
+  summarizeApartmentDecorCrossPlacementInstancingInScene,
   syncMammothStairwellCeilingFixturePresentation,
   ensureMammothStairwellCeilingFixtureVisuals,
   requestWebGpuAdapter,
@@ -822,6 +823,13 @@ export async function mountFpSession(
     frustumPracticalWindowLights: 0,
     practicalDecorLightBreakdownVis: "(none)",
     practicalDecorLightBreakdownFr: "(none)",
+    decorInstancedBatchesVisible: 0,
+    decorInstancedInstancesVisible: 0,
+    decorInstancedBatchesFrustum: 0,
+    decorInstancedInstancesFrustum: 0,
+    decorInstancedHiddenPlacements: 0,
+    decorInstancedEstDrawSavings: 0,
+    decorInstancingLastRebuild: "",
     ...emptyFpPracticalDecorLightKindFields(),
   };
   const objectVisibleInHierarchy = (obj: THREE.Object3D): boolean => {
@@ -931,6 +939,10 @@ export async function mountFpSession(
     );
 
     const sceneGraphSummary = summarizeFpSessionSceneTriangles(scene);
+    const decorInstancing = summarizeApartmentDecorCrossPlacementInstancingInScene(
+      scene,
+      _perfSceneFrustum,
+    );
     lastPerfSceneCounters = {
       sceneGraphVisibleTriangles: sceneGraphSummary.totalVisibleTriangles,
       sceneGraphBreakdown: formatFpSceneTriangleBuckets(sceneGraphSummary.buckets),
@@ -960,6 +972,13 @@ export async function mountFpSession(
       frustumPracticalWindowLights: practicalLightCounts.frustumPracticalWindowLights,
       practicalDecorLightBreakdownVis: practicalLightCounts.decorKindBreakdownVis,
       practicalDecorLightBreakdownFr: practicalLightCounts.decorKindBreakdownFr,
+      decorInstancedBatchesVisible: decorInstancing.visibleBatches,
+      decorInstancedInstancesVisible: decorInstancing.visibleInstances,
+      decorInstancedBatchesFrustum: decorInstancing.frustumBatches,
+      decorInstancedInstancesFrustum: decorInstancing.frustumInstances,
+      decorInstancedHiddenPlacements: decorInstancing.hiddenPlacementRoots,
+      decorInstancedEstDrawSavings: decorInstancing.estDrawCallsSaved,
+      decorInstancingLastRebuild: decorInstancing.lastRebuildSummary,
       ...practicalDecorKindFields,
     };
     return lastPerfSceneCounters;
