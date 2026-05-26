@@ -7,11 +7,11 @@ import {
   preloadBabushkaNpcBody,
 } from "./archetypes/babushka/BabushkaNpcPresenter.js";
 
-function createPresenterForArchetype(archetype: NpcArchetypeId): WorldNpcPresenter | null {
+function createPresenterForArchetype(archetype: NpcArchetypeId): WorldNpcPresenter | undefined {
   if (archetype === "babushka") {
     return BabushkaNpcPresenter.createSync();
   }
-  return null;
+  return undefined;
 }
 
 export class WorldNpcPresenterPool {
@@ -20,7 +20,6 @@ export class WorldNpcPresenterPool {
   private readonly retired = new Set<WorldNpcPresenter>();
   private envTextureProvider: (() => THREE.Texture | null) | null = null;
   private showHitDebugVolumes = false;
-  private showDetectionRadiusDebug = false;
   private showVisionConeDebug = false;
   private renderPvsGate: ((snap: ReplicatedNpcSnapshot) => boolean) | null = null;
 
@@ -33,14 +32,6 @@ export class WorldNpcPresenterPool {
     this.showHitDebugVolumes = enabled;
     for (const pres of this.byId.values()) {
       pres.setHitDebugVolumesEnabled(enabled);
-    }
-  }
-
-  setShowDetectionRadiusDebug(enabled: boolean): void {
-    if (this.showDetectionRadiusDebug === enabled) return;
-    this.showDetectionRadiusDebug = enabled;
-    for (const pres of this.byId.values()) {
-      pres.setDetectionRadiusDebugEnabled(enabled);
     }
   }
 
@@ -76,9 +67,6 @@ export class WorldNpcPresenterPool {
   private applyDebugFlags(pres: WorldNpcPresenter): void {
     if (this.showHitDebugVolumes) {
       pres.setHitDebugVolumesEnabled(true);
-    }
-    if (this.showDetectionRadiusDebug) {
-      pres.setDetectionRadiusDebugEnabled(true);
     }
     if (this.showVisionConeDebug) {
       pres.setVisionConeDebugEnabled(true);

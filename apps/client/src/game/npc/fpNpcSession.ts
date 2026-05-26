@@ -101,16 +101,13 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
   const syncHitDebugVolumes = (): void => {
     pool.setShowHitDebugVolumes(isFpDebugGameplayFeedbackEnabled("npcHitDebugVolumes"));
   };
-  const syncDetectionDebug = (): void => {
-    pool.setShowDetectionRadiusDebug(
-      isFpDebugGameplayFeedbackEnabled("npcDetectionRadiusDebug"),
-    );
+  const syncVisionConeDebug = (): void => {
     pool.setShowVisionConeDebug(isFpDebugGameplayFeedbackEnabled("npcVisionConeDebug"));
   };
   syncHitDebugVolumes();
-  syncDetectionDebug();
+  syncVisionConeDebug();
   const unsubHitDebug = subscribeFpDebugGameplayFeedback(syncHitDebugVolumes);
-  const unsubDetectionDebug = subscribeFpDebugGameplayFeedback(syncDetectionDebug);
+  const unsubVisionConeDebug = subscribeFpDebugGameplayFeedback(syncVisionConeDebug);
   await pool.ensureReady();
 
   const bloodFx: FpBloodBurstFx = createFpBloodBurstFx(opts.fxScene);
@@ -310,7 +307,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
       }
       epitaphTimers.clear();
       unsubHitDebug();
-      unsubDetectionDebug();
+      unsubVisionConeDebug();
       opts.conn.db.world_sound_event.removeOnInsert(onFleshImpact);
       opts.conn.db.world_npc.removeOnInsert(onInsertCb);
       opts.conn.db.world_npc.removeOnUpdate(onUpdateCb);

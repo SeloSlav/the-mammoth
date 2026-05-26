@@ -1,33 +1,8 @@
 import * as THREE from "three";
-import {
-  npcCrouchAggroRangeM,
-  type NpcPerceptionProfile,
-} from "@the-mammoth/game";
+import type { NpcPerceptionProfile } from "@the-mammoth/game";
 
 const OVERLAY_Y_M = 0.06;
-const RING_SEGMENTS = 64;
 const CONE_SEGMENTS = 28;
-
-function makeRingLineLoop(radiusM: number, color: number, opacity: number): THREE.LineLoop {
-  const positions = new Float32Array((RING_SEGMENTS + 1) * 3);
-  for (let i = 0; i <= RING_SEGMENTS; i++) {
-    const t = (i / RING_SEGMENTS) * Math.PI * 2;
-    positions[i * 3] = Math.sin(t) * radiusM;
-    positions[i * 3 + 1] = OVERLAY_Y_M;
-    positions[i * 3 + 2] = Math.cos(t) * radiusM;
-  }
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  return new THREE.LineLoop(
-    geom,
-    new THREE.LineBasicMaterial({
-      color,
-      transparent: true,
-      opacity,
-      depthTest: true,
-    }),
-  );
-}
 
 function makeVisionConeMesh(
   rangeM: number,
@@ -86,37 +61,20 @@ function makeVisionConeEdges(
   );
 }
 
-/** Dev overlay — standing/crouch detection rings + forward vision cone wedge. */
+/** Dev overlay — forward vision cone wedge on the NPC (range + FOV). */
 export class NpcDetectionDebugOverlay {
   readonly root = new THREE.Group();
-  private readonly detectionRadiusGroup = new THREE.Group();
-  private readonly visionConeGroup = new THREE.Group();
 
   constructor(profile: NpcPerceptionProfile) {
-    this.root.name = "npc_detection_debug_overlay";
-    const crouchRangeM = npcCrouchAggroRangeM(profile);
-
-    this.detectionRadiusGroup.name = "npc_detection_radius";
-    this.detectionRadiusGroup.add(
-      makeRingLineLoop(profile.aggroRangeM, 0xffcc44, 0.92),
-      makeRingLineLoop(crouchRangeM, 0xff9955, 0.72),
-    );
-    this.root.add(this.detectionRadiusGroup);
-
-    this.visionConeGroup.name = "npc_vision_cone";
-    this.visionConeGroup.add(
+    this.root.name = "npc_vision_cone_debug_overlay";
+    this.root.add(
       makeVisionConeMesh(profile.aggroRangeM, profile.visionHalfAngleRad),
       makeVisionConeEdges(profile.aggroRangeM, profile.visionHalfAngleRad),
     );
-    this.root.add(this.visionConeGroup);
   }
 
-  setShowDetectionRadius(enabled: boolean): void {
-    this.detectionRadiusGroup.visible = enabled;
-  }
-
-  setShowVisionCone(enabled: boolean): void {
-    this.visionConeGroup.visible = enabled;
+  setVisible(enabled: boolean): void {
+    this.root.visible = enabled;
   }
 
   dispose(): void {

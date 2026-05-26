@@ -76,7 +76,11 @@ import {
 } from "./fpDebugMenuSessionBridge.js";
 import { resetFpDebugRenderIsolationFlags } from "./fpDebugRenderIsolation.js";
 import { resetFpDebugEmissiveIsolationState } from "./fpDebugEmissiveIsolation.js";
-import { resetFpDebugGameplayFeedbackFlags } from "./fpDebugGameplayFeedback.js";
+import {
+  isFpDebugGameplayFeedbackEnabled,
+  resetFpDebugGameplayFeedbackFlags,
+  subscribeFpDebugGameplayFeedback,
+} from "./fpDebugGameplayFeedback.js";
 import { installMmWallProbeLoadingStub } from "./fpSession/fpSessionWallProbeStub.js";
 import { disposeStaticWorldObjectTree } from "./fpSession/fpSessionStaticWorldDispose.js";
 import {
@@ -217,6 +221,7 @@ import {
 } from "./fpSession/fpSessionPracticalLightPerfKinds.js";
 import { FpHotbarConsumableVisual } from "./fpHotbar/fpHotbarConsumableVisual.js";
 import { createFpCollisionDebugOverlay } from "./fpSession/fpSessionCollisionDebug.js";
+import { createFpPlayerStealthDetectionDebugOverlay } from "./fpSession/fpPlayerStealthDetectionDebug.js";
 import { FpCabMirrorCollection } from "./fpRendering/fpCabMirrorCollection.js";
 import {
   FP_APARTMENT_DECOR_PROP_LAYER,
@@ -564,6 +569,18 @@ export async function mountFpSession(
     },
   });
   scene.add(fpCollisionDebug.group);
+
+  const fpPlayerStealthDetectionDebug = createFpPlayerStealthDetectionDebugOverlay();
+  scene.add(fpPlayerStealthDetectionDebug.group);
+  const syncPlayerStealthDetectionDebug = (): void => {
+    fpPlayerStealthDetectionDebug.setEnabled(
+      isFpDebugGameplayFeedbackEnabled("npcDetectionRadiusDebug"),
+    );
+  };
+  syncPlayerStealthDetectionDebug();
+  const unsubPlayerStealthDetectionDebug = subscribeFpDebugGameplayFeedback(
+    syncPlayerStealthDetectionDebug,
+  );
 
   const unitInteriorMeshEntries = collectFpSessionUnitInteriorMeshEntries(buildingRoot);
   const unitInteriorMeshes = unitInteriorMeshEntries.map((entry) => entry.mesh);
@@ -2324,6 +2341,7 @@ export async function mountFpSession(
     _walkOpts,
     simulatePredictedPlayerStep,
     fpCollisionDebug,
+    fpPlayerStealthDetectionDebug,
     fpElevators,
     fpApartmentDoors,
     fpApartmentDecorMeshes,
@@ -2522,6 +2540,7 @@ export async function mountFpSession(
     disposeWeaponPresentationHotReload();
     disposeWorldContentHotReload();
     unsubHotbarRail();
+    unsubPlayerStealthDetectionDebug();
     cabMotionAudio.dispose();
     cabMotionAudioReady = false;
     backgroundMusic.dispose();

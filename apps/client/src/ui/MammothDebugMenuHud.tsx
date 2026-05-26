@@ -555,7 +555,7 @@ export function MammothDebugMenuHud() {
                 {rowToggle({
                   label: "Detection radius",
                   description:
-                    "Gold standing ring + orange crouch ring (6.5 m / 3.6 m) around each babushka",
+                    "Gold standing + orange crouch rings (6.5 m / 3.6 m) at your feet — brighter ring matches your current stance",
                   on: gameplayFeedback.npcDetectionRadiusDebug,
                   onToggle: () => {
                     setFpDebugGameplayFeedbackFlag(

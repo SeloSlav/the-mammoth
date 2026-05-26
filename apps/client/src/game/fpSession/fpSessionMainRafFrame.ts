@@ -84,6 +84,7 @@ import {
 } from "./fpSessionHudPickThrottle.js";
 import { FpHotbarConsumableVisual } from "../fpHotbar/fpHotbarConsumableVisual.js";
 import { createFpCollisionDebugOverlay } from "./fpSessionCollisionDebug.js";
+import type { createFpPlayerStealthDetectionDebugOverlay } from "./fpPlayerStealthDetectionDebug.js";
 import type { FpPlanarMirror } from "../fpRendering/fpPlanarMirror.js";
 import {
   FP_APARTMENT_MIRROR_REFLECTION_UPDATE_INTERVAL_MS,
@@ -226,6 +227,7 @@ export type FpSessionMainRafFrameDeps = {
   _walkOpts: FpLocomotionWalkOptions;
   simulatePredictedPlayerStep: (opts: FpSessionMainStepOpts) => number;
   fpCollisionDebug: ReturnType<typeof createFpCollisionDebugOverlay>;
+  fpPlayerStealthDetectionDebug: ReturnType<typeof createFpPlayerStealthDetectionDebugOverlay>;
   fpElevators: MountFpElevatorWorldResult;
   fpApartmentDoors: MountFpApartmentDoorsResult;
   fpApartmentDecorMeshes: MountFpApartmentDecorMeshesResult;
@@ -538,6 +540,7 @@ export function createFpSessionMainRafFrame(
       crouch: mainRaf.crouchToggle,
       displayOffset: deps._displayOffset,
     });
+    deps.fpPlayerStealthDetectionDebug.update(deps.pos, mainRaf.crouchToggle);
 
     // --- Elevator section timing ---
     deps.fpElevators.tick(dt, nowMs, deps.pos);

@@ -23,7 +23,6 @@ export interface WorldNpcPresenter {
     envTexture: THREE.Texture | null,
   ): void;
   setHitDebugVolumesEnabled(enabled: boolean): void;
-  setDetectionRadiusDebugEnabled(enabled: boolean): void;
   setVisionConeDebugEnabled(enabled: boolean): void;
   flashHitDebug(headshot: boolean): void;
   dispose(): void;
@@ -36,8 +35,7 @@ export abstract class NpcPresenterFrame implements WorldNpcPresenter {
   protected abstract readonly perceptionProfile: NpcPerceptionProfile;
 
   private hitDebug: NpcHitDebugOverlay | null = null;
-  private detectionDebug: NpcDetectionDebugOverlay | null = null;
-  private showDetectionRadiusDebug = false;
+  private visionConeDebug: NpcDetectionDebugOverlay | null = null;
   private showVisionConeDebug = false;
 
   protected constructor(rootName: string) {
@@ -66,30 +64,18 @@ export abstract class NpcPresenterFrame implements WorldNpcPresenter {
     this.hitDebug.root.visible = false;
   }
 
-  setDetectionRadiusDebugEnabled(enabled: boolean): void {
-    this.showDetectionRadiusDebug = enabled;
-    this.syncDetectionDebugVisibility();
-  }
-
   setVisionConeDebugEnabled(enabled: boolean): void {
     this.showVisionConeDebug = enabled;
-    this.syncDetectionDebugVisibility();
-  }
-
-  private syncDetectionDebugVisibility(): void {
-    const wantsOverlay = this.showDetectionRadiusDebug || this.showVisionConeDebug;
-    if (wantsOverlay) {
-      if (!this.detectionDebug) {
-        this.detectionDebug = new NpcDetectionDebugOverlay(this.perceptionProfile);
-        this.root.add(this.detectionDebug.root);
+    if (enabled) {
+      if (!this.visionConeDebug) {
+        this.visionConeDebug = new NpcDetectionDebugOverlay(this.perceptionProfile);
+        this.root.add(this.visionConeDebug.root);
       }
-      this.detectionDebug.setShowDetectionRadius(this.showDetectionRadiusDebug);
-      this.detectionDebug.setShowVisionCone(this.showVisionConeDebug);
-      this.detectionDebug.root.visible = true;
+      this.visionConeDebug.setVisible(true);
       return;
     }
-    if (!this.detectionDebug) return;
-    this.detectionDebug.root.visible = false;
+    if (!this.visionConeDebug) return;
+    this.visionConeDebug.setVisible(false);
   }
 
   ingestAuthoritativeSnapshot(snapshot: ReplicatedNpcSnapshot): void {
@@ -134,10 +120,10 @@ export abstract class NpcPresenterFrame implements WorldNpcPresenter {
       this.hitDebug.dispose();
       this.hitDebug = null;
     }
-    if (this.detectionDebug) {
-      this.root.remove(this.detectionDebug.root);
-      this.detectionDebug.dispose();
-      this.detectionDebug = null;
+    if (this.visionConeDebug) {
+      this.root.remove(this.visionConeDebug.root);
+      this.visionConeDebug.dispose();
+      this.visionConeDebug = null;
     }
     this.disposeBody();
   }
