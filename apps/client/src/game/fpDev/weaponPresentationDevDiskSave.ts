@@ -4,9 +4,12 @@ import {
   mergeWeaponFpViewmodelForSave,
   parseWeaponPrimitivePresentationDoc,
   type PlayerPresentationManager,
+  type WeaponDefinition,
 } from "@the-mammoth/engine";
 
-function requireEquippedWeaponId(presentation: PlayerPresentationManager): string {
+function requireEquippedWeaponId(
+  presentation: PlayerPresentationManager,
+): WeaponDefinition["id"] {
   const def = presentation.getLocalWeaponDefinition();
   if (!def) {
     throw new Error("No weapon equipped — select a weapon on the hotbar first.");
