@@ -328,6 +328,40 @@ fn insert_world_loot_row(
     });
 }
 
+/// Mission-authored pickup — uses reserved slots outside world-loot refresh.
+pub(crate) fn insert_mission_loot_row(
+    ctx: &ReducerContext,
+    slot: u16,
+    def_id: &str,
+    quantity: u32,
+    x: f32,
+    y: f32,
+    z: f32,
+) {
+    let seed = ctx.timestamp.to_micros_since_unix_epoch() as u64 ^ ((slot as u64) << 48);
+    insert_world_loot_row(ctx, slot, def_id, quantity, x, y, z, seed);
+}
+
+pub(crate) fn mission_loot_slot_exists(ctx: &ReducerContext, slot: u16) -> bool {
+    ctx.db
+        .dropped_item()
+        .iter()
+        .any(|d| d.world_spawn_slot == Some(slot))
+}
+
+pub(crate) fn delete_mission_loot_by_slot(ctx: &ReducerContext, slot: u16) {
+    let ids: Vec<u64> = ctx
+        .db
+        .dropped_item()
+        .iter()
+        .filter(|d| d.world_spawn_slot == Some(slot))
+        .map(|d| d.id)
+        .collect();
+    for id in ids {
+        ctx.db.dropped_item().id().delete(id);
+    }
+}
+
 fn insert_world_loot_at_anchor(
     ctx: &ReducerContext,
     slot: u16,
@@ -556,7 +590,10 @@ fn delete_all_anchored_world_loot(ctx: &ReducerContext) {
         .db
         .dropped_item()
         .iter()
-        .filter(|d| d.world_spawn_slot.is_some())
+        .filter(|d| {
+            d.world_spawn_slot.is_some()
+                && d.world_spawn_slot.unwrap() < crate::player_mission::MISSION_WORLD_SPAWN_SLOT_MIN
+        })
         .map(|d| d.id)
         .collect();
     for id in ids {
@@ -830,6 +867,7 @@ fn pickup_dropped_item_inner(
         dropped_item_id,
         remaining
     );
+    crate::player_mission::on_mission_item_pickup(ctx, sender, def_id.as_str());
     Ok(())
 }
 

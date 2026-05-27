@@ -10,12 +10,11 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-import {
-  ApartmentWaterTankSchedule,
-} from "./types";
-
-export default {
-  get arg() {
-    return ApartmentWaterTankSchedule;
-  },
-};
+export default __t.row({
+  identity: __t.identity().primaryKey(),
+  activeMissionId: __t.string().name("active_mission_id"),
+  status: __t.u8(),
+  itemCollected: __t.bool().name("item_collected"),
+  itemDeposited: __t.bool().name("item_deposited"),
+  firstExtractionComplete: __t.bool().name("first_extraction_complete"),
+});

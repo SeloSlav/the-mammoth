@@ -26,6 +26,7 @@ import { MammothSleepConfirmHud } from "./MammothSleepConfirmHud";
 import { MammothFpsHud } from "./MammothFpsHud";
 import { MammothCraftQueueStrip } from "./MammothCraftQueueStrip";
 import { MammothCraftingHud } from "./MammothCraftingHud";
+import { MammothMissionsHud } from "./MammothMissionsHud";
 import { MammothDebugMenuHud } from "./MammothDebugMenuHud";
 import { MammothPickupPromptHud } from "./MammothPickupPromptHud";
 import { BalconyGrowInspectHud } from "./BalconyGrowInspectHud";
@@ -188,6 +189,7 @@ export function HudShell({ onSignOut, conn }: HudProps) {
         <MammothCompassHud />
         <MammothDebugMenuHud />
         {conn ? <MammothCraftingHud conn={conn} /> : null}
+        {conn ? <MammothMissionsHud conn={conn} /> : null}
         {conn ? (
           <MammothToastHud conn={conn} reserveAboveVitalsExtraPx={craftStripReserveAboveVitalsPx} />
         ) : null}

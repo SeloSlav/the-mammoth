@@ -394,6 +394,16 @@ export const PlayerMeleeCooldown = __t.object("PlayerMeleeCooldown", {
 });
 export type PlayerMeleeCooldown = __Infer<typeof PlayerMeleeCooldown>;
 
+export const PlayerMissionProgress = __t.object("PlayerMissionProgress", {
+  identity: __t.identity(),
+  activeMissionId: __t.string(),
+  status: __t.u8(),
+  itemCollected: __t.bool(),
+  itemDeposited: __t.bool(),
+  firstExtractionComplete: __t.bool(),
+});
+export type PlayerMissionProgress = __Infer<typeof PlayerMissionProgress>;
+
 export const PlayerPose = __t.object("PlayerPose", {
   identity: __t.identity(),
   x: __t.f32(),

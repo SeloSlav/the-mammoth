@@ -2547,6 +2547,9 @@ fn stash_push_item_to_slot_impl(
         target_opt,
         quantity_to_move,
     )
+    .map(|_| {
+        crate::player_mission::on_mission_stash_push(ctx, owner_id, stash_kind, row.def_id.as_str());
+    })
     .map_err(|e| format!("{stash_kind} stash: {e}"))
 }
 

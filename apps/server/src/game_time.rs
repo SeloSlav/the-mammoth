@@ -408,6 +408,12 @@ pub(crate) fn force_collapse_sleep(ctx: &ReducerContext, owner: Identity) {
         return;
     }
 
+    crate::player_mission::evaluate_mission_before_day_rollover(
+        ctx,
+        owner,
+        SleepRolloverKind::Collapse,
+    );
+
     let unit_key = apartments::claimed_unit_key_for_owner(ctx, owner);
     let bedtime = ctx
         .db
@@ -495,6 +501,12 @@ fn sleep_in_bed_impl(ctx: &ReducerContext, unit_key: &str) -> Result<(), String>
         return Err("That is not your apartment.".to_string());
     }
     player_near_unit_bed(ctx, sender, unit_key)?;
+
+    crate::player_mission::evaluate_mission_before_day_rollover(
+        ctx,
+        sender,
+        SleepRolloverKind::Voluntary,
+    );
 
     let bedtime = ctx
         .db

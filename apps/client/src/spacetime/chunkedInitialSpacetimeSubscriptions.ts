@@ -15,6 +15,7 @@ const INITIAL_TABLE_SNAPSHOT_BATCHES_AFTER_SELF_USER: readonly (readonly string[
     "SELECT * FROM player_vitals",
     "SELECT * FROM player_firearm_chamber",
     "SELECT * FROM player_world_progress",
+    "SELECT * FROM player_mission_progress",
     "SELECT * FROM flashlight_charge",
     "SELECT * FROM water_bottle_fill",
     "SELECT * FROM apartment_water_tank",

@@ -44,6 +44,7 @@ mod npc_collision;
 mod npc_combat_sim;
 mod npc_perception;
 mod player_vitals;
+mod player_mission;
 mod pose;
 mod spawn_routing;
 mod stair_runtime_overlay;
@@ -109,6 +110,8 @@ pub fn on_connect(ctx: &ReducerContext) {
     apartments::ensure_authored_fish_tank_filter_decor_for_owner(ctx, id);
     balcony_grow::ensure_balcony_grow_for_owner(ctx, id);
     game_time::ensure_player_world_progress(ctx, id);
+    player_mission::ensure_player_mission_progress(ctx, id);
+    player_mission::sync_mission_progress_from_inventory(ctx, id);
     loadout::ensure_player_active_hotbar_row(ctx, id);
 }
 

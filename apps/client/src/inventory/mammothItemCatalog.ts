@@ -140,6 +140,7 @@ const ICONS: Record<string, string> = {
   cigarettes: cigaretteIcon,
   "door-lock": doorLockIcon,
   "fish-filter-sponge": fishFilterSpongeIcon,
+  "fuse-wire-pack": chemicalStockIcon,
   multimeter: multimeterIcon,
   screwdriver: screwdriverIcon,
   "balcony-grow-substrate": compostIcon,
