@@ -8,13 +8,14 @@ import {
 } from "./fpPickupPrompt";
 
 describe("fpPickupPrompt secondary notebook", () => {
-  it("stacks notebook when primary is another interact", () => {
+  it("stacks notebook when primary is grow tray stash", () => {
     clearFpPickupPrompts();
     setFpPickupPrompt({
-      kind: "apartment_sittable",
-      sittableKey: "chair",
+      kind: "apartment_stash",
+      stashKey: "grow-tray",
       unitKey: "u1",
-      label: "Sit on chair",
+      stashLabel: "Grow tray",
+      willClose: false,
     });
     syncFpPickupPromptNotebookSecondary(getFpPickupPrompt(), {
       kind: "apartment_notebook",
@@ -23,7 +24,7 @@ describe("fpPickupPrompt secondary notebook", () => {
       label: "Open notebook",
       willClose: false,
     });
-    expect(getFpPickupPrompt()?.kind).toBe("apartment_sittable");
+    expect(getFpPickupPrompt()?.kind).toBe("apartment_stash");
     expect(getFpPickupPromptSecondary()?.kind).toBe("apartment_notebook");
   });
 

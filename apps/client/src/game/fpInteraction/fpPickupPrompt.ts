@@ -183,7 +183,7 @@ export function setFpPickupPromptSecondary(next: FpPickupPromptState): void {
   for (const l of secondaryListeners) l();
 }
 
-/** Notebook rides alongside a higher-priority primary prompt (grow tray, sit, etc.). */
+/** Notebook rides alongside a higher-priority primary prompt (grow tray, stash, etc.). */
 export function syncFpPickupPromptNotebookSecondary(
   primary: FpPickupPromptState,
   notebook: FpPickupPromptApartmentNotebook | null,

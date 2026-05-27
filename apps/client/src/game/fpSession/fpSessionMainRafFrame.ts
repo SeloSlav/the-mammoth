@@ -969,7 +969,7 @@ export function createFpSessionMainRafFrame(
 
       let nextClaimSmoothCarry: ApartmentClaimHoldSmooth | null = null;
       const sitPromptHud =
-        !isFpSitActive() ? cachedSitPromptHud : null;
+        !isFpSitActive() && !cachedNotebookPromptHud ? cachedSitPromptHud : null;
       const rawElevDoorPrompt = cachedElevDoorPrompt;
       const doorPrompt =
         sitPromptHud !== null
@@ -1031,6 +1031,8 @@ export function createFpSessionMainRafFrame(
           slotIndex: cachedBalconyGrowPrompt.slotIndex,
           cropDisplayName: cachedBalconyGrowPrompt.cropDisplayName,
         });
+      } else if (cachedNotebookPromptHud) {
+        publishPickup(notebookPickupFromCache());
       } else if (sitPromptHud) {
         publishPickup({
           kind: "apartment_sittable",
@@ -1071,8 +1073,6 @@ export function createFpSessionMainRafFrame(
               : cachedBalconyGrowPrompt!.stashLabel,
           willClose: activeStash?.stashKey === growStash.stashKey,
         });
-      } else if (cachedNotebookPromptHud) {
-        publishPickup(notebookPickupFromCache());
       } else if (doorPrompt) {
         publishPickup({
           kind: "elevator_exterior_door",
