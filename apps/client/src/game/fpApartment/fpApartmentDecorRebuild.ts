@@ -7,9 +7,7 @@ import {
   buildOwnedApartmentPartitionWallInGroup,
   clampOwnedApartmentWallOpeningsForLength,
   buildApartmentPlanarMirrorVisual,
-  buildProceduralApartmentDecorVisual,
   isProceduralApartmentDecorModelPath,
-  postProcessApartmentDecorGltfScene,
   tagApartmentDecorMeshesSkipMaterialMerge,
   MAMMOTH_FP_INTERIOR_PARTITION_SOLID,
 } from "@the-mammoth/world";
@@ -43,8 +41,6 @@ import {
   contentDecorCoveredByDbRow,
 } from "./fpApartmentDecorStashKey.js";
 import {
-  apartmentDecorFetchPath,
-  apartmentDecorModelExtension,
   normalizeApartmentDecorModelRelPath,
 } from "./fpApartmentDecorAssets.js";
 import {
@@ -61,19 +57,25 @@ import {
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 import type { FpCabMirrorCollection } from "../fpRendering/fpCabMirrorCollection.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
+import { fpLoadingDbgTimed } from "../fpSession/fpLoadingDebug.js";
 import {
-  fpLoadingDbgMark,
-  fpLoadingDbgTimed,
-  isFpLoadingDebugEnabled,
-} from "../fpSession/fpLoadingDebug.js";
+  beginFpApartmentDecorRebuildLoadDebug,
+  markFpApartmentDecorRebuildDone,
+  markFpApartmentDecorRebuildStart,
+} from "./fpApartmentDecorRebuildLoadDebug.js";
+import { FpApartmentDecorRebuildYieldBatcher } from "./fpApartmentDecorRebuildYield.js";
+import {
+  collectApartmentDecorTemplateRequests,
+  loadFpApartmentDecorTemplate,
+  prefetchApartmentDecorTemplates,
+  resolveApartmentDecorTemplateCacheKey,
+} from "./fpApartmentDecorTemplateLoad.js";
 import {
   applyApartmentDecorCrossPlacementInstancing,
   applyApartmentDecorCastShadowFlags,
   attachApartmentWarmFixtureBulbGlow,
   bindMammothApartmentPropReadableEnv,
-  loadGltfFirstMatch,
   moodGradeMammothApartmentDecorMesh,
-  resolveStaticModelFetchUrl,
 } from "@the-mammoth/engine";
 import {
   growTrayIdForPlacement,
@@ -425,27 +427,6 @@ export function keepCloneInsideUnitXZ(
   }
 }
 
-export async function loadFpApartmentDecorTemplate(
-  gltfLoader: GLTFLoader,
-  objLoader: OBJLoader,
-  url: string,
-  modelRelPath: string,
-): Promise<THREE.Object3D> {
-  const procedural = buildProceduralApartmentDecorVisual(modelRelPath);
-  if (procedural) return procedural;
-  switch (apartmentDecorModelExtension(modelRelPath)) {
-    case ".glb": {
-      const { scene } = await loadGltfFirstMatch([url], gltfLoader);
-      postProcessApartmentDecorGltfScene(scene, modelRelPath);
-      return scene;
-    }
-    case ".obj":
-      return await objLoader.loadAsync(url);
-    default:
-      throw new Error(`Unsupported apartment decor asset: ${modelRelPath}`);
-  }
-}
-
 export type FpApartmentDecorFullRebuildContext = {
   conn: DbConnection;
   buildingRoot: THREE.Group;
@@ -477,67 +458,16 @@ export type FpApartmentDecorFullRebuildContext = {
   yieldToMain: typeof yieldToMain;
 };
 
-type FpApartmentDecorRebuildTimings = {
-  yieldMs: number;
-  yieldCount: number;
-  layoutMs: number;
-  templateLoadMs: number;
-  templateLoadCount: number;
-  templateCacheHitCount: number;
-  decorMountMs: number;
-  decorMountCount: number;
-  wallMs: number;
-  wallCount: number;
-  mirrorMs: number;
-  mirrorCount: number;
-  finalizeMs: number;
-};
-
-function emptyFpApartmentDecorRebuildTimings(): FpApartmentDecorRebuildTimings {
-  return {
-    yieldMs: 0,
-    yieldCount: 0,
-    layoutMs: 0,
-    templateLoadMs: 0,
-    templateLoadCount: 0,
-    templateCacheHitCount: 0,
-    decorMountMs: 0,
-    decorMountCount: 0,
-    wallMs: 0,
-    wallCount: 0,
-    mirrorMs: 0,
-    mirrorCount: 0,
-    finalizeMs: 0,
-  };
-}
-
-async function decorRebuildYield(
-  yieldFn: () => Promise<void>,
-  timings: FpApartmentDecorRebuildTimings | null,
-): Promise<void> {
-  if (!timings) {
-    await yieldFn();
-    return;
-  }
-  const t0 = performance.now();
-  await yieldFn();
-  timings.yieldMs += performance.now() - t0;
-  timings.yieldCount += 1;
-}
-
-function roundRebuildMs(ms: number): number {
-  return Math.round(ms);
-}
+export { loadFpApartmentDecorTemplate } from "./fpApartmentDecorTemplateLoad.js";
 
 export async function runFpApartmentDecorFullRebuild(
   ctx: FpApartmentDecorFullRebuildContext,
   epoch: number,
 ): Promise<void> {
-  const loadDbg = isFpLoadingDebugEnabled();
-  const rebuildT0 = loadDbg ? performance.now() : 0;
-  const timings = loadDbg ? emptyFpApartmentDecorRebuildTimings() : null;
+  const { enabled: loadDbg, rebuildT0, timings } = beginFpApartmentDecorRebuildLoadDebug();
+  const yieldBatcher = new FpApartmentDecorRebuildYieldBatcher(() => ctx.yieldToMain(), timings);
 
-  await decorRebuildYield(() => ctx.yieldToMain(), timings);
+  await yieldBatcher.yieldNow();
   if (ctx.isBuildStale(epoch)) return;
 
   const layoutT0 = loadDbg ? performance.now() : 0;
@@ -579,19 +509,35 @@ export async function runFpApartmentDecorFullRebuild(
   }
   ctx.clearAll();
 
-  if (loadDbg) {
-    fpLoadingDbgMark("fp_apartment_decor_rebuild:start", {
-      epoch,
-      rowCount: rows.length,
-      decorRows: decorRows.length,
-      wallRows: wallRows.length,
-      mirrorRows: mirrorRows.length,
-      layoutMs: roundRebuildMs(timings!.layoutMs),
-    });
+  const templateRequests = await collectApartmentDecorTemplateRequests(decorRows);
+  const prefetchT0 = loadDbg ? performance.now() : 0;
+  const prefetch = await prefetchApartmentDecorTemplates({
+    gltfLoader: ctx.gltfLoader,
+    objLoader: ctx.objLoader,
+    templateByUrl: ctx.templateByUrl,
+    isBuildStale: ctx.isBuildStale,
+    epoch,
+    requests: templateRequests,
+  });
+  if (timings) {
+    timings.prefetchMs = loadDbg ? performance.now() - prefetchT0 : prefetch.elapsedMs;
+    timings.prefetchLoadCount = prefetch.loadedCount;
+    timings.templateLoadMs = timings.prefetchMs;
+    timings.templateLoadCount = prefetch.loadedCount;
   }
+  if (ctx.isBuildStale(epoch)) return;
+
+  markFpApartmentDecorRebuildStart(timings, {
+    epoch,
+    rowCount: rows.length,
+    decorRows: decorRows.length,
+    wallRows: wallRows.length,
+    mirrorRows: mirrorRows.length,
+    uniqueTemplateRequests: templateRequests.length,
+  });
 
   for (const entry of rows) {
-    await decorRebuildYield(() => ctx.yieldToMain(), timings);
+    await yieldBatcher.beforeRow();
     if (ctx.isBuildStale(epoch)) return;
 
     if (entry.kind === "mirror") {
@@ -709,24 +655,20 @@ export async function runFpApartmentDecorFullRebuild(
 
     const templateCacheKey = isProceduralApartmentDecorModelPath(effectiveModelRelPath)
       ? effectiveModelRelPath
-      : await resolveStaticModelFetchUrl(apartmentDecorFetchPath(effectiveModelRelPath));
+      : await resolveApartmentDecorTemplateCacheKey(effectiveModelRelPath);
     let template = ctx.templateByUrl.get(templateCacheKey);
     if (!template) {
       try {
-        const templateLoadT0 = timings ? performance.now() : 0;
         template = await loadFpApartmentDecorTemplate(
           ctx.gltfLoader,
           ctx.objLoader,
           templateCacheKey,
           effectiveModelRelPath,
         );
-        if (timings) {
-          timings.templateLoadMs += performance.now() - templateLoadT0;
-          timings.templateLoadCount += 1;
-        }
         if (ctx.isBuildStale(epoch)) return;
         template.userData.mammothApartmentDecorTemplate = templateCacheKey;
         ctx.templateByUrl.set(templateCacheKey, template);
+        if (timings) timings.templateLoadCount += 1;
       } catch (err) {
         console.warn(
           "[mountFpApartmentDecorMeshes] failed to load decor asset",
@@ -808,7 +750,7 @@ export async function runFpApartmentDecorFullRebuild(
           isStale: () => ctx.isBuildStale(epoch),
           loadFishTemplate: async () => {
             const ftPath = APARTMENT_FISH_TANK_SWIMMER_MODEL_REL_PATH;
-            const ftCacheKey = await resolveStaticModelFetchUrl(apartmentDecorFetchPath(ftPath));
+            const ftCacheKey = await resolveApartmentDecorTemplateCacheKey(ftPath);
             let tpl = ctx.templateByUrl.get(`__fish_school_tpl:${ftPath}`);
             if (!tpl) {
               tpl = await loadFpApartmentDecorTemplate(
@@ -955,26 +897,14 @@ export async function runFpApartmentDecorFullRebuild(
   ctx.onPartitionWallsRebuilt?.(wallRows);
   ctx.onRebuilt?.();
 
+  await yieldBatcher.flush();
+
   if (timings) {
     timings.finalizeMs = performance.now() - finalizeT0;
-    fpLoadingDbgMark("fp_apartment_decor_rebuild:done", {
+    markFpApartmentDecorRebuildDone(timings, rebuildT0, {
       epoch,
-      elapsedMs: roundRebuildMs(performance.now() - rebuildT0),
       rowCount: rows.length,
       uniqueTemplates: ctx.templateByUrl.size,
-      yieldMs: roundRebuildMs(timings.yieldMs),
-      yieldCount: timings.yieldCount,
-      layoutMs: roundRebuildMs(timings.layoutMs),
-      templateLoadMs: roundRebuildMs(timings.templateLoadMs),
-      templateLoadCount: timings.templateLoadCount,
-      templateCacheHitCount: timings.templateCacheHitCount,
-      decorMountMs: roundRebuildMs(timings.decorMountMs),
-      decorMountCount: timings.decorMountCount,
-      wallMs: roundRebuildMs(timings.wallMs),
-      wallCount: timings.wallCount,
-      mirrorMs: roundRebuildMs(timings.mirrorMs),
-      mirrorCount: timings.mirrorCount,
-      finalizeMs: roundRebuildMs(timings.finalizeMs),
     });
   }
 }

@@ -2533,12 +2533,11 @@ export async function mountFpSession(
     playerRig.position.copy(pos);
     playerRig.rotation.y = mainRaf.bodyYaw;
     playerRig.updateMatrixWorld(true);
-    if (loadDbg) fpLoadingDbgMark("mount_fp_session:gpu_entry_warmup_renders");
-    const { prepareFpSessionLoadingGpuWarmup } = await import(
+    if (loadDbg) fpLoadingDbgMark("mount_fp_session:gpu_entry_warmup_scheduled");
+    const { scheduleFpSessionLoadingGpuWarmup } = await import(
       "./fpSession/fpSessionLoadingGpuWarmup.js"
     );
-    await prepareFpSessionLoadingGpuWarmup({ renderFrame: renderBootstrapFrame });
-    if (loadDbg) fpLoadingDbgMark("mount_fp_session:gpu_entry_warmup_renders_done");
+    scheduleFpSessionLoadingGpuWarmup({ renderFrame: renderBootstrapFrame });
   }
 
   /**
