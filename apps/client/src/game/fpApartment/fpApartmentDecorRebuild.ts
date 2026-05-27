@@ -62,6 +62,11 @@ import {
 import type { FpCabMirrorCollection } from "../fpRendering/fpCabMirrorCollection.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
 import {
+  fpLoadingDbgMark,
+  fpLoadingDbgTimed,
+  isFpLoadingDebugEnabled,
+} from "../fpSession/fpLoadingDebug.js";
+import {
   applyApartmentDecorCrossPlacementInstancing,
   applyApartmentDecorCastShadowFlags,
   attachApartmentWarmFixtureBulbGlow,
@@ -472,17 +477,81 @@ export type FpApartmentDecorFullRebuildContext = {
   yieldToMain: typeof yieldToMain;
 };
 
+type FpApartmentDecorRebuildTimings = {
+  yieldMs: number;
+  yieldCount: number;
+  layoutMs: number;
+  templateLoadMs: number;
+  templateLoadCount: number;
+  templateCacheHitCount: number;
+  decorMountMs: number;
+  decorMountCount: number;
+  wallMs: number;
+  wallCount: number;
+  mirrorMs: number;
+  mirrorCount: number;
+  finalizeMs: number;
+};
+
+function emptyFpApartmentDecorRebuildTimings(): FpApartmentDecorRebuildTimings {
+  return {
+    yieldMs: 0,
+    yieldCount: 0,
+    layoutMs: 0,
+    templateLoadMs: 0,
+    templateLoadCount: 0,
+    templateCacheHitCount: 0,
+    decorMountMs: 0,
+    decorMountCount: 0,
+    wallMs: 0,
+    wallCount: 0,
+    mirrorMs: 0,
+    mirrorCount: 0,
+    finalizeMs: 0,
+  };
+}
+
+async function decorRebuildYield(
+  yieldFn: () => Promise<void>,
+  timings: FpApartmentDecorRebuildTimings | null,
+): Promise<void> {
+  if (!timings) {
+    await yieldFn();
+    return;
+  }
+  const t0 = performance.now();
+  await yieldFn();
+  timings.yieldMs += performance.now() - t0;
+  timings.yieldCount += 1;
+}
+
+function roundRebuildMs(ms: number): number {
+  return Math.round(ms);
+}
+
 export async function runFpApartmentDecorFullRebuild(
   ctx: FpApartmentDecorFullRebuildContext,
   epoch: number,
 ): Promise<void> {
-  await ctx.yieldToMain();
+  const loadDbg = isFpLoadingDebugEnabled();
+  const rebuildT0 = loadDbg ? performance.now() : 0;
+  const timings = loadDbg ? emptyFpApartmentDecorRebuildTimings() : null;
+
+  await decorRebuildYield(() => ctx.yieldToMain(), timings);
   if (ctx.isBuildStale(epoch)) return;
 
-  const [builtinsFromContent, profilesFromContent] = await Promise.all([
-    loadOwnedApartmentBuiltinsDocFromContent(),
-    loadApartmentUnitLayoutProfilesDocFromContent(),
-  ]);
+  const layoutT0 = loadDbg ? performance.now() : 0;
+  const [builtinsFromContent, profilesFromContent] = loadDbg
+    ? await fpLoadingDbgTimed("fp_apartment_decor_rebuild:content_fetch", () =>
+        Promise.all([
+          loadOwnedApartmentBuiltinsDocFromContent(),
+          loadApartmentUnitLayoutProfilesDocFromContent(),
+        ]),
+      )
+    : await Promise.all([
+        loadOwnedApartmentBuiltinsDocFromContent(),
+        loadApartmentUnitLayoutProfilesDocFromContent(),
+      ]);
   if (ctx.isBuildStale(epoch)) return;
 
   const decorRows = visibleDecorPlacements(
@@ -505,13 +574,28 @@ export async function runFpApartmentDecorFullRebuild(
     ...wallRows.map((wall) => ({ kind: "wall" as const, wall })),
     ...mirrorRows.map((mirror) => ({ kind: "mirror" as const, mirror })),
   ].sort(compareAuthoringBuildEntries);
+  if (timings) {
+    timings.layoutMs = performance.now() - layoutT0;
+  }
   ctx.clearAll();
 
+  if (loadDbg) {
+    fpLoadingDbgMark("fp_apartment_decor_rebuild:start", {
+      epoch,
+      rowCount: rows.length,
+      decorRows: decorRows.length,
+      wallRows: wallRows.length,
+      mirrorRows: mirrorRows.length,
+      layoutMs: roundRebuildMs(timings!.layoutMs),
+    });
+  }
+
   for (const entry of rows) {
-    await ctx.yieldToMain();
+    await decorRebuildYield(() => ctx.yieldToMain(), timings);
     if (ctx.isBuildStale(epoch)) return;
 
     if (entry.kind === "mirror") {
+      const mirrorT0 = timings ? performance.now() : 0;
       const m = entry.mirror;
       const g = new THREE.Group();
       g.name = `apartment_mirror:${m.mirrorId}`;
@@ -541,10 +625,15 @@ export async function runFpApartmentDecorFullRebuild(
       tagApartmentDecorPropMeshesForMirrorExclusion(g);
       ctx.root.add(g);
       ctx.groupByRenderKey.set(m.renderKey, g);
+      if (timings) {
+        timings.mirrorMs += performance.now() - mirrorT0;
+        timings.mirrorCount += 1;
+      }
       continue;
     }
 
     if (entry.kind === "wall") {
+      const wallT0 = timings ? performance.now() : 0;
       const w = entry.wall;
       const g = new THREE.Group();
       g.name = `apartment_wall:${w.wallId}`;
@@ -608,6 +697,10 @@ export async function runFpApartmentDecorFullRebuild(
       tagApartmentDecorPropMeshesForMirrorExclusion(g);
       ctx.root.add(g);
       ctx.groupByRenderKey.set(w.renderKey, g);
+      if (timings) {
+        timings.wallMs += performance.now() - wallT0;
+        timings.wallCount += 1;
+      }
       continue;
     }
 
@@ -620,12 +713,17 @@ export async function runFpApartmentDecorFullRebuild(
     let template = ctx.templateByUrl.get(templateCacheKey);
     if (!template) {
       try {
+        const templateLoadT0 = timings ? performance.now() : 0;
         template = await loadFpApartmentDecorTemplate(
           ctx.gltfLoader,
           ctx.objLoader,
           templateCacheKey,
           effectiveModelRelPath,
         );
+        if (timings) {
+          timings.templateLoadMs += performance.now() - templateLoadT0;
+          timings.templateLoadCount += 1;
+        }
         if (ctx.isBuildStale(epoch)) return;
         template.userData.mammothApartmentDecorTemplate = templateCacheKey;
         ctx.templateByUrl.set(templateCacheKey, template);
@@ -638,9 +736,12 @@ export async function runFpApartmentDecorFullRebuild(
         );
         continue;
       }
+    } else if (timings) {
+      timings.templateCacheHitCount += 1;
     }
     if (ctx.isBuildStale(epoch)) return;
 
+    const decorMountT0 = timings ? performance.now() : 0;
     try {
       const g = new THREE.Group();
       g.name =
@@ -824,7 +925,15 @@ export async function runFpApartmentDecorFullRebuild(
 
       ctx.groupByRenderKey.set(d.renderKey, g);
       if (d.decorId !== null) ctx.groupByDecorId.set(d.decorId, g);
+      if (timings) {
+        timings.decorMountMs += performance.now() - decorMountT0;
+        timings.decorMountCount += 1;
+      }
     } catch (err) {
+      if (timings) {
+        timings.decorMountMs += performance.now() - decorMountT0;
+        timings.decorMountCount += 1;
+      }
       console.warn(
         "[mountFpApartmentDecorMeshes] failed to mount decor",
         effectiveModelRelPath,
@@ -833,6 +942,7 @@ export async function runFpApartmentDecorFullRebuild(
     }
   }
 
+  const finalizeT0 = timings ? performance.now() : 0;
   const practicalLightsContextUnitKey = ctx.getPracticalLightsContextUnitKey();
   ctx.resyncDecorShadowsForUnit(practicalLightsContextUnitKey, true);
   ctx.schedulePracticalLightsAfterDecorRebuild(practicalLightsContextUnitKey);
@@ -844,4 +954,27 @@ export async function runFpApartmentDecorFullRebuild(
   requestOwnedApartmentStashDecorSync(ctx.conn);
   ctx.onPartitionWallsRebuilt?.(wallRows);
   ctx.onRebuilt?.();
+
+  if (timings) {
+    timings.finalizeMs = performance.now() - finalizeT0;
+    fpLoadingDbgMark("fp_apartment_decor_rebuild:done", {
+      epoch,
+      elapsedMs: roundRebuildMs(performance.now() - rebuildT0),
+      rowCount: rows.length,
+      uniqueTemplates: ctx.templateByUrl.size,
+      yieldMs: roundRebuildMs(timings.yieldMs),
+      yieldCount: timings.yieldCount,
+      layoutMs: roundRebuildMs(timings.layoutMs),
+      templateLoadMs: roundRebuildMs(timings.templateLoadMs),
+      templateLoadCount: timings.templateLoadCount,
+      templateCacheHitCount: timings.templateCacheHitCount,
+      decorMountMs: roundRebuildMs(timings.decorMountMs),
+      decorMountCount: timings.decorMountCount,
+      wallMs: roundRebuildMs(timings.wallMs),
+      wallCount: timings.wallCount,
+      mirrorMs: roundRebuildMs(timings.mirrorMs),
+      mirrorCount: timings.mirrorCount,
+      finalizeMs: roundRebuildMs(timings.finalizeMs),
+    });
+  }
 }
