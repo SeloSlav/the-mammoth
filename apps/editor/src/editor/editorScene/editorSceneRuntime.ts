@@ -1507,15 +1507,6 @@ export async function mountEditorScene(
     if (programmaticTransformControlsDepth > 0) return;
     const store = useEditorStore.getState();
     if (isWeaponFpAuthoringState(store)) {
-      const pres = fp.getFpSession()?.getPresenter();
-      const attached = transformControls.object as THREE.Object3D | undefined;
-      if (pres && attached) {
-        const pid = pres
-          .getAuthoringPickList()
-          .find((p) => p.object === attached)?.id;
-        if (pid === "rigRoot") pres.syncAuthoringRigRestFromAttachedRig();
-        else if (pid === "weapon") pres.syncFpWeaponMountBaselineFromRoot();
-      }
       store.bumpFpAuthorLive();
     }
   });

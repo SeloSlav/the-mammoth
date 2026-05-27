@@ -8,6 +8,7 @@ import { mammothGameClientSocialMetaHead } from "../../packages/ui-theme/src/mam
 import { contentDevStaticGetMiddleware } from "./src/vite/contentDevMiddleware.js";
 import { devStaticModelMiddleware } from "./src/vite/devStaticModelMiddleware.js";
 import { prependConnectMiddleware } from "./src/vite/prependConnectMiddleware.js";
+import { weaponPresentationDevSaveMiddleware } from "./src/vite/weaponPresentationDevSaveMiddleware.js";
 
 const clientPublicRoot = path.resolve(__dirname, "public");
 
@@ -66,6 +67,7 @@ export default defineConfig(({ mode }) => {
               server.middlewares,
               devStaticModelMiddleware({ clientPublicRoot }),
             );
+            server.middlewares.use(weaponPresentationDevSaveMiddleware(repoRoot));
             server.middlewares.use(contentDevStaticGetMiddleware(repoRoot));
           },
         },

@@ -287,7 +287,7 @@ export function EditorChromeFpViewmodel({
             onClick={() => {
               setFpAuthorCamera("gameplay");
               frameFpMountIntoGameplayView();
-              pickFpAuthorTarget("rigRoot");
+              pickFpAuthorTarget("hand");
             }}
           >
             Fit in gameplay camera
@@ -309,28 +309,32 @@ export function EditorChromeFpViewmodel({
       </p>
 
       <span style={label}>Gizmo moves</span>
-      <p style={{ fontSize: 10, opacity: 0.75, margin: "0 0 4px" }}>
+      <p style={{ fontSize: 10, opacity: 0.75, margin: "0 0 8px" }}>
         {isConsumable
           ? "Consumables currently expose a single authored mount root."
-          : "Hand only moves the stock hand mesh relative to the rig; the weapon stays put until you switch gizmo target. Save layout writes the current hand and grip offset to disk as you see it."}
+          : "Hand & weapon — move the stock hand mesh; the equipped weapon follows. Save layout writes the current hand and grip offset to disk as you see it."}
       </p>
-      <select
-        style={{ ...input, marginBottom: 8 }}
-        value={gizmoTargetValue}
-        onChange={(e) => {
-          pickFpAuthorTarget(e.target.value);
-        }}
-      >
-        {fpAuthorPickList.length === 0 ? (
-          <option value="">Loading…</option>
-        ) : (
-          fpAuthorPickList.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))
-        )}
-      </select>
+      {!isConsumable ? (
+        <p style={{ fontSize: 11, margin: "0 0 8px", opacity: 0.85 }}>Hand &amp; weapon</p>
+      ) : (
+        <select
+          style={{ ...input, marginBottom: 8 }}
+          value={gizmoTargetValue}
+          onChange={(e) => {
+            pickFpAuthorTarget(e.target.value);
+          }}
+        >
+          {fpAuthorPickList.length === 0 ? (
+            <option value="">Loading…</option>
+          ) : (
+            fpAuthorPickList.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))
+          )}
+        </select>
+      )}
 
       <span style={label}>Gizmo</span>
       <div style={{ marginBottom: 8 }}>

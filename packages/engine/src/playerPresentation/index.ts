@@ -46,6 +46,7 @@ export {
 export { FP_MELEE_HAND_RIGHT } from "./fpViewmodelRefs.js";
 export {
   buildWeaponFirstPersonPresentationMergeFromPickList,
+  mergeWeaponFpViewmodelForSave,
   type WeaponFirstPersonAuthoringPresentationMerge,
   type WeaponMountAuthorMerge,
   type WeaponFirstPersonPersistRefs,

@@ -195,6 +195,11 @@ export class PlayerPresentationManager {
     this.local.syncFpWeaponMountBaselineFromRoot();
   }
 
+  /** Dev: weapon currently shown on the local FP viewmodel (null when unarmed). */
+  getLocalWeaponDefinition(): WeaponDefinition | null {
+    return this.local.getWeaponDefinition();
+  }
+
   /**
    * Dev: re-read layout from the in-memory weapon definition after hot-reloading presentation JSON.
    * No-op if the local viewmodel is showing a different weapon id.

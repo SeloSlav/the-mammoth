@@ -197,8 +197,8 @@ export class LocalFirstPersonPresenter {
   private readonly _mtxGripInRig = new THREE.Matrix4();
   /**
    * When true (gameplay default), grip position/orientation tracks `hand × gripOffset` each frame.
-   * When false (editor “Hand only”), grip stays rig-local so manipulating {@link handScene} does not
-   * drag the mounted weapon until the grip is reconciled (mode change / Save layout).
+   * When false, grip stays rig-local so manipulating {@link handScene} does not drag the mounted
+   * weapon until the grip is reconciled. FP authoring keeps this true so hand + weapon move together.
    */
   private fpAuthorGripAnchoredToLiveHandPose = true;
   private readonly _vmMountBox = new THREE.Box3();
@@ -322,7 +322,7 @@ export class LocalFirstPersonPresenter {
     return this.weapon?.getVisual();
   }
 
-  /** Editor FP: while false (“Hand only”), the grip does not weld to live hand edits every frame. */
+  /** Dev/editor FP: when false, the grip does not weld to live hand edits every frame. */
   setFpAuthorGripAnchoredToLiveHandPose(v: boolean): void {
     this.fpAuthorGripAnchoredToLiveHandPose = v;
   }
@@ -520,25 +520,10 @@ export class LocalFirstPersonPresenter {
     this.authoringFrozen = frozen;
   }
 
-  /** Dev layout targets: rig (both), hand mesh, weapon mount (`weapon` meshes resolve here for click-pick). */
+  /** Dev layout target: stock hand mesh; weapon follows via live grip sync while authoring. */
   getAuthoringPickList(): FpAuthoringPick[] {
-    const list: FpAuthoringPick[] = [];
-    list.push({
-      id: "rigRoot",
-      label: "Hand & weapon together",
-      object: this.rightHandRig,
-    });
-    if (this.handScene) {
-      list.push({ id: "hand", label: "Hand only", object: this.handScene });
-    }
-    if (this.weapon && this.weaponDefinition) {
-      list.push({
-        id: "weapon",
-        label: "Weapon only",
-        object: this.weapon.root,
-      });
-    }
-    return list;
+    if (!this.handScene) return [];
+    return [{ id: "hand", label: "Hand & weapon", object: this.handScene }];
   }
 
   /**

@@ -73,10 +73,6 @@ export const OWNED_APARTMENT_DECOR_DEFAULT_SCALE_BY_MODEL = {
     uniformScale: 0.8012005715278097,
     verticalScaleMul: 1,
   },
-  "static/models/objects/drying-rack-dishes.glb": {
-    uniformScale: 0.1513817664625529,
-    verticalScaleMul: 1,
-  },
   "static/models/objects/empty-beer-bottle.glb": {
     uniformScale: 0.1702213304073897,
     verticalScaleMul: 1,
@@ -183,7 +179,7 @@ export const OWNED_APARTMENT_DECOR_DEFAULT_SCALE_BY_MODEL = {
   },
   "static/models/objects/rug-floor.glb": {
     uniformScale: 2.084773889828986,
-    verticalScaleMul: 1.0298823224092546,
+    verticalScaleMul: 1,
   },
   "static/models/objects/rug-wall.glb": {
     uniformScale: 1,

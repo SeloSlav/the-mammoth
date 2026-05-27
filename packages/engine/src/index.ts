@@ -138,6 +138,7 @@ export {
   resolveSkinnedHumanoidHandBone,
   SKINNED_HUMANOID_RIGHT_HAND_BONE_NAMES,
   buildWeaponFirstPersonPresentationMergeFromPickList,
+  mergeWeaponFpViewmodelForSave,
   FP_MELEE_HAND_RIGHT,
   type PlayerPresentationManagerOptions,
   type LocalFirstPersonPresenterOptions,

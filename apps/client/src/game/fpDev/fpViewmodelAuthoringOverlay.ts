@@ -5,6 +5,10 @@ import {
   buildWeaponFirstPersonPresentationMergeFromPickList,
 } from "@the-mammoth/engine";
 import { patchFpTransformControlsPointerForCaptureCompat } from "../fpApartment/fpTransformControlsPointerPatch.js";
+import {
+  revertLocalWeaponPresentationFromDisk,
+  saveLocalWeaponPresentationFromAuthoring,
+} from "./weaponPresentationDevDiskSave.js";
 
 export type FpViewmodelAuthoringOpts = {
   scene: THREE.Scene;
@@ -23,7 +27,7 @@ function buildExportJson(presentation: PlayerPresentationManager): string {
   });
   const doc = {
     _note:
-      'Merge into content/weapons/<weaponId>.presentation.json under "firstPerson" (same shape as editor export). Commit JSON — HMR reloads it.',
+      'Merge into content/weapons/<weaponId>.presentation.json under "firstPerson", or use Save to disk.',
     firstPersonMerge: merge,
   };
   return JSON.stringify(doc, null, 2);
@@ -89,14 +93,10 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
   hint.style.fontSize = "11px";
   hint.style.marginBottom = "10px";
 
-  const select = document.createElement("select");
-  select.style.width = "100%";
-  select.style.marginBottom = "8px";
-  select.style.padding = "4px 6px";
-  select.style.borderRadius = "4px";
-  select.style.border = "1px solid rgba(255,255,255,0.2)";
-  select.style.background = "#1a1c28";
-  select.style.color = "#eee";
+  const targetLabel = document.createElement("div");
+  targetLabel.textContent = "Hand & weapon";
+  targetLabel.style.marginBottom = "8px";
+  targetLabel.style.opacity = "0.9";
 
   const modeRow = document.createElement("div");
   modeRow.style.display = "flex";
@@ -122,6 +122,55 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
   mkMode("Move", "translate");
   mkMode("Rotate", "rotate");
   mkMode("Scale", "scale");
+
+  const diskRow = document.createElement("div");
+  diskRow.style.display = "flex";
+  diskRow.style.gap = "6px";
+  diskRow.style.marginBottom = "8px";
+
+  const mkDiskBtn = (label: string) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.style.flex = "1";
+    b.style.cursor = "pointer";
+    b.style.padding = "6px 0";
+    b.style.borderRadius = "4px";
+    b.style.border = "1px solid rgba(255,255,255,0.18)";
+    b.style.background = "#2a2d3e";
+    b.style.color = "#eee";
+    return b;
+  };
+
+  const saveBtn = mkDiskBtn("Save to disk");
+  saveBtn.style.border = "1px solid rgba(120,180,255,0.35)";
+  saveBtn.style.background = "rgba(60,100,180,0.35)";
+  saveBtn.style.color = "#e8f0ff";
+
+  const revertBtn = mkDiskBtn("Revert from disk");
+  diskRow.append(saveBtn, revertBtn);
+
+  const status = document.createElement("div");
+  status.style.minHeight = "16px";
+  status.style.fontSize = "11px";
+  status.style.marginBottom = "6px";
+  status.style.opacity = "0.88";
+
+  const setStatus = (text: string, tone: "ok" | "err" | "neutral" = "neutral") => {
+    status.textContent = text;
+    status.style.color =
+      tone === "ok" ? "#9fd4a8" : tone === "err" ? "#f0a0a8" : "rgba(232,232,239,0.82)";
+  };
+
+  const flashBtn = (btn: HTMLButtonElement, text: string, restoreMs = 1400) => {
+    const prev = btn.textContent;
+    btn.textContent = text;
+    btn.disabled = true;
+    window.setTimeout(() => {
+      btn.textContent = prev;
+      btn.disabled = false;
+    }, restoreMs);
+  };
 
   const copyBtn = document.createElement("button");
   copyBtn.type = "button";
@@ -149,28 +198,15 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
   ta.style.color = "#c8d0e0";
   ta.style.padding = "6px";
 
-  shell.append(title, hint, select, modeRow, copyBtn, ta);
+  shell.append(title, hint, targetLabel, modeRow, diskRow, status, copyBtn, ta);
   shell.style.display = panelVisible ? "block" : "none";
   document.body.appendChild(shell);
 
-  const repopulateSelect = () => {
-    const prev = select.value;
-    select.innerHTML = "";
+  const attachAuthoringTarget = () => {
     const picks = presentation.getFpAuthoringPickList();
-    for (const p of picks) {
-      const opt = document.createElement("option");
-      opt.value = p.id;
-      opt.textContent = p.label;
-      select.appendChild(opt);
-    }
-    const next =
-      picks.find((p) => p.id === prev) ?? picks[0];
-    if (next) {
-      select.value = next.id;
-      transformControls.attach(next.object);
-    } else {
-      transformControls.detach();
-    }
+    const target = picks[0];
+    if (target) transformControls.attach(target.object);
+    else transformControls.detach();
     ta.value = buildExportJson(presentation);
   };
 
@@ -178,13 +214,44 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
     ta.value = buildExportJson(presentation);
   };
 
-  if (panelVisible) repopulateSelect();
+  if (panelVisible) attachAuthoringTarget();
   else ta.value = buildExportJson(presentation);
 
-  select.addEventListener("change", () => {
-    const picks = presentation.getFpAuthoringPickList();
-    const hit = picks.find((p) => p.id === select.value);
-    if (hit) transformControls.attach(hit.object);
+  saveBtn.addEventListener("click", async () => {
+    refreshExport();
+    setStatus("");
+    try {
+      const { weaponId } = await saveLocalWeaponPresentationFromAuthoring(presentation);
+      attachAuthoringTarget();
+      setStatus(`Saved content/weapons/${weaponId}.presentation.json`, "ok");
+      flashBtn(saveBtn, "Saved!");
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "Save failed.", "err");
+    }
+  });
+
+  revertBtn.addEventListener("click", async () => {
+    const def = presentation.getLocalWeaponDefinition();
+    if (!def) {
+      setStatus("No weapon equipped — select a weapon on the hotbar first.", "err");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Discard unsaved gizmo edits and reload content/weapons/${def.id}.presentation.json from disk?`,
+      )
+    ) {
+      return;
+    }
+    setStatus("");
+    try {
+      const { weaponId } = await revertLocalWeaponPresentationFromDisk(presentation);
+      attachAuthoringTarget();
+      setStatus(`Reverted from content/weapons/${weaponId}.presentation.json`, "ok");
+      flashBtn(revertBtn, "Reverted");
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "Revert failed.", "err");
+    }
   });
 
   copyBtn.addEventListener("click", async () => {
@@ -222,7 +289,7 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
     presentation.setFpAuthoringFrozen(panelVisible);
     if (panelVisible) {
       void document.exitPointerLock();
-      repopulateSelect();
+      attachAuthoringTarget();
     } else {
       transformControls.detach();
       presentation.syncLocalFpWeaponMountBaselineFromRoot();

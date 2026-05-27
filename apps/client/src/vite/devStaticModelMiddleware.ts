@@ -74,7 +74,13 @@ export function devStaticModelMiddleware(
       return;
     }
 
-    if (!pathOnly.startsWith("/static/") && !pathOnly.startsWith("/audio/")) return next();
+    if (
+      !pathOnly.startsWith("/static/") &&
+      !pathOnly.startsWith("/audio/") &&
+      !pathOnly.startsWith("/basis/")
+    ) {
+      return next();
+    }
 
     const resolved = resolvePublicFile(opts.clientPublicRoot, pathOnly);
     if (!resolved) {
