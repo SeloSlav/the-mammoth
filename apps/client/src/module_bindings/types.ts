@@ -425,6 +425,15 @@ export const PlayerVitalsSchedule = __t.object("PlayerVitalsSchedule", {
 });
 export type PlayerVitalsSchedule = __Infer<typeof PlayerVitalsSchedule>;
 
+export const PlayerWeaponChamberCache = __t.object("PlayerWeaponChamberCache", {
+  id: __t.u64(),
+  identity: __t.identity(),
+  weaponDefId: __t.string(),
+  chamberCount: __t.u8(),
+  reloadCompleteMicros: __t.i64(),
+});
+export type PlayerWeaponChamberCache = __Infer<typeof PlayerWeaponChamberCache>;
+
 export const PlayerWorldProgress = __t.object("PlayerWorldProgress", {
   identity: __t.identity(),
   sleepsCount: __t.u32(),

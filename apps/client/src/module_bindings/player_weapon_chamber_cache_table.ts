@@ -10,12 +10,10 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-import {
-  ApartmentWaterTankSchedule,
-} from "./types";
-
-export default {
-  get arg() {
-    return ApartmentWaterTankSchedule;
-  },
-};
+export default __t.row({
+  id: __t.u64().primaryKey(),
+  identity: __t.identity(),
+  weaponDefId: __t.string().name("weapon_def_id"),
+  chamberCount: __t.u8().name("chamber_count"),
+  reloadCompleteMicros: __t.i64().name("reload_complete_micros"),
+});

@@ -27,7 +27,7 @@ describe("male.glb integration", () => {
 
     await ensureConfiguredGltfLoaderKtx2Support(
       {
-        isWebGPURenderer: true,
+        isWebGPURenderer: true,wh
         hasFeature: () => false,
       },
       nodeGltfKtx2TranscoderPath(),

@@ -56,4 +56,5 @@ pub fn set_active_hotbar_slot(ctx: &ReducerContext, slot_index: u8) {
             slot_index,
         });
     }
+    crate::firearm::sync_firearm_chamber_for_active_hotbar(ctx, id);
 }

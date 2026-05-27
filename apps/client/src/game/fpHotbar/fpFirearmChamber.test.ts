@@ -34,7 +34,7 @@ describe("chamberCapacityForWeapon", () => {
 });
 
 describe("getLocalFirearmChamberView", () => {
-  it("predicts a full chamber before the server syncs a weapon swap", () => {
+  it("shows an empty chamber until the server row matches the active weapon", () => {
     const conn = stubConn(
       { weaponDefId: "pistol", chamberCount: 6, reloadCompleteMicros: 0n },
       [
@@ -46,9 +46,10 @@ describe("getLocalFirearmChamberView", () => {
       ],
     );
     const view = getLocalFirearmChamberView(conn, testOwner, "shotgun-coach");
-    expect(view.chamberCount).toBe(2);
+    expect(view.chamberCount).toBe(0);
     expect(view.capacity).toBe(2);
     expect(view.reserveCount).toBe(12);
+    expect(view.weaponSynced).toBe(false);
   });
 
   it("predicts chamber fill once the reload timer elapses locally", () => {

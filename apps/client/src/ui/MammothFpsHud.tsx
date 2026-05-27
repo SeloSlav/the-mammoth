@@ -76,6 +76,24 @@ function fpsColor(fps: number | null): string {
   return THEME_ERROR;
 }
 
+type DecorInstancingRebuildEntry = { path: string; count: string };
+
+function parseDecorInstancingRebuildSummary(summary: string): DecorInstancingRebuildEntry[] {
+  if (!summary.trim()) return [];
+  return summary.split(",").flatMap((part) => {
+    const trimmed = part.trim();
+    if (!trimmed) return [];
+    const sep = trimmed.lastIndexOf("×");
+    if (sep <= 0) return [{ path: trimmed, count: "" }];
+    return [{ path: trimmed.slice(0, sep).trim(), count: trimmed.slice(sep + 1).trim() }];
+  });
+}
+
+function decorInstancingPathBasename(path: string): string {
+  const slash = path.lastIndexOf("/");
+  return slash >= 0 ? path.slice(slash + 1) : path;
+}
+
 /** Forward-filled yaw in degrees for sparklines when some frames omit yaw. */
 function yawDegHeldSeries(samples: readonly FpPerfTimelineSample[]): Float64Array {
   const out = new Float64Array(samples.length);
@@ -412,6 +430,8 @@ export function MammothFpsHud(props: { conn: DbConnection | null }) {
     backdropFilter: "blur(8px)",
     WebkitBackdropFilter: "blur(8px)",
     minWidth: 320,
+    maxWidth: 360,
+    overflowX: "hidden",
   };
 
   const audioButtonStyle: React.CSSProperties = {
@@ -769,9 +789,19 @@ export function MammothFpsHud(props: { conn: DbConnection | null }) {
                     {rendererInfo.decorInstancingLastRebuild.length > 0 ? (
                       <div
                         style={{ ...monoStyle, ...dimStyle, fontSize: 9, marginBottom: 4 }}
-                        title="Last cross-placement instancing rebuild"
+                        title={rendererInfo.decorInstancingLastRebuild}
                       >
-                        inst rebuild: {rendererInfo.decorInstancingLastRebuild}
+                        <div style={{ marginBottom: 2 }}>inst rebuild</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 1, paddingLeft: 8 }}>
+                          {parseDecorInstancingRebuildSummary(rendererInfo.decorInstancingLastRebuild).map(
+                            ({ path, count }) => (
+                              <div key={path} title={path}>
+                                {decorInstancingPathBasename(path)}
+                                {count ? ` ×${count}` : ""}
+                              </div>
+                            ),
+                          )}
+                        </div>
                       </div>
                     ) : null}
               </>

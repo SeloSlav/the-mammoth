@@ -39,6 +39,18 @@ pub struct PlayerFirearmChamber {
     pub reload_complete_micros: i64,
 }
 
+/// Per-weapon chamber snapshot preserved across hotbar swaps (identity + weapon_def_id lookup).
+#[spacetimedb::table(public, accessor = player_weapon_chamber_cache)]
+pub struct PlayerWeaponChamberCache {
+    #[primary_key]
+    #[auto_inc]
+    pub id: u64,
+    pub identity: Identity,
+    pub weapon_def_id: String,
+    pub chamber_count: u8,
+    pub reload_complete_micros: i64,
+}
+
 pub fn ensure_player_firearm_cooldown_row(ctx: &ReducerContext, id: Identity) {
     if ctx
         .db
@@ -86,6 +98,69 @@ pub fn reset_player_firearm_chamber(ctx: &ReducerContext, id: Identity) {
     row.chamber_count = 0;
     row.reload_complete_micros = 0;
     ctx.db.player_firearm_chamber().identity().update(row);
+    clear_weapon_chamber_cache_for_player(ctx, id);
+}
+
+fn find_weapon_chamber_cache(
+    ctx: &ReducerContext,
+    owner: Identity,
+    weapon_def_id: &str,
+) -> Option<PlayerWeaponChamberCache> {
+    ctx.db
+        .player_weapon_chamber_cache()
+        .iter()
+        .find(|row| row.identity == owner && row.weapon_def_id == weapon_def_id)
+}
+
+fn upsert_weapon_chamber_cache(
+    ctx: &ReducerContext,
+    owner: Identity,
+    weapon_def_id: &str,
+    chamber_count: u8,
+    reload_complete_micros: i64,
+) {
+    if let Some(mut row) = find_weapon_chamber_cache(ctx, owner, weapon_def_id) {
+        row.chamber_count = chamber_count;
+        row.reload_complete_micros = reload_complete_micros;
+        ctx.db.player_weapon_chamber_cache().id().update(row);
+        return;
+    }
+    let _ = ctx.db.player_weapon_chamber_cache().insert(PlayerWeaponChamberCache {
+        id: 0,
+        identity: owner,
+        weapon_def_id: weapon_def_id.to_string(),
+        chamber_count,
+        reload_complete_micros,
+    });
+}
+
+fn clear_weapon_chamber_cache_for_player(ctx: &ReducerContext, owner: Identity) {
+    let ids: Vec<u64> = ctx
+        .db
+        .player_weapon_chamber_cache()
+        .iter()
+        .filter(|row| row.identity == owner)
+        .map(|row| row.id)
+        .collect();
+    for id in ids {
+        ctx.db.player_weapon_chamber_cache().id().delete(&id);
+    }
+}
+
+fn persist_active_ranged_chamber_to_cache(ctx: &ReducerContext, id: Identity) {
+    let Some(chamber) = ctx.db.player_firearm_chamber().identity().find(&id) else {
+        return;
+    };
+    if chamber.weapon_def_id.is_empty() || !is_ranged_weapon(&chamber.weapon_def_id) {
+        return;
+    }
+    upsert_weapon_chamber_cache(
+        ctx,
+        id,
+        &chamber.weapon_def_id,
+        chamber.chamber_count,
+        chamber.reload_complete_micros,
+    );
 }
 
 fn ammo_def_for_weapon(weapon: &str) -> Option<&'static str> {
@@ -206,7 +281,7 @@ fn try_finish_reload(ctx: &ReducerContext, id: Identity, now_us: i64) {
     ctx.db.player_firearm_chamber().identity().update(chamber);
 }
 
-/// When the active hotbar weapon changes, load a fresh chamber from carried reserve ammo.
+/// When the active ranged weapon changes, restore its cached chamber or chamber once on first equip.
 fn ensure_chamber_weapon_synced(ctx: &ReducerContext, id: Identity, weapon_def_id: &str) {
     ensure_player_firearm_chamber_row(ctx, id);
     let Some(mut chamber) = ctx.db.player_firearm_chamber().identity().find(&id) else {
@@ -215,13 +290,42 @@ fn ensure_chamber_weapon_synced(ctx: &ReducerContext, id: Identity, weapon_def_i
     if chamber.weapon_def_id == weapon_def_id {
         return;
     }
+
+    persist_active_ranged_chamber_to_cache(ctx, id);
+
     chamber.weapon_def_id = weapon_def_id.to_string();
-    chamber.reload_complete_micros = 0;
-    let cap = chamber_capacity_for_weapon(weapon_def_id);
-    let ammo_def = ammo_def_for_weapon(weapon_def_id).expect("validated");
-    let loaded = consume_carried_ammo(ctx, id, ammo_def, u32::from(cap));
-    chamber.chamber_count = loaded.min(u32::from(cap)) as u8;
+    if let Some(cached) = find_weapon_chamber_cache(ctx, id, weapon_def_id) {
+        chamber.chamber_count = cached.chamber_count;
+        chamber.reload_complete_micros = cached.reload_complete_micros;
+    } else {
+        chamber.reload_complete_micros = 0;
+        let cap = chamber_capacity_for_weapon(weapon_def_id);
+        let ammo_def = ammo_def_for_weapon(weapon_def_id).expect("validated");
+        let loaded = consume_carried_ammo(ctx, id, ammo_def, u32::from(cap));
+        chamber.chamber_count = loaded.min(u32::from(cap)) as u8;
+        upsert_weapon_chamber_cache(
+            ctx,
+            id,
+            weapon_def_id,
+            chamber.chamber_count,
+            chamber.reload_complete_micros,
+        );
+    }
     ctx.db.player_firearm_chamber().identity().update(chamber);
+}
+
+/// Keep the active chamber row aligned when the hotbar selection changes.
+pub fn sync_firearm_chamber_for_active_hotbar(ctx: &ReducerContext, id: Identity) {
+    ensure_player_firearm_chamber_row(ctx, id);
+    let Some(weapon_def_id) = crate::combat_stub::active_hotbar_item_def_id(ctx, id) else {
+        persist_active_ranged_chamber_to_cache(ctx, id);
+        return;
+    };
+    if !is_ranged_weapon(&weapon_def_id) {
+        persist_active_ranged_chamber_to_cache(ctx, id);
+        return;
+    }
+    ensure_chamber_weapon_synced(ctx, id, &weapon_def_id);
 }
 
 fn is_reload_in_progress(chamber: &PlayerFirearmChamber, now_us: i64) -> bool {

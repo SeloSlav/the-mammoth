@@ -116,9 +116,9 @@ export function getLocalFirearmChamberView(
       const needed = capacity - chamberCount;
       chamberCount = Math.min(capacity, chamberCount + Math.min(needed, reserveCount));
     }
-  } else if (reserveCount > 0) {
-    // Weapon swap auto-chambers on the server before the first shot/reload.
-    chamberCount = Math.min(capacity, reserveCount);
+  } else {
+    // Hotbar swap syncs on the server; stay at 0 until the row matches the active weapon.
+    chamberCount = 0;
   }
 
   return {
