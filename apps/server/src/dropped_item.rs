@@ -13,7 +13,8 @@ use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Tim
 
 use crate::apartment_interior_anchors::{BED_HALF_X_M, BED_HALF_Z_M};
 use crate::apartments::{
-    apartment_unit, is_vacant_home_pool_unit_row, ApartmentUnit, UNIT_STATE_UNCLAIMED,
+    apartment_unit, feet_inside_unit, is_vacant_home_pool_unit_row, ApartmentUnit,
+    UNIT_STATE_UNCLAIMED,
 };
 use crate::auth;
 use crate::crafting;
@@ -360,6 +361,40 @@ pub(crate) fn delete_mission_loot_by_slot(ctx: &ReducerContext, slot: u16) {
     for id in ids {
         ctx.db.dropped_item().id().delete(id);
     }
+}
+
+/// Whether mission loot for `slot` already sits inside `unit_key` (not a legacy corridor anchor).
+pub(crate) fn mission_loot_spawned_in_apartment_unit(
+    ctx: &ReducerContext,
+    slot: u16,
+    unit_key: &str,
+) -> bool {
+    let Some(unit) = ctx.db.apartment_unit().unit_key().find(&unit_key.to_string()) else {
+        return false;
+    };
+    ctx.db.dropped_item().iter().any(|d| {
+        d.world_spawn_slot == Some(slot)
+            && feet_inside_unit(&unit, d.x, d.y, d.z)
+    })
+}
+
+/// Spawn a mission pickup on the unit floor — entry/living strip, clear of the bed footprint.
+pub(crate) fn insert_mission_loot_in_apartment_unit(
+    ctx: &ReducerContext,
+    slot: u16,
+    unit_key: &str,
+    def_id: &str,
+    quantity: u32,
+    placement_seed: u64,
+) -> bool {
+    let Some(unit) = ctx.db.apartment_unit().unit_key().find(&unit_key.to_string()) else {
+        log::warn!("mission loot: unknown apartment unit {unit_key:?}");
+        return false;
+    };
+    let (x, z) = apartment_clear_pickup_anchor_xz(&unit, placement_seed);
+    let y = apartment_world_loot_floor_y(&unit);
+    insert_mission_loot_row(ctx, slot, def_id, quantity, x, y, z);
+    true
 }
 
 fn insert_world_loot_at_anchor(

@@ -6,7 +6,6 @@ use spacetimedb::{Identity, ReducerContext, Table};
 use crate::apartments;
 use crate::crafting::emit_hud_notice;
 use crate::dropped_item;
-use crate::elevator_layout::{BUILDING_ORIGIN_Y, STOREY_SPACING_M};
 use crate::game_time::SleepRolloverKind;
 use crate::inventory::{inventory_item};
 use crate::inventory_models::{ItemLocation, StashLocationData};
@@ -17,14 +16,14 @@ pub(crate) const FIRST_EXTRACTION_MISSION_ID: &str = "work_order_fuse_wire_16e4"
 pub(crate) const FIRST_EXTRACTION_ITEM_DEF_ID: &str = "fuse-wire-pack";
 pub(crate) const FIRST_EXTRACTION_ELEVATOR_DECK: u32 = 16;
 pub(crate) const FIRST_EXTRACTION_LEVEL_INDEX: u32 = FIRST_EXTRACTION_ELEVATOR_DECK + 1;
+pub(crate) const FIRST_EXTRACTION_FLOOR_DOC_ID: &str = "floor_mamutica_typical";
+pub(crate) const FIRST_EXTRACTION_UNIT_ID: &str = "unit_e_004";
 
 /// Reserved `world_spawn_slot` range — excluded from periodic world-loot refresh deletes.
 pub(crate) const MISSION_WORLD_SPAWN_SLOT_MIN: u16 = 61_000;
 pub(crate) const FIRST_EXTRACTION_LOOT_SLOT: u16 = MISSION_WORLD_SPAWN_SLOT_MIN;
 
-const FIRST_EXTRACTION_LOOT_X: f32 = 1.05;
-const FIRST_EXTRACTION_LOOT_Z: f32 = -4.5;
-const WORLD_LOOT_Y_OFFSET_ABOVE_PLATE_M: f32 = 0.28;
+const FIRST_EXTRACTION_LOOT_PLACEMENT_SEED: u64 = 0x0016_E4_00_04;
 
 pub(crate) const MISSION_STATUS_OFFERED: u8 = 0;
 pub(crate) const MISSION_STATUS_ACTIVE: u8 = 1;
@@ -48,13 +47,11 @@ pub struct PlayerMissionProgress {
 }
 
 #[inline]
-const fn building_plate_world_y(level: u32) -> f32 {
-    let lv = if level < 1 { 1 } else { level };
-    BUILDING_ORIGIN_Y + (lv as f32 - 1.0) * STOREY_SPACING_M
-}
-
-fn first_extraction_loot_world_y() -> f32 {
-    building_plate_world_y(FIRST_EXTRACTION_LEVEL_INDEX) + WORLD_LOOT_Y_OFFSET_ABOVE_PLATE_M
+fn first_extraction_unit_key() -> String {
+    format!(
+        "{}|{}|{}",
+        FIRST_EXTRACTION_FLOOR_DOC_ID, FIRST_EXTRACTION_LEVEL_INDEX, FIRST_EXTRACTION_UNIT_ID
+    )
 }
 
 fn mission_row(ctx: &ReducerContext, owner: Identity) -> Option<PlayerMissionProgress> {
@@ -98,18 +95,22 @@ pub(crate) fn ensure_player_mission_progress(ctx: &ReducerContext, owner: Identi
 }
 
 fn spawn_first_extraction_loot(ctx: &ReducerContext) {
-    if dropped_item::mission_loot_slot_exists(ctx, FIRST_EXTRACTION_LOOT_SLOT) {
+    let unit_key = first_extraction_unit_key();
+    if dropped_item::mission_loot_spawned_in_apartment_unit(ctx, FIRST_EXTRACTION_LOOT_SLOT, &unit_key)
+    {
         return;
     }
-    dropped_item::insert_mission_loot_row(
+    dropped_item::delete_mission_loot_by_slot(ctx, FIRST_EXTRACTION_LOOT_SLOT);
+    if !dropped_item::insert_mission_loot_in_apartment_unit(
         ctx,
         FIRST_EXTRACTION_LOOT_SLOT,
+        &unit_key,
         FIRST_EXTRACTION_ITEM_DEF_ID,
         1,
-        FIRST_EXTRACTION_LOOT_X,
-        first_extraction_loot_world_y(),
-        FIRST_EXTRACTION_LOOT_Z,
-    );
+        FIRST_EXTRACTION_LOOT_PLACEMENT_SEED,
+    ) {
+        log::warn!("first extraction loot: could not spawn in unit {unit_key}");
+    }
 }
 
 fn refresh_first_extraction_loot(ctx: &ReducerContext, owner: Identity) {
@@ -374,5 +375,13 @@ mod tests {
     #[test]
     fn mission_loot_slot_is_outside_world_loot_refresh_range() {
         assert!(FIRST_EXTRACTION_LOOT_SLOT >= MISSION_WORLD_SPAWN_SLOT_MIN);
+    }
+
+    #[test]
+    fn first_extraction_unit_key_matches_schema() {
+        assert_eq!(
+            first_extraction_unit_key(),
+            "floor_mamutica_typical|17|unit_e_004"
+        );
     }
 }

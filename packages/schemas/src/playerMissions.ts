@@ -109,7 +109,7 @@ export function buildFirstExtractionMissionPanel(
   const steps: MissionObjectiveStep[] = [
     {
       id: "descend",
-      label: `Take the elevator to deck ${FIRST_EXTRACTION_ELEVATOR_DECK}`,
+      label: `Ride to deck ${FIRST_EXTRACTION_ELEVATOR_DECK} and enter unit ${FIRST_EXTRACTION_PUBLIC_LABEL}`,
       done: collected || deposited,
     },
     {
