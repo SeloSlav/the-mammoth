@@ -258,8 +258,50 @@ let _lastDecorInstancingLastRebuild = "";
 const HEAVY_MESH_RECORD_LIMIT = 768;
 const _heavyMeshRecords: FpPerfHeavyMeshRecord[] = [];
 
-export function getLastRendererInfo(): FpRendererInfo {
-  return {
+/** Stable reference for `useSyncExternalStore` — replaced only when counters change. */
+let _cachedLastRendererInfo: FpRendererInfo = {
+  drawCalls: 0,
+  triangles: 0,
+  sceneGraphVisibleTriangles: 0,
+  sceneGraphBreakdown: "",
+  visibleFloorPlates: 0,
+  visibleUnitInteriorMeshes: 0,
+  visibleApartmentPropMeshes: 0,
+  visibleApartmentDecorFloorShadowMeshes: 0,
+  visibleResidentialShellMeshes: 0,
+  visibleAnonymousInteriorMeshes: 0,
+  visibleGenericInteriorMeshes: 0,
+  visibleExteriorGlassMeshes: 0,
+  visibleTransparentMeshes: 0,
+  visibleTransparentExteriorGlassMeshes: 0,
+  frustumFloorPlates: 0,
+  frustumUnitInteriorMeshes: 0,
+  frustumApartmentPropMeshes: 0,
+  frustumApartmentDecorFloorShadowMeshes: 0,
+  frustumResidentialShellMeshes: 0,
+  frustumAnonymousInteriorMeshes: 0,
+  frustumGenericInteriorMeshes: 0,
+  frustumExteriorGlassMeshes: 0,
+  frustumTransparentMeshes: 0,
+  frustumTransparentExteriorGlassMeshes: 0,
+  visiblePracticalDecorLights: 0,
+  frustumPracticalDecorLights: 0,
+  visiblePracticalWindowLights: 0,
+  frustumPracticalWindowLights: 0,
+  practicalDecorLightBreakdownVis: "",
+  practicalDecorLightBreakdownFr: "",
+  decorInstancedBatchesVisible: 0,
+  decorInstancedInstancesVisible: 0,
+  decorInstancedBatchesFrustum: 0,
+  decorInstancedInstancesFrustum: 0,
+  decorInstancedHiddenPlacements: 0,
+  decorInstancedEstDrawSavings: 0,
+  decorInstancingLastRebuild: "",
+  ...emptyFpPracticalDecorLightKindFields(),
+};
+
+function _rebuildCachedLastRendererInfo(): void {
+  _cachedLastRendererInfo = {
     drawCalls: _lastDrawCalls,
     triangles: _lastTriangles,
     sceneGraphVisibleTriangles: _lastSceneGraphVisibleTriangles,
@@ -299,6 +341,10 @@ export function getLastRendererInfo(): FpRendererInfo {
     decorInstancingLastRebuild: _lastDecorInstancingLastRebuild,
     ..._lastPracticalDecorKindFields,
   };
+}
+
+export function getLastRendererInfo(): FpRendererInfo {
+  return _cachedLastRendererInfo;
 }
 
 export function pushFpPerfFrame(
@@ -363,6 +409,7 @@ export function pushFpPerfFrame(
       visiblePracticalDecorGrowOpLights: rendererInfo.visiblePracticalDecorGrowOpLights,
       frustumPracticalDecorGrowOpLights: rendererInfo.frustumPracticalDecorGrowOpLights,
     };
+    _rebuildCachedLastRendererInfo();
   }
   const i = _head;
   _ts[i] = nowMs;
@@ -567,6 +614,7 @@ export function resetFpPerfStore(): void {
   _lastDecorInstancedHiddenPlacements = 0;
   _lastDecorInstancedEstDrawSavings = 0;
   _lastDecorInstancingLastRebuild = "";
+  _rebuildCachedLastRendererInfo();
   _heavyMeshRecords.length = 0;
 }
 

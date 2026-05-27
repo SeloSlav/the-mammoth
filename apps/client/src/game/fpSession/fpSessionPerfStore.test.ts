@@ -6,6 +6,7 @@ import {
   exportFpPerfReport,
   exportFpPerfTimelineDump,
   getFpPerfTimeline,
+  getLastRendererInfo,
   pushFpPerfFrame,
   recordFpPerfHeavyMeshes,
   resetFpPerfStore,
@@ -296,5 +297,16 @@ describe("fpSessionPerfStore", () => {
     expect(report).toContain("420.0k tri");
     expect(report).toContain("decor:42");
     expect(report).toContain("mat=rusty_metal");
+  });
+
+  it("getLastRendererInfo returns a stable reference until counters change", () => {
+    const initial = getLastRendererInfo();
+    expect(getLastRendererInfo()).toBe(initial);
+
+    pushFpPerfFrame(1000, 16, dummySections, { ...dummyRi, drawCalls: 42 });
+    const updated = getLastRendererInfo();
+    expect(updated.drawCalls).toBe(42);
+    expect(updated).not.toBe(initial);
+    expect(getLastRendererInfo()).toBe(updated);
   });
 });
