@@ -56,6 +56,30 @@ export function cloneGeometryForMerge(
   return g;
 }
 
+/** Merge one material bucket, or keep separate meshes when mergeGeometries rejects the batch. */
+function addMergedOrFallbackMeshes(group: THREE.Group, bucket: MergeBucket): void {
+  const { mat, geos } = bucket;
+  const merged = mergeGeometries(geos, false);
+  if (merged) {
+    for (const g of geos) g.dispose();
+    merged.computeBoundingSphere();
+    merged.computeBoundingBox();
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.frustumCulled = true;
+    applyMergedUserData(mesh, bucket);
+    group.add(mesh);
+    return;
+  }
+  for (const geo of geos) {
+    geo.computeBoundingSphere();
+    geo.computeBoundingBox();
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.frustumCulled = true;
+    applyMergedUserData(mesh, bucket);
+    group.add(mesh);
+  }
+}
+
 /**
  * Merge all descendant `Mesh` objects inside `group` by material, replacing the group's full
  * subtree with one merged `Mesh` per unique material (plus any preserved meshes reattached).
@@ -114,16 +138,7 @@ export function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
   }
 
   for (const bucket of geosByMat.values()) {
-    const { mat, geos } = bucket;
-    const merged = mergeGeometries(geos, false);
-    for (const g of geos) g.dispose();
-    if (!merged) continue;
-    merged.computeBoundingSphere();
-    merged.computeBoundingBox();
-    const mesh = new THREE.Mesh(merged, mat);
-    mesh.frustumCulled = true;
-    applyMergedUserData(mesh, bucket);
-    group.add(mesh);
+    addMergedOrFallbackMeshes(group, bucket);
   }
 
   reattachPreservedMeshesWithSavedWorld(group, preserveMeshes, preserveWorld);
@@ -201,16 +216,7 @@ export async function mergeGroupDescendantsByMaterialYielding(
   }
 
   for (const bucket of geosByMat.values()) {
-    const { mat, geos } = bucket;
-    const merged = mergeGeometries(geos, false);
-    for (const g of geos) g.dispose();
-    if (!merged) continue;
-    merged.computeBoundingSphere();
-    merged.computeBoundingBox();
-    const mesh = new THREE.Mesh(merged, mat);
-    mesh.frustumCulled = true;
-    applyMergedUserData(mesh, bucket);
-    group.add(mesh);
+    addMergedOrFallbackMeshes(group, bucket);
     await yieldToMain();
   }
 
