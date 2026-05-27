@@ -45,6 +45,10 @@ import {
   subscribeFpSessionGameUiHidden,
 } from "../game/fpSession/fpSessionGameUiHidden";
 import {
+  notifyFpGameHudExclusiveOpen,
+  subscribeFpGameHudExclusiveCloseOthers,
+} from "../game/fpInteraction/fpGameHudExclusive.js";
+import {
   THEME_ACCENT,
   THEME_ACCENT_ON,
   THEME_BACKDROP_SCRIM,
@@ -254,12 +258,23 @@ export function MammothDebugMenuHud() {
   }, [open, refreshLs]);
 
   useEffect(() => {
+    return subscribeFpGameHudExclusiveCloseOthers((keeping) => {
+      if (keeping === "debug") return;
+      setOpen(false);
+    });
+  }, []);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (gameUiHidden || isTextInputFocused()) return;
       if (e.code !== "KeyM" || e.repeat) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       e.preventDefault();
-      setOpen((o) => !o);
+      setOpen((o) => {
+        const next = !o;
+        if (next) notifyFpGameHudExclusiveOpen("debug");
+        return next;
+      });
       if (document.pointerLockElement) void document.exitPointerLock();
     };
     window.addEventListener("keydown", onKey, true);

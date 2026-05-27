@@ -36,8 +36,10 @@ import {
   onMammothInventoryOpenRequestFromFp,
 } from "../game/fpInteraction/fpInventoryOpenRequest";
 import {
-  setFpInventoryDockOpen,
-} from "../game/fpInteraction/fpInventoryDockOpen";
+  notifyFpGameHudExclusiveOpen,
+  subscribeFpGameHudExclusiveCloseOthers,
+} from "../game/fpInteraction/fpGameHudExclusive.js";
+import { setFpInventoryDockOpen } from "../game/fpInteraction/fpInventoryDockOpen";
 import { isTextInputFocused } from "../game/isTextInputFocused.js";
 import {
   getFpHotbarSelectedSlot,
@@ -356,6 +358,13 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
   }, [invOpen]);
 
   useEffect(() => {
+    return subscribeFpGameHudExclusiveCloseOthers((keeping) => {
+      if (keeping === "inventory") return;
+      closeApartmentStashAndInventory();
+    });
+  }, []);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== "Tab" || e.repeat) return;
       if (isTextInputFocused()) return;
@@ -366,8 +375,10 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
         return;
       }
       setInvOpen((o) => {
+        const next = !o;
+        if (next) notifyFpGameHudExclusiveOpen("inventory");
         if (o) setFpActiveStashPanel(null);
-        return !o;
+        return next;
       });
       if (document.pointerLockElement) void document.exitPointerLock();
     };
@@ -389,6 +400,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
 
   useEffect(() => {
     return onMammothInventoryOpenRequestFromFp(() => {
+      notifyFpGameHudExclusiveOpen("inventory");
       setInvOpen(true);
       if (document.pointerLockElement) void document.exitPointerLock();
     });

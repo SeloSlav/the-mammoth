@@ -11,6 +11,10 @@ import type { CraftQueueItem as CraftQueueRow } from "../module_bindings/types";
 import { isTextInputFocused } from "../game/isTextInputFocused.js";
 import { setFpCraftingPanelOpen } from "../game/fpInteraction/fpCraftingPanelOpen";
 import {
+  notifyFpGameHudExclusiveOpen,
+  subscribeFpGameHudExclusiveCloseOthers,
+} from "../game/fpInteraction/fpGameHudExclusive.js";
+import {
   getMammothItemDef,
   listMammothCraftableItemDefs,
   mammothCraftYieldCount,
@@ -188,11 +192,22 @@ export function MammothCraftingHud({ conn }: Props) {
   }, [open]);
 
   useEffect(() => {
+    return subscribeFpGameHudExclusiveCloseOthers((keeping) => {
+      if (keeping === "crafting") return;
+      setOpen(false);
+    });
+  }, []);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (gameUiHidden || isTextInputFocused()) return;
       if (e.code !== "KeyB" || e.repeat) return;
       e.preventDefault();
-      setOpen((o) => !o);
+      setOpen((o) => {
+        const next = !o;
+        if (next) notifyFpGameHudExclusiveOpen("crafting");
+        return next;
+      });
       if (document.pointerLockElement) void document.exitPointerLock();
     };
     window.addEventListener("keydown", onKey, true);
