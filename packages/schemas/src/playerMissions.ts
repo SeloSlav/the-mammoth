@@ -114,18 +114,17 @@ export function buildFirstExtractionMissionPanel(
   const steps: MissionObjectiveStep[] = [
     {
       id: "descend",
-      label: `Ride to deck ${FIRST_EXTRACTION_ELEVATOR_DECK} and enter unit ${FIRST_EXTRACTION_PUBLIC_LABEL}`,
+      label: `Go to ${FIRST_EXTRACTION_PUBLIC_LABEL}`,
       done: collected,
     },
     {
       id: "collect",
-      label: `Retrieve ${itemDisplayName} from ${FIRST_EXTRACTION_PUBLIC_LABEL}`,
+      label: `Retrieve ${itemDisplayName}`,
       done: collected,
     },
     {
       id: "deposit",
-      label:
-        "Stash it in your apartment footlocker before the day ends — or pass out at home while carrying it",
+      label: "Stash item",
       done: deposited || collapseComplete,
     },
   ];

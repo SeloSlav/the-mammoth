@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { APARTMENT_INTERIOR_VISUAL_PROFILE } from "@the-mammoth/engine";
 import { resolveOwnedApartmentDecorRootScale } from "@the-mammoth/schemas";
 import {
   ENABLE_CORRIDOR_CEILING_LIGHTS,
@@ -18,7 +17,6 @@ export const FP_FLOOR_19_CORRIDOR_DECOR_ROOT_NAME = "fp_floor_19_corridor_decor"
 /** Corridor proxies never enter the apartment decor / instancing / practical-light pipelines. */
 export const MAMMOTH_CORRIDOR_CEILING_LIGHT_PROXY_UD = "mammothCorridorCeilingLightProxy";
 
-const PROXY_LENS_RADIUS = 1;
 const PROXY_RING_INNER = 0.82;
 const PROXY_RING_OUTER = 1.18;
 const PROXY_HOUSING_HEIGHT = 0.08;
@@ -27,10 +25,10 @@ const PROXY_SOCKET_HEIGHT = 0.14;
 const PROXY_SOCKET_RADIUS = 0.34;
 /** Unit-space globe before placement scale (~0.19 → ~10 cm radius in world). */
 const PROXY_BULB_RADIUS = 0.54;
-const PROXY_BULB_CENTER_Y = -0.38;
+const PROXY_BULB_CENTER_Y =
+  -PROXY_HOUSING_HEIGHT - PROXY_SOCKET_HEIGHT - PROXY_BULB_RADIUS;
 
 let sharedProxyGeometries: {
-  lens: THREE.CircleGeometry;
   ring: THREE.RingGeometry;
   housing: THREE.CylinderGeometry;
   socket: THREE.CylinderGeometry;
@@ -38,7 +36,6 @@ let sharedProxyGeometries: {
 } | null = null;
 
 let sharedProxyMaterials: {
-  lens: THREE.MeshStandardMaterial;
   housing: THREE.MeshStandardMaterial;
   socket: THREE.MeshStandardMaterial;
   bulb: THREE.MeshStandardMaterial;
@@ -50,7 +47,6 @@ function corridorCeilingLightProxyAssets(): {
 } {
   if (!sharedProxyGeometries) {
     sharedProxyGeometries = {
-      lens: new THREE.CircleGeometry(PROXY_LENS_RADIUS * 0.72, 10),
       ring: new THREE.RingGeometry(PROXY_RING_INNER, PROXY_RING_OUTER, 12),
       housing: new THREE.CylinderGeometry(
         PROXY_RING_OUTER,
@@ -68,16 +64,7 @@ function corridorCeilingLightProxyAssets(): {
     };
   }
   if (!sharedProxyMaterials) {
-    const { decor, practical } = APARTMENT_INTERIOR_VISUAL_PROFILE;
     sharedProxyMaterials = {
-      lens: new THREE.MeshStandardMaterial({
-        color: 0xfff4e8,
-        emissive: practical.ceiling.color,
-        emissiveIntensity: decor.fixtureEmissiveScale * 1.35,
-        roughness: 0.32,
-        metalness: 0,
-        side: THREE.DoubleSide,
-      }),
       housing: new THREE.MeshStandardMaterial({
         color: 0xd4d8dc,
         roughness: 0.86,
@@ -102,13 +89,11 @@ function corridorCeilingLightProxyAssets(): {
 }
 
 function disposeCorridorCeilingLightProxyAssets(): void {
-  sharedProxyGeometries?.lens.dispose();
   sharedProxyGeometries?.ring.dispose();
   sharedProxyGeometries?.housing.dispose();
   sharedProxyGeometries?.socket.dispose();
   sharedProxyGeometries?.bulb.dispose();
   sharedProxyGeometries = null;
-  sharedProxyMaterials?.lens.dispose();
   sharedProxyMaterials?.housing.dispose();
   sharedProxyMaterials?.socket.dispose();
   sharedProxyMaterials?.bulb.dispose();
@@ -148,7 +133,8 @@ function createCorridorCeilingLightProxyVisual(): THREE.Group {
     materials.housing,
     "fp_corridor_ceiling_trim",
   );
-  ring.rotation.x = -Math.PI / 2;
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = -PROXY_HOUSING_HEIGHT;
 
   const socket = addProxyMesh(
     visual,
@@ -165,15 +151,6 @@ function createCorridorCeilingLightProxyVisual(): THREE.Group {
     "fp_corridor_ceiling_bulb",
   );
   bulb.position.y = PROXY_BULB_CENTER_Y;
-
-  const lens = addProxyMesh(
-    visual,
-    geometries.lens,
-    materials.lens,
-    "fp_corridor_ceiling_lens",
-  );
-  lens.rotation.x = -Math.PI / 2;
-  lens.position.y = PROXY_BULB_CENTER_Y - PROXY_BULB_RADIUS * 0.82;
 
   return visual;
 }

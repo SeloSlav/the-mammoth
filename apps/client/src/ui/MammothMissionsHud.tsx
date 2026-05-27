@@ -23,7 +23,6 @@ import { MISSION_STATUS } from "@the-mammoth/schemas";
 import {
   THEME_ACCENT,
   THEME_CARD_BORDER,
-  THEME_DIVIDER,
   THEME_TEXT_FAINT,
   THEME_TEXT_MUTED,
   THEME_TEXT_PRIMARY,
@@ -166,21 +165,6 @@ export function MammothMissionsHud({ conn }: Props) {
           </li>
         ))}
       </ul>
-
-      <div
-        style={{
-          marginTop: 8,
-          paddingTop: 6,
-          borderTop: `1px solid ${THEME_DIVIDER}`,
-          display: "flex",
-          gap: 10,
-          fontSize: 10,
-          color: THEME_TEXT_MUTED,
-        }}
-      >
-        <span>Collected: {mission.itemCollected ? "yes" : "no"}</span>
-        <span>Turned in: {mission.itemDeposited ? "yes" : "no"}</span>
-      </div>
     </div>
   );
 }

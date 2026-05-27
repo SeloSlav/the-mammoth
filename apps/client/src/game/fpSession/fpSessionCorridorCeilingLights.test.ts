@@ -55,6 +55,17 @@ describe("createCorridorCeilingLightProxyVisualForTests", () => {
     if (!(mat instanceof THREE.MeshStandardMaterial)) return;
     expect(mat.toneMapped).toBe(false);
     expect(mat.emissiveIntensity).toBeGreaterThan(4);
-    expect(bulbObj.position.y).toBeLessThan(-0.2);
+    expect(bulbObj.position.y).toBeLessThan(-0.5);
+  });
+
+  it("keeps the trim ring on the flush mount above the globe", () => {
+    const visual = createCorridorCeilingLightProxyVisualForTests();
+    const trim = visual.getObjectByName("fp_corridor_ceiling_trim");
+    const bulb = visual.getObjectByName("fp_corridor_ceiling_bulb");
+    expect(trim).toBeInstanceOf(THREE.Mesh);
+    expect(bulb).toBeInstanceOf(THREE.Mesh);
+    if (!(trim instanceof THREE.Mesh) || !(bulb instanceof THREE.Mesh)) return;
+    expect(trim.position.y).toBeGreaterThan(bulb.position.y);
+    expect(visual.getObjectByName("fp_corridor_ceiling_lens")).toBeUndefined();
   });
 });

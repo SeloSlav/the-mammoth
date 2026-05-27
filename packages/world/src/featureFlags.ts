@@ -29,7 +29,7 @@ export const ENABLE_STAIRWELL_GRAFFITI_DECALS = false;
  * Floor-19 corridor flush ceiling fixtures — emissive bulb glow only (never runtime SpotLights).
  * See {@link ENABLE_RUNTIME_CORRIDOR_FIXTURE_PRACTICAL_LIGHTS}.
  */
-export const ENABLE_CORRIDOR_CEILING_LIGHTS = true;
+export const ENABLE_CORRIDOR_CEILING_LIGHTS = false;
 
 /**
  * Stairwell flush ceiling fixtures (world mount). Off while perf is tuned; corridor uses
