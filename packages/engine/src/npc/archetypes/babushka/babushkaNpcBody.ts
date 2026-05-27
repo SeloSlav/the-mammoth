@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { NpcBodyClipName, ReplicatedNpcSnapshot } from "@the-mammoth/game";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { mammothGlbLoadCandidates } from "@the-mammoth/assets";
+import { loadGltfFirstMatch } from "../../../loaders/gltfLoadFirstMatch.js";
 import { detachSkinnedModelCloneSubtree } from "../../../loaders/deepDisposeObject3D.js";
 import type { NpcVisualAnimationState } from "../../NpcVisualSmoothingState.js";
 import {
@@ -59,24 +60,24 @@ const BABUSHKA_CLIP_CANDIDATES: Record<BabushkaClipKey, readonly string[]> = {
 const LOCOMOTION_CLIP_KEYS = new Set<BabushkaClipKey>(["idle", "airSquat", "walk", "run"]);
 const OVERLAY_CLIP_KEYS = new Set<BabushkaClipKey>(["punch", "punch1", "punch5", "hit", "dead"]);
 
-const npcLoader = new GLTFLoader();
+const BABUSHKA_NPC_LOAD_CANDIDATES = mammothGlbLoadCandidates(BABUSHKA_NPC_GLB_URI);
 let babushkaTemplate: NpcBodyTemplate | null = null;
 let babushkaLoad: Promise<void> | null = null;
 
 export async function preloadBabushkaNpcBody(): Promise<void> {
   if (babushkaTemplate) return;
   if (!babushkaLoad) {
-    babushkaLoad = npcLoader.loadAsync(BABUSHKA_NPC_GLB_URI).then(
-      (gltf) => {
-        const deadClip = gltf.animations.find(
+    babushkaLoad = loadGltfFirstMatch(BABUSHKA_NPC_LOAD_CANDIDATES).then(
+      ({ animations, scene }) => {
+        const deadClip = animations.find(
           (clip) => normalizeClipLabel(clip.name) === normalizeClipLabel("Dead"),
         );
         if (deadClip && deadClip.duration > 0) {
           BABUSHKA_NPC_DEATH_CLIP_SEC = deadClip.duration;
         }
         babushkaTemplate = {
-          scene: gltf.scene,
-          animations: gltf.animations.map(sanitizeNpcClip),
+          scene,
+          animations: animations.map(sanitizeNpcClip),
         };
       },
       (err) => {

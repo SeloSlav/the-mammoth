@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
   createFPRig,
   createGltfModelLoadRegistry,
@@ -78,7 +77,6 @@ export class FpConsumableEditorSession {
     );
 
     try {
-      const loader = new GLTFLoader();
       const registry = createGltfModelLoadRegistry();
       await registry.preload(FP_MELEE_HAND_RIGHT);
       const presenter = new LocalFirstPersonPresenter({
@@ -94,7 +92,7 @@ export class FpConsumableEditorSession {
       if (!gripAnchor) throw new Error("FP grip anchor missing");
 
       const consumableScene = (
-        await loadGltfSceneFirstMatch(loader, [...mammothCatalogGlbCandidates(consumableId)])
+        await loadGltfSceneFirstMatch([...mammothCatalogGlbCandidates(consumableId)])
       ).scene;
       const consumableRoot = new THREE.Group();
       consumableRoot.name = `fp_consumable_root_${consumableId}`;

@@ -104,6 +104,7 @@ export {
   pickCornerLandingHighestY,
   pickCornerLandingOppositePrimaryDoor,
 } from "./stairWellLandingProps.js";
+export { setStairwellLandingPropGltfLoader } from "./stairWellLandingPropGltfLoader.js";
 export {
   STAIRWELL_CEILING_LIGHT_MODEL_URL,
   allStairwellCeilingLightGroupsReady,

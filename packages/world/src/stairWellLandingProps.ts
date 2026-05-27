@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { StairWellLandingProp, StairWellDef } from "@the-mammoth/schemas";
+import { loadStairwellLandingPropGltfScene } from "./stairWellLandingPropGltfLoader.js";
 import {
   landingNearRacetrackAnchor,
   pickCornerLandingNearDoorBand,
@@ -15,7 +15,6 @@ import { canonicalStairwellLandingPropUniformScale } from "./stairwellLitterCano
 const STAIRWELL_HEATER_LANDING_PROP_MODEL_URL =
   "/static/models/objects/stairwell-heater.glb";
 
-const _loader = new GLTFLoader();
 const _templatePromiseByUrl = new Map<string, Promise<THREE.Object3D>>();
 
 export function loadPropTemplate(url: string): Promise<THREE.Object3D> {
@@ -31,8 +30,7 @@ export function loadPropTemplate(url: string): Promise<THREE.Object3D> {
     return pending;
   }
 
-  const pending = _loader
-    .loadAsync(url)
+  const pending = loadStairwellLandingPropGltfScene(url)
     .then((gltf) => gltf.scene)
     .catch((err) => {
       _templatePromiseByUrl.delete(url);

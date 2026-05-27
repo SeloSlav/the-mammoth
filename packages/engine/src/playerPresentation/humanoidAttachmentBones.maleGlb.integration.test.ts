@@ -16,11 +16,23 @@ beforeAll(() => {
 describe("male.glb integration", () => {
   it("resolves RightHand after SkeletonUtils clone (same path as RemotePlayerPresenter)", async () => {
     const THREE = await import("three");
-    const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+    const { ensureConfiguredGltfLoaderKtx2Support, getConfiguredGltfLoader } = await import(
+      "../loaders/createConfiguredGltfLoader.js"
+    );
+    const { nodeGltfDracoDecoderPath, nodeGltfKtx2TranscoderPath } = await import(
+      "../loaders/gltfLoaderNodeTestPaths.js"
+    );
     const { clone: cloneSkeleton } = await import("three/addons/utils/SkeletonUtils.js");
     const { resolveSkinnedHumanoidHandBone } = await import("./humanoidAttachmentBones.js");
 
-    const loader = new GLTFLoader();
+    await ensureConfiguredGltfLoaderKtx2Support(
+      {
+        isWebGPURenderer: true,
+        hasFeature: () => false,
+      },
+      nodeGltfKtx2TranscoderPath(),
+    );
+    const loader = getConfiguredGltfLoader(nodeGltfDracoDecoderPath());
     const buf = readFileSync(MALE_GLB);
     const gltf = await loader.parseAsync(
       buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),

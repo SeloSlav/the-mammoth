@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { loadGltfFirstMatch } from "@the-mammoth/engine";
 
 export type FpPlacementPreviewTarget = {
   worldPosition: THREE.Vector3;
@@ -24,8 +24,7 @@ export async function createFpWorldPlacementPreview(
   scene: THREE.Scene,
   ghostUrl: string,
 ): Promise<FpWorldPlacementPreview> {
-  const loader = new GLTFLoader();
-  const gltf = await loader.loadAsync(ghostUrl);
+  const gltf = await loadGltfFirstMatch([ghostUrl]);
   const root = gltf.scene;
   root.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return;

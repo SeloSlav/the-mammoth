@@ -205,12 +205,21 @@ export {
 } from "./npc/NpcVisualSmoothingState.js";
 export { createGltfModelLoadRegistry, GltfModelLoadRegistry } from "./loaders/GltfModelLoadRegistry.js";
 export {
+  createConfiguredGltfLoader,
+  ensureConfiguredGltfLoaderKtx2Support,
+  getConfiguredGltfLoader,
+  GLTF_DRACO_DECODER_PATH,
+  GLTF_KTX2_TRANSCODER_PATH,
+} from "./loaders/createConfiguredGltfLoader.js";
+export {
   clearStaticModelFetchUrlCache,
   resolveStaticModelFetchUrl,
 } from "./loaders/staticModelFetchUrl.js";
-export { loadGltfSceneFirstMatch } from "./loaders/gltfLoadFirstMatch.js";
+export { loadGltfFirstMatch, loadGltfSceneFirstMatch } from "./loaders/gltfLoadFirstMatch.js";
 export {
   mammothCatalogGlbCandidates,
+  mammothGlbLoadCandidates,
+  expandMammothGlbLoadCandidates,
   MAMMOTH_CATALOG_GLB_FALLBACK_URI,
   MAMMOTH_CATALOG_GLB_PRIMARY_URI,
   MAMMOTH_CATALOG_GLB_SEARCH_ROOTS,

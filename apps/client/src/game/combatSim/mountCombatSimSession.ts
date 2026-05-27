@@ -1,6 +1,5 @@
 import type { DbConnection } from "../../module_bindings";
 import { mountFpSession } from "../mountFpSession.js";
-import { preloadBabushkaNpcBody } from "@the-mammoth/engine";
 import {
   findOwnedApartmentUnitForIdentity,
   loadAuthoredNpcCombatSpawnsFromContent,
@@ -57,10 +56,7 @@ export async function mountCombatSimSession(
   }
 
   report("wait_combat_npc");
-  const [, babushkaRow] = await Promise.all([
-    preloadBabushkaNpcBody(),
-    waitForCombatSimBabushkaRow(conn),
-  ]);
+  const babushkaRow = await waitForCombatSimBabushkaRow(conn);
   if (!babushkaRow) {
     await conn.reducers.enterCombatSim({});
     const retryRow = await waitForCombatSimBabushkaRow(conn, 5_000);

@@ -1,9 +1,9 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
   applyApartmentDecorCrossPlacementInstancing,
   attachApartmentWarmFixtureBulbGlow,
   bindMammothApartmentPropReadableEnv,
+  loadGltfFirstMatch,
   moodGradeMammothApartmentDecorMesh,
   prepareMammothApartmentInteriorContentRoots,
   syncApartmentInteriorPracticalLighting,
@@ -139,7 +139,6 @@ export function mountFpFloor19CorridorCeilingLights(args: {
 
   let disposed = false;
   let practicalLights: ApartmentPracticalLightsMount | null = null;
-  const loader = new GLTFLoader();
   const ready = resolveFpFloor19CorridorAuthoringContext()
     .then(async ({ doc, footprint }) => {
       if (disposed) return;
@@ -148,14 +147,14 @@ export function mountFpFloor19CorridorCeilingLights(args: {
 
       const templates = new Map<string, THREE.Object3D>();
       for (const modelRelPath of [...new Set(placements.map((p) => p.modelRelPath))]) {
-        const gltf = await loader.loadAsync(apartmentDecorFetchPath(modelRelPath));
+        const { scene } = await loadGltfFirstMatch([apartmentDecorFetchPath(modelRelPath)]);
         if (disposed) {
-          disposeStaticWorldObjectTree(gltf.scene);
+          disposeStaticWorldObjectTree(scene);
           return;
         }
-        postProcessApartmentDecorGltfScene(gltf.scene, modelRelPath);
-        prepCorridorDecorTemplate(gltf.scene);
-        templates.set(modelRelPath, gltf.scene);
+        postProcessApartmentDecorGltfScene(scene, modelRelPath);
+        prepCorridorDecorTemplate(scene);
+        templates.set(modelRelPath, scene);
       }
 
       if (disposed) return;

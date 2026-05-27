@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
+import type { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
   applyOwnedApartmentWallSurfaceMaterial,
   applyOwnedApartmentWallSurfaceMaterialToVisuals,
@@ -67,6 +67,7 @@ import {
   applyApartmentDecorCastShadowFlags,
   attachApartmentWarmFixtureBulbGlow,
   bindMammothApartmentPropReadableEnv,
+  loadGltfFirstMatch,
   moodGradeMammothApartmentDecorMesh,
   resolveStaticModelFetchUrl,
 } from "@the-mammoth/engine";
@@ -430,7 +431,7 @@ export async function loadFpApartmentDecorTemplate(
   if (procedural) return procedural;
   switch (apartmentDecorModelExtension(modelRelPath)) {
     case ".glb": {
-      const scene = (await gltfLoader.loadAsync(url)).scene;
+      const { scene } = await loadGltfFirstMatch([url], gltfLoader);
       postProcessApartmentDecorGltfScene(scene, modelRelPath);
       return scene;
     }

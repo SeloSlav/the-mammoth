@@ -9,6 +9,8 @@ export type DevStaticModelMiddlewareOptions = {
 };
 
 function staticMime(filePath: string): string {
+  if (filePath.endsWith(".wasm")) return "application/wasm";
+  if (filePath.endsWith(".js")) return "application/javascript; charset=utf-8";
   if (filePath.endsWith(".glb")) return "model/gltf-binary";
   if (filePath.endsWith(".gltf")) return "model/gltf+json";
   if (filePath.endsWith(".png")) return "image/png";

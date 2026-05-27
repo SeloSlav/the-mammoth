@@ -39,13 +39,25 @@ function measureWorldSkinnedBox(model: THREE.Object3D): THREE.Box3 {
 describe("babushka.glb integration", () => {
   it("walking locomotion stays human-sized with sanitized clips and no root rescale", async () => {
     const THREE = await import("three");
-    const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+    const { ensureConfiguredGltfLoaderKtx2Support, getConfiguredGltfLoader } = await import(
+      "../../../loaders/createConfiguredGltfLoader.js"
+    );
+    const { nodeGltfDracoDecoderPath, nodeGltfKtx2TranscoderPath } = await import(
+      "../../../loaders/gltfLoaderNodeTestPaths.js"
+    );
     const { BabushkaNpcPresenter, seedBabushkaNpcBodyTemplateForTests } = await import(
       "./BabushkaNpcPresenter.js",
     );
     const { snapNpcModelFeetToLocalGround } = await import("../../npcModelUtils.js");
 
-    const loader = new GLTFLoader();
+    await ensureConfiguredGltfLoaderKtx2Support(
+      {
+        isWebGPURenderer: true,
+        hasFeature: () => false,
+      },
+      nodeGltfKtx2TranscoderPath(),
+    );
+    const loader = getConfiguredGltfLoader(nodeGltfDracoDecoderPath());
     const buf = readFileSync(BABUSHKA_GLB);
     const gltf = await loader.parseAsync(
       buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),

@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { and } from "spacetimedb";
 import { MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M } from "@the-mammoth/assets";
 import {
@@ -328,7 +327,6 @@ export function mountDroppedItemsWorld(
   root.name = "dropped_items";
   scene.add(root);
 
-  const loader = new GLTFLoader();
   const rowCache = new Map<string, CachedDropRow>();
   const defTemplateState = new Map<string, DefTemplateState>();
   const defTemplatePromise = new Map<string, Promise<DefTemplateState>>();
@@ -407,7 +405,7 @@ export function mountDroppedItemsWorld(
       return Promise.resolve(st);
     }
 
-    const p = loadGltfSceneFirstMatch(loader, candidates)
+    const p = loadGltfSceneFirstMatch(candidates)
       .then(({ scene: loadedScene }) => {
         prepareLoadedSceneForTemplate(loadedScene);
         const layers = buildDropMeshLayersFromGltf(loadedScene, defId);

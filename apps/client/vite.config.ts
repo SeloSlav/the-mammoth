@@ -38,6 +38,9 @@ function watchWorkspaceUiThemeSrc(): Plugin {
 
 const repoRoot = path.resolve(__dirname, "../..");
 const uiThemeSrc = path.resolve(repoRoot, "packages/ui-theme/src");
+const assetsSrc = path.resolve(repoRoot, "packages/assets/src/index.ts");
+const engineSrc = path.resolve(repoRoot, "packages/engine/src/index.ts");
+const worldSrc = path.resolve(repoRoot, "packages/world/src/index.ts");
 const gameSrc = path.resolve(repoRoot, "packages/game/src/index.ts");
 const spacetimeClientSrc = path.resolve(repoRoot, "packages/spacetime-client/src/index.ts");
 
@@ -92,6 +95,18 @@ export default defineConfig(({ mode }) => {
           replacement: gameSrc,
         },
         {
+          find: /^@the-mammoth\/assets$/,
+          replacement: assetsSrc,
+        },
+        {
+          find: /^@the-mammoth\/engine$/,
+          replacement: engineSrc,
+        },
+        {
+          find: /^@the-mammoth\/world$/,
+          replacement: worldSrc,
+        },
+        {
           find: /^@the-mammoth\/ui-theme\/uiTheme\.css$/,
           replacement: path.join(uiThemeSrc, "uiTheme.css"),
         },
@@ -108,7 +123,13 @@ export default defineConfig(({ mode }) => {
     },
     // Linked workspace packages: skip pre-bundle so edits resolve from packages/{name}/src.
     optimizeDeps: {
-      exclude: ["@the-mammoth/world", "@the-mammoth/ui-theme", "@the-mammoth/game"],
+      exclude: [
+        "@the-mammoth/assets",
+        "@the-mammoth/engine",
+        "@the-mammoth/world",
+        "@the-mammoth/ui-theme",
+        "@the-mammoth/game",
+      ],
     },
     test: {
       environment: "node",

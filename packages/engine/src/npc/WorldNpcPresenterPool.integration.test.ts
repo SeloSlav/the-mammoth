@@ -17,13 +17,25 @@ beforeAll(() => {
 describe("WorldNpcPresenterPool", () => {
   it("syncs after GLB preload even without ensureReady()", async () => {
     const THREE = await import("three");
-    const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+    const { ensureConfiguredGltfLoaderKtx2Support, getConfiguredGltfLoader } = await import(
+      "../loaders/createConfiguredGltfLoader.js"
+    );
+    const { nodeGltfDracoDecoderPath, nodeGltfKtx2TranscoderPath } = await import(
+      "../loaders/gltfLoaderNodeTestPaths.js"
+    );
     const { seedBabushkaNpcBodyTemplateForTests } = await import(
       "./archetypes/babushka/BabushkaNpcPresenter.js",
     );
     const { WorldNpcPresenterPool } = await import("./WorldNpcPresenterPool.js");
 
-    const loader = new GLTFLoader();
+    await ensureConfiguredGltfLoaderKtx2Support(
+      {
+        isWebGPURenderer: true,
+        hasFeature: () => false,
+      },
+      nodeGltfKtx2TranscoderPath(),
+    );
+    const loader = getConfiguredGltfLoader(nodeGltfDracoDecoderPath());
     const buf = readFileSync(BABUSHKA_GLB);
     const gltf = await loader.parseAsync(
       buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
@@ -69,13 +81,25 @@ describe("WorldNpcPresenterPool", () => {
 
   it("retires despawned presenters without disposing GPU resources during runtime sync", async () => {
     const THREE = await import("three");
-    const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+    const { ensureConfiguredGltfLoaderKtx2Support, getConfiguredGltfLoader } = await import(
+      "../loaders/createConfiguredGltfLoader.js"
+    );
+    const { nodeGltfDracoDecoderPath, nodeGltfKtx2TranscoderPath } = await import(
+      "../loaders/gltfLoaderNodeTestPaths.js"
+    );
     const { seedBabushkaNpcBodyTemplateForTests } = await import(
       "./archetypes/babushka/BabushkaNpcPresenter.js",
     );
     const { WorldNpcPresenterPool } = await import("./WorldNpcPresenterPool.js");
 
-    const loader = new GLTFLoader();
+    await ensureConfiguredGltfLoaderKtx2Support(
+      {
+        isWebGPURenderer: true,
+        hasFeature: () => false,
+      },
+      nodeGltfKtx2TranscoderPath(),
+    );
+    const loader = getConfiguredGltfLoader(nodeGltfDracoDecoderPath());
     const buf = readFileSync(BABUSHKA_GLB);
     const gltf = await loader.parseAsync(
       buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),

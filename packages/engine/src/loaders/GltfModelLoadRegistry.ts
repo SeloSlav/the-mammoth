@@ -1,6 +1,7 @@
 import type { IModelLoadRegistry, ModelInstantiationResult, ModelRef } from "@the-mammoth/assets";
+import { expandMammothGlbLoadCandidates } from "@the-mammoth/assets";
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { getConfiguredGltfLoader } from "./createConfiguredGltfLoader.js";
 
 /**
  * Minimal GLB cache: `preload` loads once; `instantiateLoaded` returns `scene.clone(true)` clones.
@@ -8,15 +9,14 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
  * Intended for the client; keep construction in `mountFpSession` (or tests with real files).
  */
 export class GltfModelLoadRegistry implements IModelLoadRegistry {
-  private readonly loader = new GLTFLoader();
+  private readonly loader = getConfiguredGltfLoader();
   private readonly templates = new Map<string, { uri: string; scene: THREE.Object3D }>();
 
   async preload(ref: ModelRef): Promise<void> {
     if (ref.kind !== "gltf") return;
     const cur = this.templates.get(ref.key);
     if (cur?.uri === ref.uri) return;
-    const gltf = await this.loader.loadAsync(ref.uri);
-    this.templates.set(ref.key, { uri: ref.uri, scene: gltf.scene });
+    await this.preloadWithUriCandidates(ref, [ref.uri]);
   }
 
   /**
@@ -33,8 +33,9 @@ export class GltfModelLoadRegistry implements IModelLoadRegistry {
       ref.uri = cur.uri;
       return cur.uri;
     }
+    const urls = expandMammothGlbLoadCandidates(candidates);
     let lastErr: unknown;
-    for (const uri of candidates) {
+    for (const uri of urls) {
       try {
         const gltf = await this.loader.loadAsync(uri);
         this.templates.set(ref.key, { uri, scene: gltf.scene });
@@ -45,7 +46,7 @@ export class GltfModelLoadRegistry implements IModelLoadRegistry {
       }
     }
     throw new Error(
-      `GltfModelLoadRegistry: no candidate GLB loaded for key ${ref.key} (${candidates.length} tried): ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`,
+      `GltfModelLoadRegistry: no candidate GLB loaded for key ${ref.key} (${urls.length} tried): ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`,
     );
   }
 

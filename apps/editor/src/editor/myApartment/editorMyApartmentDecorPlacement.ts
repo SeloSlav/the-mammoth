@@ -1,7 +1,6 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
-import { resolveStaticModelFetchUrl } from "@the-mammoth/engine";
+import { loadGltfFirstMatch, resolveStaticModelFetchUrl } from "@the-mammoth/engine";
 import {
   moodGradeMammothApartmentDecorMesh,
   attachApartmentWarmFixtureBulbGlow,
@@ -274,7 +273,6 @@ export async function loadMissingEditorDecorTemplates(
 export async function loadEditorMyApartmentDecorTemplates(
   modelRelPaths: readonly string[],
 ): Promise<EditorMyApartmentDecorTemplateMap> {
-  const gltfLoader = new GLTFLoader();
   const objLoader = new OBJLoader();
   const out: EditorMyApartmentDecorTemplateMap = new Map();
   await Promise.all(
@@ -290,9 +288,9 @@ export async function loadEditorMyApartmentDecorTemplates(
         if (!pending) {
           const loadPromise = modelRelPath.toLowerCase().endsWith(".obj")
             ? objLoader.loadAsync(url)
-            : gltfLoader.loadAsync(url).then((gltf) => {
-                postProcessApartmentDecorGltfScene(gltf.scene, modelRelPath);
-                return gltf.scene;
+            : loadGltfFirstMatch([url]).then(({ scene }) => {
+                postProcessApartmentDecorGltfScene(scene, modelRelPath);
+                return scene;
               });
           pending = loadPromise.catch((err: unknown) => {
             editorMyApartmentDecorTemplatePromises.delete(url);

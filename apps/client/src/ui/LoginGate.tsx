@@ -117,7 +117,7 @@ export function LoginGate({ session }: Props) {
     return (
       <AuthScreen eyebrow="Connecting">
         <p className={styles.statusCopy}>Connecting…</p>
-        <p className={styles.hint}>This usually takes a few seconds.</p>
+        {/* <p className={styles.hint}>This usually takes a few seconds.</p> */}
       </AuthScreen>
     );
   }
@@ -162,10 +162,10 @@ function AuthScreen({ eyebrow, children }: { eyebrow: string; children: ReactNod
             />
           </div>
           {children}
-        <p className={styles.preloadNotice}>
+        {/* <p className={styles.preloadNotice}>
           The building and game assets keep preloading in the background. If you want the smoothest
           entry, wait a moment for that preload to finish before continuing.
-        </p>
+        </p> */}
         </main>
       </div>
     </div>

@@ -7,12 +7,12 @@
  * covered by a nearby DB row (so JSON-only props like a water tank still appear after claim).
  */
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import {
   applyApartmentInteriorFloorReceiveShadowUnder,
   apartmentDecorEmitterKindFromModelPath,
   APARTMENT_INTERIOR_VISUAL_PROFILE,
+  getConfiguredGltfLoader,
   syncApartmentDecorShadowRig,
   syncApartmentDecorBakedFloorShadowOverlay,
   syncApartmentInteriorPracticalLighting,
@@ -236,7 +236,7 @@ export function mountFpApartmentDecorMeshes(opts: {
   root.name = "apartment_unit_decor_root";
   opts.buildingRoot.add(root);
 
-  const gltfLoader = new GLTFLoader();
+  const gltfLoader = getConfiguredGltfLoader();
   const objLoader = new OBJLoader();
   const templateByUrl = new Map<string, THREE.Object3D>();
   const groupByRenderKey = new Map<string, THREE.Group>();

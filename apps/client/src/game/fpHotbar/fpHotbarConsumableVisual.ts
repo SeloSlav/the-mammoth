@@ -1,7 +1,10 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { detachRegistryCloneSubtree } from "@the-mammoth/engine";
-import { getMammothDroppedWorldModelUrl } from "../../inventory/mammothItemCatalog.js";
+import {
+  detachRegistryCloneSubtree,
+  getConfiguredGltfLoader,
+  loadGltfFirstMatch,
+} from "@the-mammoth/engine";
+import { mammothCatalogGlbCandidates } from "@the-mammoth/assets";
 
 type ConsumableMount = {
   positionM: { x: number; y: number; z: number };
@@ -14,10 +17,6 @@ const DEFAULT_CONSUMABLE_MOUNT: ConsumableMount = {
   eulerRad: { x: 0, y: 0, z: 0 },
   scaleM: { x: 1, y: 1, z: 1 },
 };
-
-function consumableGltfUri(defId: string): string {
-  return getMammothDroppedWorldModelUrl(defId);
-}
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -55,7 +54,7 @@ async function loadConsumableMount(defId: string): Promise<ConsumableMount> {
 }
 
 export class FpHotbarConsumableVisual {
-  private readonly loader = new GLTFLoader();
+  private readonly loader = getConfiguredGltfLoader();
   private readonly templateByDefId = new Map<string, THREE.Object3D>();
   private readonly mountByDefId = new Map<string, ConsumableMount>();
   private readonly preloadPromiseByDefId = new Map<string, Promise<void>>();
@@ -118,7 +117,7 @@ export class FpHotbarConsumableVisual {
     const existing = this.preloadPromiseByDefId.get(defId);
     if (existing) return existing;
     const promise = Promise.all([
-      this.loader.loadAsync(consumableGltfUri(defId)),
+      loadGltfFirstMatch(mammothCatalogGlbCandidates(defId), this.loader),
       loadConsumableMount(defId),
     ])
       .then(([gltf, mount]) => {

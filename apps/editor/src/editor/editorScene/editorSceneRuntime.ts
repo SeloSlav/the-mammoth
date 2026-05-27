@@ -6,6 +6,8 @@ import {
   assertWebGpuAdapterOrThrow,
   assertWebGpuRendererBackend,
   createFPCamera,
+  ensureConfiguredGltfLoaderKtx2Support,
+  getConfiguredGltfLoader,
   applyMammothApartmentInteriorEditorLayoutPresentation,
   applyMammothApartmentInteriorLightLayersToGlobalRig,
   applyMammothApartmentInteriorScene,
@@ -24,6 +26,8 @@ import {
 import {
   ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS,
   ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS,
+  ensurePbrKtx2Support,
+  setStairwellLandingPropGltfLoader,
   LANDING_DOOR_OPENING_PROXY_ID,
   collectStairwellCeilingLightGroups,
   isStairWellCeilingPropEditorId,
@@ -150,6 +154,11 @@ export async function mountEditorScene(
   });
   await renderer.init();
   assertWebGpuRendererBackend(renderer);
+  await Promise.all([
+    ensurePbrKtx2Support(renderer),
+    ensureConfiguredGltfLoaderKtx2Support(renderer),
+  ]);
+  setStairwellLandingPropGltfLoader(getConfiguredGltfLoader());
   registerEditorMyApartmentDecorShadowRenderer(renderer);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;

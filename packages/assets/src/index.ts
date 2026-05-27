@@ -21,6 +21,11 @@ export {
   isBalconyGrowCatalogPreviewDef,
 } from "./catalogGlb.js";
 export {
+  expandMammothGlbLoadCandidates,
+  mammothGlbLoadCandidates,
+  normalizeMammothStaticModelUri,
+} from "./glbLoadCandidates.js";
+export {
   getMammothDroppedWorldTargetMaxDimM,
   MAMMOTH_DROPPED_WORLD_DEFAULT_TARGET_MAX_DIM_M,
   MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M,

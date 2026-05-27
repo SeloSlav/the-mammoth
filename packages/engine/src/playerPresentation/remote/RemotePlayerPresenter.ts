@@ -6,7 +6,9 @@ import type {
   ReplicatedPlayerSnapshot,
   ThirdPersonWeaponPresentationDrive,
 } from "@the-mammoth/game";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { mammothGlbLoadCandidates } from "@the-mammoth/assets";
+import { getConfiguredGltfLoader } from "../../loaders/createConfiguredGltfLoader.js";
+import { loadGltfFirstMatch } from "../../loaders/gltfLoadFirstMatch.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import { detachSkinnedModelCloneSubtree } from "../../loaders/deepDisposeObject3D.js";
 import { CrowdSkinnedPresenter } from "../crowd/CrowdSkinnedPresenter.js";
@@ -68,7 +70,7 @@ function expectGltfModelRef(ref: ModelRef): Extract<ModelRef, { kind: "gltf" }> 
 const REMOTE_WEAPON_FLOAT_LOCAL_POS = new THREE.Vector3(0.28, 1.06, 0.12);
 const REMOTE_WEAPON_FLOAT_LOCAL_EULER = new THREE.Euler(0.12, -0.42, -0.14, "XYZ");
 
-const remotePlayerLoader = new GLTFLoader();
+const remotePlayerLoader = getConfiguredGltfLoader();
 type RemoteBodyTemplate = { scene: THREE.Object3D; animations: readonly THREE.AnimationClip[] };
 const remoteBodyTemplates = new Map<string, RemoteBodyTemplate>();
 const remoteBodyTemplateLoads = new Map<string, Promise<void>>();
@@ -314,7 +316,7 @@ class AnimatedRemotePlayerBody {
 function loadRemoteBodyTemplate(uri: string): Promise<void> {
   let load = remoteBodyTemplateLoads.get(uri);
   if (!load) {
-    load = remotePlayerLoader.loadAsync(uri).then((gltf) => {
+    load = loadGltfFirstMatch(mammothGlbLoadCandidates(uri), remotePlayerLoader).then((gltf) => {
       remoteBodyTemplates.set(uri, {
         scene: gltf.scene,
         animations: gltf.animations.map(sanitizeRemotePlayerClip),
