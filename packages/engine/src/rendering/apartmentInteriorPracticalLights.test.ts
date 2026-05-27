@@ -5,6 +5,7 @@ import {
   apartmentPracticalLightSpecFromDecorGroup,
   apartmentPracticalLightSpecFromWindowGlassMesh,
   collectApartmentInteriorPracticalLightSpecs,
+  MAMMOTH_CORRIDOR_CEILING_LIGHT_EMISSIVE_ONLY_UD,
   mountApartmentPracticalLights,
 } from "./apartmentInteriorPracticalLights.js";
 
@@ -178,6 +179,16 @@ describe("collectApartmentInteriorPracticalLightSpecs", () => {
       includeStaticFixturePracticalLights: true,
     });
     expect(specs.map((s) => s.kind).sort()).toEqual(["ceiling", "computer"]);
+  });
+
+  it("skips corridor ceiling mounts tagged emissive-only even with static fixtures enabled", () => {
+    const corridor = decorGroup("static/models/objects/light-ceiling-2.glb");
+    corridor.userData[MAMMOTH_CORRIDOR_CEILING_LIGHT_EMISSIVE_ONLY_UD] = true;
+    const specs = collectApartmentInteriorPracticalLightSpecs({
+      decorGroups: [corridor],
+      includeStaticFixturePracticalLights: true,
+    });
+    expect(specs).toEqual([]);
   });
 });
 

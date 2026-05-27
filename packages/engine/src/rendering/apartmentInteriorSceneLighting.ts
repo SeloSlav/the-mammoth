@@ -81,6 +81,8 @@ export function syncMammothApartmentInteriorSceneLighting(input: {
   exteriorHemiIntensity?: number;
   exteriorFillIntensity?: number;
   exteriorDirIntensity?: number;
+  /** Multiplier on {@link APARTMENT_INTERIOR_VISUAL_PROFILE.interiorBounce} — hallways use profile `circulation.bounceScale`. */
+  interiorBounceScale?: number;
 }): void {
   const t = THREE.MathUtils.clamp(input.interior01, 0, 1);
   const profile = APARTMENT_INTERIOR_VISUAL_PROFILE;
@@ -129,11 +131,12 @@ export function syncMammothApartmentInteriorSceneLighting(input: {
 
   input.bounce.bounceHemi.color.setHex(bounce.hemiSky);
   input.bounce.bounceHemi.groundColor.setHex(bounce.hemiGround);
-  input.bounce.bounceHemi.intensity = bounce.hemiIntensity * t;
+  const bounceScale = input.interiorBounceScale ?? 1;
+  input.bounce.bounceHemi.intensity = bounce.hemiIntensity * t * bounceScale;
   input.bounce.bounceFill.color.setHex(bounce.fill);
-  input.bounce.bounceFill.intensity = bounce.fillIntensity * t;
+  input.bounce.bounceFill.intensity = bounce.fillIntensity * t * bounceScale;
   input.bounce.bounceDir.color.setHex(bounce.dir);
-  input.bounce.bounceDir.intensity = bounce.dirIntensity * t;
+  input.bounce.bounceDir.intensity = bounce.dirIntensity * t * bounceScale;
 }
 
 /**
@@ -151,6 +154,7 @@ export function applyMammothApartmentInteriorScene(input: {
   exteriorHemiIntensity?: number;
   exteriorFillIntensity?: number;
   exteriorDirIntensity?: number;
+  interiorBounceScale?: number;
   /**
    * Editor studio: pass captured atmosphere so leaving layout mode restores orbit slab fog/background.
    * Omit for FP (sky owns exterior background).
@@ -186,6 +190,7 @@ export function applyMammothApartmentInteriorScene(input: {
     exteriorHemiIntensity: input.exteriorHemiIntensity,
     exteriorFillIntensity: input.exteriorFillIntensity,
     exteriorDirIntensity: input.exteriorDirIntensity,
+    interiorBounceScale: input.interiorBounceScale,
   });
 
   return interior01;

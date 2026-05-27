@@ -70,6 +70,13 @@
       "description": "Yellow-banded spare fuse kit from a maintenance closet — MEP tie-in insurance for the block.",
       "category": "resource",
       "maxStack": 1
+    },
+    {
+      "id": "scrip",
+      "displayName": "Scrip",
+      "description": "Building chits and stamped maintenance slips — the block's soft currency for favors, parts, and bench time.",
+      "category": "resource",
+      "maxStack": 999
     }
   ]
 }

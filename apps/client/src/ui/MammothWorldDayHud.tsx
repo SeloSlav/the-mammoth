@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { DbConnection } from "../module_bindings";
 import {
-  THEME_CARD_BG,
   THEME_CARD_BORDER,
   THEME_TEXT_FAINT,
   THEME_TEXT_MUTED,
@@ -9,6 +8,7 @@ import {
   UI_FONT_MONO,
   UI_FONT_SANS,
 } from "@the-mammoth/ui-theme";
+import { MAMMOTH_HUD_STACK_CARD_STYLE } from "./mammothHudPanelStyles";
 import {
   getFpSessionGameUiHidden,
   subscribeFpSessionGameUiHidden,
@@ -55,15 +55,7 @@ export function MammothWorldDayHud({ conn }: Props) {
   return (
     <div
       style={{
-        marginTop: 6,
-        padding: "6px 10px",
-        borderRadius: 8,
-        border: `1px solid ${THEME_CARD_BORDER}`,
-        background: THEME_CARD_BG,
-        color: THEME_TEXT_PRIMARY,
-        fontFamily: UI_FONT_SANS,
-        fontSize: 11,
-        lineHeight: 1.35,
+        ...MAMMOTH_HUD_STACK_CARD_STYLE,
         minWidth: 118,
       }}
       title="In-game day and time. Clock pauses while inventory or crafting is open."

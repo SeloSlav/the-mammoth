@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { APARTMENT_INTERIOR_VISUAL_PROFILE } from "@the-mammoth/engine";
 import {
+  fpResolveApartmentInteriorBounceScale,
   fpResolveApartmentInteriorDarkTarget01,
   fpResolveApartmentInteriorLightingZone,
 } from "./fpApartmentInteriorLightingZone";
@@ -56,12 +58,47 @@ describe("fpResolveApartmentInteriorLightingZone", () => {
 });
 
 describe("fpResolveApartmentInteriorDarkTarget01", () => {
-  it("maps the lighting zone to full interior dark blend", () => {
+  it("maps units to full interior dark and circulation to partial fill", () => {
     expect(
-      fpResolveApartmentInteriorDarkTarget01({ insideApartmentInteriorLightingZone: true }),
+      fpResolveApartmentInteriorDarkTarget01({
+        insideApartmentInteriorLightingZone: true,
+        insideResidentialUnit: true,
+      }),
     ).toBe(1);
     expect(
-      fpResolveApartmentInteriorDarkTarget01({ insideApartmentInteriorLightingZone: false }),
+      fpResolveApartmentInteriorDarkTarget01({
+        insideApartmentInteriorLightingZone: true,
+        insideResidentialUnit: false,
+      }),
+    ).toBe(APARTMENT_INTERIOR_VISUAL_PROFILE.circulation.interiorDarkTarget);
+    expect(
+      fpResolveApartmentInteriorDarkTarget01({
+        insideApartmentInteriorLightingZone: false,
+        insideResidentialUnit: false,
+      }),
     ).toBe(0);
+  });
+});
+
+describe("fpResolveApartmentInteriorBounceScale", () => {
+  it("boosts bounce in circulation only", () => {
+    expect(
+      fpResolveApartmentInteriorBounceScale({
+        insideApartmentInteriorLightingZone: true,
+        insideResidentialUnit: false,
+      }),
+    ).toBe(APARTMENT_INTERIOR_VISUAL_PROFILE.circulation.bounceScale);
+    expect(
+      fpResolveApartmentInteriorBounceScale({
+        insideApartmentInteriorLightingZone: true,
+        insideResidentialUnit: true,
+      }),
+    ).toBe(1);
+    expect(
+      fpResolveApartmentInteriorBounceScale({
+        insideApartmentInteriorLightingZone: false,
+        insideResidentialUnit: false,
+      }),
+    ).toBe(1);
   });
 });

@@ -8,8 +8,10 @@
  * - `ENABLE_RUNTIME_DYNAMIC_DECOR_LIGHTS` — TV/computer screen washes (on)
  * - `ENABLE_RUNTIME_APARTMENT_STATIC_FIXTURE_LIGHTS` — in-unit ceiling/chandelier/standing/grow-op (on)
  * - `ENABLE_RUNTIME_WINDOW_FILL_LIGHTS` — in-unit window fills (on)
- * - `ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS` — corridor/stairwell (off)
- * Stairwell + corridor fixture meshes: `ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS`.
+ * - `ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS` — stairwell only (off)
+ * - `ENABLE_RUNTIME_CORRIDOR_FIXTURE_PRACTICAL_LIGHTS` — always off; corridor fixtures are emissive-only
+ * Corridor ceiling fixture meshes: `ENABLE_CORRIDOR_CEILING_LIGHTS` (on).
+ * Stairwell ceiling fixture meshes: `ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS` (off).
  *
  * **Server parity:** `apps/server/src/feature_flags.rs` — keep cross-boundary flags (e.g. claim timing) in sync.
  */

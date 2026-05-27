@@ -8,6 +8,10 @@ import {
   apartmentDecorUsesRuntimePracticalLight,
 } from "./apartmentInteriorVisualProfile.js";
 
+/** Corridor ceiling mounts — emissive bulb glow only; never collect SpotLight specs. */
+export const MAMMOTH_CORRIDOR_CEILING_LIGHT_EMISSIVE_ONLY_UD =
+  "mammothCorridorCeilingLightEmissiveOnly";
+
 export type ApartmentPracticalLightKind = "window" | ApartmentDecorEmitterKind;
 
 export type ApartmentPracticalLightSpec = {
@@ -323,6 +327,7 @@ export function collectApartmentInteriorPracticalLightSpecs(args: {
   }
 
   for (const group of args.decorGroups) {
+    if (group.userData[MAMMOTH_CORRIDOR_CEILING_LIGHT_EMISSIVE_ONLY_UD] === true) continue;
     const modelRelPath = group.userData.mammothApartmentDecorModelRelPath;
     if (typeof modelRelPath !== "string") continue;
     const emitterKind = apartmentDecorEmitterKindFromModelPath(modelRelPath);

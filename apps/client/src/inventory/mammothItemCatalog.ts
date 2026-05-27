@@ -18,10 +18,13 @@ import multimeterIcon from "../../../../content/references/meshy/multimeter.png?
 import screwdriverIcon from "../../../../content/references/meshy/screwdriver.png?url";
 import shotgunCoachIcon from "../../../../content/references/meshy/shotgun-coach.png?url";
 import shotgunShellIcon from "../../../../content/references/meshy/shotgun-shell.png?url";
+import heatRetentionBrickIcon from "../../../../content/references/meshy/heat-retention-brick.png?url";
+import scripIcon from "../../../../content/references/meshy/scrip.png?url";
 import scrapMetalIcon from "../../../../content/references/meshy/scrap-metal.png?url";
 import chemicalStockIcon from "../../../../content/references/meshy/chemical-stock.png?url";
 import compostIcon from "../../../../content/references/meshy/compost.png?url";
 import fishFilterSpongeIcon from "../../../../content/references/meshy/fish-filter-sponge.png?url";
+import fuseWirePackIcon from "../../../../content/references/meshy/fuse-wire-pack.png?url";
 import freshOysterMushroomIcon from "../../../../content/references/meshy/fresh-oyster-mushroom.png?url";
 import freshDillIcon from "../../../../content/references/meshy/fresh-dill.png?url";
 import freshGreenOnionIcon from "../../../../content/references/meshy/fresh-green-onion.png?url";
@@ -136,11 +139,13 @@ const ICONS: Record<string, string> = {
   "ammo-9mm": ammo9mmIcon,
   "ammo-shotgun-shell": shotgunShellIcon,
   "scrap-metal": scrapMetalIcon,
+  scrip: scripIcon,
+  "heat-retention-brick": heatRetentionBrickIcon,
   "chemical-stock": chemicalStockIcon,
   cigarettes: cigaretteIcon,
   "door-lock": doorLockIcon,
   "fish-filter-sponge": fishFilterSpongeIcon,
-  "fuse-wire-pack": chemicalStockIcon,
+  "fuse-wire-pack": fuseWirePackIcon,
   multimeter: multimeterIcon,
   screwdriver: screwdriverIcon,
   "balcony-grow-substrate": compostIcon,

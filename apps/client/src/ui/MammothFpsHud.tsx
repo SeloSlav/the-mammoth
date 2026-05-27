@@ -36,6 +36,7 @@ import {
 } from "@the-mammoth/ui-theme";
 import type { DbConnection } from "../module_bindings";
 import { MammothWorldDayHud } from "./MammothWorldDayHud";
+import { MammothMissionsHud } from "./MammothMissionsHud";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -559,6 +560,7 @@ export function MammothFpsHud(props: { conn: DbConnection | null }) {
       </button>
 
       <MammothWorldDayHud conn={props.conn} />
+      {props.conn ? <MammothMissionsHud conn={props.conn} /> : null}
 
       {/* Expanded panel */}
       {open && (

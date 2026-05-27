@@ -337,6 +337,7 @@ export {
   collectApartmentInteriorPracticalLightSpecs,
   collectApartmentWindowLightSpecsFromRoot,
   createApartmentPracticalLightsMount,
+  MAMMOTH_CORRIDOR_CEILING_LIGHT_EMISSIVE_ONLY_UD,
   mountApartmentPracticalLights,
   syncApartmentInteriorPracticalLighting,
   type ApartmentPracticalLightKind,

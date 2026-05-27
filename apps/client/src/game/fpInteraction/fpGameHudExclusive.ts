@@ -2,7 +2,7 @@
  * Tab inventory, B crafting, and M debug are full-screen style overlays — only one should be open.
  */
 
-export type FpGameHudExclusiveKind = "inventory" | "crafting" | "debug" | "missions";
+export type FpGameHudExclusiveKind = "inventory" | "crafting" | "debug";
 
 const listeners = new Set<(keeping: FpGameHudExclusiveKind) => void>();
 

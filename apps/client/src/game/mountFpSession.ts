@@ -36,6 +36,7 @@ import {
 } from "@the-mammoth/engine";
 import {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
+  ENABLE_CORRIDOR_CEILING_LIGHTS,
   ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS,
   ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS,
   ENABLE_STAIRWELL_GRAFFITI_DECALS,
@@ -53,6 +54,7 @@ import {
 import {
   FP_FLOOR_19_CORRIDOR_DECOR_ROOT_NAME,
   mountFpFloor19CorridorCeilingLights,
+  syncFpFloor19CorridorCeilingLightVisibility,
 } from "./fpSession/fpSessionCorridorCeilingLights.js";
 import { installFpSessionTransientDebugConsole } from "./fpSession/fpSessionTransientDebugConsole.js";
 import { createFpSessionFloorPlateVisibility } from "./fpSession/fpSessionFloorPlateVisibility.js";
@@ -429,7 +431,7 @@ export async function mountFpSession(
   scene.add(cellRoot);
   buildingRoot.updateMatrixWorld(true);
   const floor19CorridorCeilingLights =
-    isCombatSim || !ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS
+    isCombatSim || !ENABLE_CORRIDOR_CEILING_LIGHTS
       ? null
       : mountFpFloor19CorridorCeilingLights({ buildingRoot });
   if (!isCombatSim) {
@@ -764,10 +766,9 @@ export async function mountFpSession(
   const refreshApartmentInteriorMeshes = () => {
     const tex = scene.userData.mammothFpMetallicReadableEnv;
     const envTexture = tex instanceof THREE.Texture ? tex : null;
-    const decorRoots = [
-      scene.getObjectByName("apartment_unit_decor_root"),
-      buildingRoot.getObjectByName(FP_FLOOR_19_CORRIDOR_DECOR_ROOT_NAME),
-    ].filter((node): node is THREE.Object3D => node != null);
+    const decorRoots = [scene.getObjectByName("apartment_unit_decor_root")].filter(
+      (node): node is THREE.Object3D => node != null,
+    );
     for (const decorRoot of decorRoots) {
       prepareMammothApartmentInteriorContentRoots({
         shellRoot: buildingRoot,
@@ -1002,13 +1003,8 @@ export async function mountFpSession(
       });
   if (!isCombatSim) {
     refreshApartmentInteriorMeshes();
-    if (ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS) {
+    if (ENABLE_CORRIDOR_CEILING_LIGHTS) {
       scheduleStairwellCeilingVisualSync();
-    }
-    if (floor19CorridorCeilingLights) {
-      void floor19CorridorCeilingLights.ready.then(() => {
-        refreshApartmentInteriorMeshes();
-      });
     }
   }
 
@@ -1337,6 +1333,13 @@ export async function mountFpSession(
         const band = getActiveFloorPlateBand();
         megablockSpatial?.setWalkSampleStoreyBand(band.lo, band.hi);
         syncStairwellCeilingPracticalLights();
+        syncFpFloor19CorridorCeilingLightVisibility(
+          buildingRoot.getObjectByName(FP_FLOOR_19_CORRIDOR_DECOR_ROOT_NAME),
+          {
+            insideResidentialUnit: isInsideResidentialUnit(),
+            insideApartmentInteriorLightingZone: isInsideApartmentInteriorLightingZone(),
+          },
+        );
       };
 
   getIsInsideStairwellShaft = isInsideStairwellShaft;

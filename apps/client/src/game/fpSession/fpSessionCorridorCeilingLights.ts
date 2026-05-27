@@ -1,91 +1,181 @@
 import * as THREE from "three";
-import {
-  applyApartmentDecorCrossPlacementInstancing,
-  attachApartmentWarmFixtureBulbGlow,
-  bindMammothApartmentPropReadableEnv,
-  loadGltfFirstMatch,
-  moodGradeMammothApartmentDecorMesh,
-  prepareMammothApartmentInteriorContentRoots,
-  syncApartmentInteriorPracticalLighting,
-  type ApartmentPracticalLightsMount,
-} from "@the-mammoth/engine";
+import { APARTMENT_INTERIOR_VISUAL_PROFILE } from "@the-mammoth/engine";
 import { resolveOwnedApartmentDecorRootScale } from "@the-mammoth/schemas";
-import { postProcessApartmentDecorGltfScene, ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS, ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS } from "@the-mammoth/world";
-import { apartmentDecorFetchPath } from "../fpApartment/fpApartmentDecorAssets.js";
-import { disposeStaticWorldObjectTree } from "./fpSessionStaticWorldDispose.js";
+import {
+  ENABLE_CORRIDOR_CEILING_LIGHTS,
+  ENABLE_RUNTIME_CORRIDOR_FIXTURE_PRACTICAL_LIGHTS,
+  FLOOR_19_GAMEPLAY_LEVEL_INDEX,
+} from "@the-mammoth/world";
 import {
   resolveFpFloor19CorridorAuthoringContext,
   resolveFpFloor19CorridorDecorPlacements,
   type FpFloor19CorridorDecorPlacement,
 } from "./fpFloor19CorridorBuiltinsFromContent.js";
+import { disposeStaticWorldObjectTree } from "./fpSessionStaticWorldDispose.js";
 
 export const FP_FLOOR_19_CORRIDOR_DECOR_ROOT_NAME = "fp_floor_19_corridor_decor";
 
-const _fixtureBoundsScratch = new THREE.Box3();
-const _fixtureCenterWorldScratch = new THREE.Vector3();
-const _fixtureCenterLocalScratch = new THREE.Vector3();
+/** Corridor proxies never enter the apartment decor / instancing / practical-light pipelines. */
+export const MAMMOTH_CORRIDOR_CEILING_LIGHT_PROXY_UD = "mammothCorridorCeilingLightProxy";
 
-export type FpSessionCorridorCeilingLightsMount = {
-  ready: Promise<void>;
-  dispose: () => void;
-};
+const PROXY_LENS_RADIUS = 1;
+const PROXY_RING_INNER = 0.82;
+const PROXY_RING_OUTER = 1.18;
+const PROXY_HOUSING_HEIGHT = 0.08;
+/** Short neck between flush trim and hanging globe — matches light-ceiling-2 silhouette. */
+const PROXY_SOCKET_HEIGHT = 0.14;
+const PROXY_SOCKET_RADIUS = 0.34;
+/** Unit-space globe before placement scale (~0.19 → ~10 cm radius in world). */
+const PROXY_BULB_RADIUS = 0.54;
+const PROXY_BULB_CENTER_Y = -0.38;
 
-function prepCorridorDecorTemplate(root: THREE.Object3D): void {
-  root.traverse((obj) => {
-    if (!(obj instanceof THREE.Mesh)) return;
-    obj.castShadow = false;
-    obj.receiveShadow = false;
-  });
-}
+let sharedProxyGeometries: {
+  lens: THREE.CircleGeometry;
+  ring: THREE.RingGeometry;
+  housing: THREE.CylinderGeometry;
+  socket: THREE.CylinderGeometry;
+  bulb: THREE.SphereGeometry;
+} | null = null;
 
-function prepCorridorDecorVisual(root: THREE.Object3D, modelRelPath: string): void {
-  root.userData.mammothApartmentDecorProp = true;
-  root.traverse((obj) => {
-    if (!(obj instanceof THREE.Mesh)) return;
-    moodGradeMammothApartmentDecorMesh(obj, { modelRelPath });
-    obj.userData.mammothUnitInterior = true;
-  });
-  attachApartmentWarmFixtureBulbGlow(root, modelRelPath);
-}
+let sharedProxyMaterials: {
+  lens: THREE.MeshStandardMaterial;
+  housing: THREE.MeshStandardMaterial;
+  socket: THREE.MeshStandardMaterial;
+  bulb: THREE.MeshStandardMaterial;
+} | null = null;
 
-function centerFixtureVisualBoundsOnPlacementRoot(root: THREE.Object3D): void {
-  root.updateMatrixWorld(true);
-  _fixtureBoundsScratch.setFromObject(root);
-  if (_fixtureBoundsScratch.isEmpty()) return;
-  _fixtureBoundsScratch.getCenter(_fixtureCenterWorldScratch);
-  _fixtureCenterLocalScratch.copy(_fixtureCenterWorldScratch);
-  root.worldToLocal(_fixtureCenterLocalScratch);
-  for (const child of root.children) {
-    child.position.sub(_fixtureCenterLocalScratch);
+function corridorCeilingLightProxyAssets(): {
+  geometries: NonNullable<typeof sharedProxyGeometries>;
+  materials: NonNullable<typeof sharedProxyMaterials>;
+} {
+  if (!sharedProxyGeometries) {
+    sharedProxyGeometries = {
+      lens: new THREE.CircleGeometry(PROXY_LENS_RADIUS * 0.72, 10),
+      ring: new THREE.RingGeometry(PROXY_RING_INNER, PROXY_RING_OUTER, 12),
+      housing: new THREE.CylinderGeometry(
+        PROXY_RING_OUTER,
+        PROXY_RING_OUTER,
+        PROXY_HOUSING_HEIGHT,
+        12,
+      ),
+      socket: new THREE.CylinderGeometry(
+        PROXY_SOCKET_RADIUS,
+        PROXY_SOCKET_RADIUS * 0.88,
+        PROXY_SOCKET_HEIGHT,
+        10,
+      ),
+      bulb: new THREE.SphereGeometry(PROXY_BULB_RADIUS, 12, 10),
+    };
   }
-  root.updateMatrixWorld(true);
-}
-
-function corridorDecorPlacementGroups(root: THREE.Group): THREE.Group[] {
-  return root.children.filter(
-    (child): child is THREE.Group =>
-      child instanceof THREE.Group &&
-      typeof child.userData.mammothApartmentDecorModelRelPath === "string",
-  );
-}
-
-function bindCorridorDecorReadableEnv(
-  buildingRoot: THREE.Group,
-  decorRoot: THREE.Group,
-): void {
-  let scene: THREE.Scene | null = null;
-  for (let cur: THREE.Object3D | null = buildingRoot; cur; cur = cur.parent) {
-    if (cur instanceof THREE.Scene) {
-      scene = cur;
-      break;
-    }
+  if (!sharedProxyMaterials) {
+    const { decor, practical } = APARTMENT_INTERIOR_VISUAL_PROFILE;
+    sharedProxyMaterials = {
+      lens: new THREE.MeshStandardMaterial({
+        color: 0xfff4e8,
+        emissive: practical.ceiling.color,
+        emissiveIntensity: decor.fixtureEmissiveScale * 1.35,
+        roughness: 0.32,
+        metalness: 0,
+        side: THREE.DoubleSide,
+      }),
+      housing: new THREE.MeshStandardMaterial({
+        color: 0xd4d8dc,
+        roughness: 0.86,
+        metalness: 0.04,
+      }),
+      socket: new THREE.MeshStandardMaterial({
+        color: 0x9aa0a8,
+        roughness: 0.78,
+        metalness: 0.12,
+      }),
+      bulb: new THREE.MeshStandardMaterial({
+        color: 0xfff4e8,
+        emissive: new THREE.Color(1, 0.98, 0.92),
+        emissiveIntensity: 5.4,
+        roughness: 0.28,
+        metalness: 0,
+        toneMapped: false,
+      }),
+    };
   }
-  if (!scene) return;
-  const tex = scene.userData.mammothFpMetallicReadableEnv;
-  bindMammothApartmentPropReadableEnv(
-    decorRoot,
-    tex instanceof THREE.Texture ? tex : null,
+  return { geometries: sharedProxyGeometries, materials: sharedProxyMaterials };
+}
+
+function disposeCorridorCeilingLightProxyAssets(): void {
+  sharedProxyGeometries?.lens.dispose();
+  sharedProxyGeometries?.ring.dispose();
+  sharedProxyGeometries?.housing.dispose();
+  sharedProxyGeometries?.socket.dispose();
+  sharedProxyGeometries?.bulb.dispose();
+  sharedProxyGeometries = null;
+  sharedProxyMaterials?.lens.dispose();
+  sharedProxyMaterials?.housing.dispose();
+  sharedProxyMaterials?.socket.dispose();
+  sharedProxyMaterials?.bulb.dispose();
+  sharedProxyMaterials = null;
+}
+
+function addProxyMesh(
+  parent: THREE.Object3D,
+  geometry: THREE.BufferGeometry,
+  material: THREE.Material,
+  name: string,
+): THREE.Mesh {
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = name;
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  parent.add(mesh);
+  return mesh;
+}
+
+function createCorridorCeilingLightProxyVisual(): THREE.Group {
+  const { geometries, materials } = corridorCeilingLightProxyAssets();
+  const visual = new THREE.Group();
+  visual.name = "fp_corridor_ceiling_light_proxy";
+
+  const housing = addProxyMesh(
+    visual,
+    geometries.housing,
+    materials.housing,
+    "fp_corridor_ceiling_housing",
   );
+  housing.position.y = -PROXY_HOUSING_HEIGHT * 0.5;
+
+  const ring = addProxyMesh(
+    visual,
+    geometries.ring,
+    materials.housing,
+    "fp_corridor_ceiling_trim",
+  );
+  ring.rotation.x = -Math.PI / 2;
+
+  const socket = addProxyMesh(
+    visual,
+    geometries.socket,
+    materials.socket,
+    "fp_corridor_ceiling_socket",
+  );
+  socket.position.y = -PROXY_HOUSING_HEIGHT - PROXY_SOCKET_HEIGHT * 0.5;
+
+  const bulb = addProxyMesh(
+    visual,
+    geometries.bulb,
+    materials.bulb,
+    "fp_corridor_ceiling_bulb",
+  );
+  bulb.position.y = PROXY_BULB_CENTER_Y;
+
+  const lens = addProxyMesh(
+    visual,
+    geometries.lens,
+    materials.lens,
+    "fp_corridor_ceiling_lens",
+  );
+  lens.rotation.x = -Math.PI / 2;
+  lens.position.y = PROXY_BULB_CENTER_Y - PROXY_BULB_RADIUS * 0.82;
+
+  return visual;
 }
 
 function applyCorridorDecorRootScale(
@@ -102,98 +192,93 @@ function applyCorridorDecorRootScale(
   root.scale.set(scale.x, scale.y, scale.z);
 }
 
-function mountCorridorDecorPlacement(
+function mountCorridorCeilingLightProxy(
   root: THREE.Group,
-  template: THREE.Object3D,
   placement: FpFloor19CorridorDecorPlacement,
 ): void {
   const fixtureRoot = new THREE.Group();
-  fixtureRoot.name = `fp_floor_19_corridor_decor_${placement.id}`;
+  fixtureRoot.name = `fp_floor_19_corridor_light_${placement.id}`;
   fixtureRoot.position.fromArray(placement.position);
   fixtureRoot.rotation.order = "YXZ";
   fixtureRoot.rotation.set(placement.pitchRad, placement.yawRad, placement.rollRad);
   applyCorridorDecorRootScale(fixtureRoot, placement);
-  fixtureRoot.userData.mammothApartmentDecorModelRelPath = placement.modelRelPath;
-  fixtureRoot.userData.mammothApartmentDecorProp = true;
+  fixtureRoot.userData[MAMMOTH_CORRIDOR_CEILING_LIGHT_PROXY_UD] = true;
+  fixtureRoot.userData.mammothSkipFloorGeometryMerge = true;
+  fixtureRoot.userData.mammothNoCollision = true;
 
-  const fixtureVisual = template.clone(true);
-  prepCorridorDecorVisual(fixtureVisual, placement.modelRelPath);
-  fixtureRoot.add(fixtureVisual);
-  centerFixtureVisualBoundsOnPlacementRoot(fixtureRoot);
+  fixtureRoot.add(createCorridorCeilingLightProxyVisual());
   root.add(fixtureRoot);
 }
+
+export function syncFpFloor19CorridorCeilingLightVisibility(
+  decorRoot: THREE.Object3D | null | undefined,
+  input: {
+    insideResidentialUnit: boolean;
+    insideApartmentInteriorLightingZone: boolean;
+  },
+): void {
+  if (!decorRoot) return;
+  decorRoot.visible =
+    input.insideApartmentInteriorLightingZone && !input.insideResidentialUnit;
+}
+
+export type FpSessionCorridorCeilingLightsMount = {
+  ready: Promise<void>;
+  dispose: () => void;
+};
 
 export function mountFpFloor19CorridorCeilingLights(args: {
   buildingRoot: THREE.Group;
 }): FpSessionCorridorCeilingLightsMount {
-  if (!ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS) {
+  if (!ENABLE_CORRIDOR_CEILING_LIGHTS) {
     return {
       ready: Promise.resolve(),
       dispose: () => {},
     };
   }
 
+  if (ENABLE_RUNTIME_CORRIDOR_FIXTURE_PRACTICAL_LIGHTS) {
+    console.warn(
+      "[fpSession] ENABLE_RUNTIME_CORRIDOR_FIXTURE_PRACTICAL_LIGHTS is unsupported — corridor fixtures stay emissive-only",
+    );
+  }
+
   const root = new THREE.Group();
   root.name = FP_FLOOR_19_CORRIDOR_DECOR_ROOT_NAME;
+  root.userData.mammothPlateLevelIndex = FLOOR_19_GAMEPLAY_LEVEL_INDEX;
+  root.userData.mammothSkipFloorGeometryMerge = true;
   args.buildingRoot.add(root);
 
   let disposed = false;
-  let practicalLights: ApartmentPracticalLightsMount | null = null;
   const ready = resolveFpFloor19CorridorAuthoringContext()
-    .then(async ({ doc, footprint }) => {
+    .then(({ doc, footprint }) => {
       if (disposed) return;
       const placements = resolveFpFloor19CorridorDecorPlacements({ doc, footprint });
-      if (placements.length === 0) return;
-
-      const templates = new Map<string, THREE.Object3D>();
-      for (const modelRelPath of [...new Set(placements.map((p) => p.modelRelPath))]) {
-        const { scene } = await loadGltfFirstMatch([apartmentDecorFetchPath(modelRelPath)]);
-        if (disposed) {
-          disposeStaticWorldObjectTree(scene);
-          return;
-        }
-        postProcessApartmentDecorGltfScene(scene, modelRelPath);
-        prepCorridorDecorTemplate(scene);
-        templates.set(modelRelPath, scene);
-      }
-
-      if (disposed) return;
       for (const placement of placements) {
-        const template = templates.get(placement.modelRelPath);
-        if (!template) continue;
-        mountCorridorDecorPlacement(root, template, placement);
+        mountCorridorCeilingLightProxy(root, placement);
       }
-
-      prepareMammothApartmentInteriorContentRoots({
-        shellRoot: args.buildingRoot,
-        decorRoot: root,
-      });
-      bindCorridorDecorReadableEnv(args.buildingRoot, root);
-      if (ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS) {
-        practicalLights = syncApartmentInteriorPracticalLighting({
-          lightParent: root,
-          maxWindowLights: 0,
-          decorGroups: corridorDecorPlacementGroups(root),
-          includeStaticFixturePracticalLights: true,
-          includeDynamicDecorPracticalLights: false,
-          previous: practicalLights,
-        });
-      }
-      applyApartmentDecorCrossPlacementInstancing(root);
     })
     .catch((error: unknown) => {
-      console.warn("[fpSession] failed to mount floor 19 corridor decor", error);
+      console.warn("[fpSession] failed to mount floor 19 corridor ceiling proxies", error);
     });
 
   return {
     ready,
     dispose: () => {
       disposed = true;
-      practicalLights?.dispose();
-      practicalLights = null;
       args.buildingRoot.remove(root);
       disposeStaticWorldObjectTree(root);
       root.clear();
     },
   };
+}
+
+/** Test hook — build one proxy visual without mounting the full corridor decor root. */
+export function createCorridorCeilingLightProxyVisualForTests(): THREE.Group {
+  return createCorridorCeilingLightProxyVisual();
+}
+
+/** Test hook — release module-level proxy assets after the last FP session unmounts. */
+export function disposeFpCorridorCeilingLightProxyAssetsForTests(): void {
+  disposeCorridorCeilingLightProxyAssets();
 }

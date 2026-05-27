@@ -23,6 +23,11 @@ export const FIRST_EXTRACTION_DISPLAY_TITLE = "Fuse kit — unit 16-E-4" as cons
 
 export const FIRST_EXTRACTION_ISSUER = "Rada (maintenance net)" as const;
 
+/** Scrip granted when the first extraction turn-in completes. */
+export const FIRST_EXTRACTION_SCRIP_REWARD = 15 as const;
+
+export const SCRIP_ITEM_DEF_ID = "scrip" as const;
+
 export function firstExtractionUnitKey(
   floorDocId: string = FIRST_EXTRACTION_FLOOR_DOC_ID,
 ): string {
@@ -110,7 +115,7 @@ export function buildFirstExtractionMissionPanel(
     {
       id: "descend",
       label: `Ride to deck ${FIRST_EXTRACTION_ELEVATOR_DECK} and enter unit ${FIRST_EXTRACTION_PUBLIC_LABEL}`,
-      done: collected || deposited,
+      done: collected,
     },
     {
       id: "collect",

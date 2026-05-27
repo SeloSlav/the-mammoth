@@ -98,6 +98,20 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
   },
 
+  /**
+   * Corridor / lobby / cab / stair — shared circulation without unit practicals. Keeps global fill
+   * navigable while residential units stay at full {@link interiorBounce} + fixture pools.
+   */
+  circulation: {
+
+    /** Raw FP dark blend — partial interior rig so hallway sun/fill remain readable. */
+    interiorDarkTarget: 0.38,
+
+    /** Extra bounce vs {@link interiorBounce} — no window/ceiling practicals in shared spaces. */
+    bounceScale: 2.6,
+
+  },
+
   scene: {
 
     /** Dark void behind the flat — editor layout + FP interior. */

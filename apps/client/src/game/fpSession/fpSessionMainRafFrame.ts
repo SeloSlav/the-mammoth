@@ -111,7 +111,7 @@ import {
   fpSampleStairwellInteriorDarkTarget,
   STAIRWELL_INTERIOR_DARK_HALF_LIFE_SEC,
 } from "./fpSessionStairwellInteriorDark.js";
-import { fpResolveApartmentInteriorDarkTarget01 } from "./fpApartmentInteriorLightingZone.js";
+import { fpResolveApartmentInteriorDarkTarget01, fpResolveApartmentInteriorBounceScale } from "./fpApartmentInteriorLightingZone.js";
 import {
   hotbarDefIdSupportsMeleeAttack,
   hotbarDefIdSupportsRangedAttack,
@@ -1206,6 +1206,7 @@ export function createFpSessionMainRafFrame(
     );
     const apartmentDarkTarget = fpResolveApartmentInteriorDarkTarget01({
       insideApartmentInteriorLightingZone: deps.isInsideApartmentInteriorLightingZone(),
+      insideResidentialUnit: deps.isInsideResidentialUnit(),
     });
     mainRaf.apartmentInteriorDarkSmoothed = fpExpSmoothToward(
       mainRaf.apartmentInteriorDarkSmoothed,
@@ -1247,6 +1248,10 @@ export function createFpSessionMainRafFrame(
         deps.isApartmentDecorInteriorVisible() ||
         deps.isInsideStairwellShaft(),
       stairwellInteriorDark01: mainRaf.stairwellInteriorDarkSmoothed,
+      apartmentInteriorBounceScale: fpResolveApartmentInteriorBounceScale({
+        insideApartmentInteriorLightingZone: deps.isInsideApartmentInteriorLightingZone(),
+        insideResidentialUnit: deps.isInsideResidentialUnit(),
+      }),
     });
     const _t_afterFpEnv = performance.now();
     const cabMirrors = deps.cabMirrorCollection.mirrors;

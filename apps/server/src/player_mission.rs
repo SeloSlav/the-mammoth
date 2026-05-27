@@ -4,10 +4,10 @@
 use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::apartments;
-use crate::crafting::emit_hud_notice;
+use crate::crafting::{self, emit_hud_notice};
 use crate::dropped_item;
 use crate::game_time::SleepRolloverKind;
-use crate::inventory::{inventory_item};
+use crate::inventory::{inventory_item, try_grant_stack_to_player};
 use crate::inventory_models::{ItemLocation, StashLocationData};
 
 const FOOTLOCKER_STASH_KIND: &str = "footlocker";
@@ -24,6 +24,9 @@ pub(crate) const MISSION_WORLD_SPAWN_SLOT_MIN: u16 = 61_000;
 pub(crate) const FIRST_EXTRACTION_LOOT_SLOT: u16 = MISSION_WORLD_SPAWN_SLOT_MIN;
 
 const FIRST_EXTRACTION_LOOT_PLACEMENT_SEED: u64 = 0x0016_E4_00_04;
+
+pub(crate) const SCRIP_DEF_ID: &str = "scrip";
+pub(crate) const FIRST_EXTRACTION_SCRIP_REWARD: u32 = 15;
 
 pub(crate) const MISSION_STATUS_OFFERED: u8 = 0;
 pub(crate) const MISSION_STATUS_ACTIVE: u8 = 1;
@@ -185,6 +188,82 @@ fn player_footlocker_quantity(ctx: &ReducerContext, owner: Identity, def_id: &st
         .sum()
 }
 
+fn delete_player_items_with_def_id(ctx: &ReducerContext, owner: Identity, def_id: &str) {
+    let ids: Vec<u64> = ctx
+        .db
+        .inventory_item()
+        .iter()
+        .filter_map(|row| {
+            let owned = match &row.location {
+                ItemLocation::Inventory(d) if d.owner_id == owner => true,
+                ItemLocation::Hotbar(d) if d.owner_id == owner => true,
+                ItemLocation::Stash(s) if s.owner_identity == owner => true,
+                _ => false,
+            };
+            if owned && row.def_id == def_id {
+                Some(row.instance_id)
+            } else {
+                None
+            }
+        })
+        .collect();
+    let inv = ctx.db.inventory_item();
+    for instance_id in ids {
+        inv.instance_id().delete(instance_id);
+    }
+}
+
+fn grant_scrip_turn_in_reward(ctx: &ReducerContext, owner: Identity) -> u32 {
+    let Ok(remaining) = try_grant_stack_to_player(
+        ctx,
+        owner,
+        SCRIP_DEF_ID.to_string(),
+        FIRST_EXTRACTION_SCRIP_REWARD,
+    ) else {
+        log::warn!("first extraction: failed to grant {SCRIP_DEF_ID}");
+        return 0;
+    };
+    let granted = FIRST_EXTRACTION_SCRIP_REWARD.saturating_sub(remaining);
+    if granted > 0 {
+        crafting::emit_hud_toast(
+            ctx,
+            owner,
+            crafting::HUD_TOAST_KIND_ITEM_RECEIVED,
+            SCRIP_DEF_ID.to_string(),
+            granted,
+        );
+    }
+    if remaining > 0 {
+        let _ = dropped_item::grant_stack_to_player_spilling_at_feet(
+            ctx,
+            owner,
+            SCRIP_DEF_ID.to_string(),
+            remaining,
+        );
+        crafting::emit_hud_notice(
+            ctx,
+            owner,
+            format!("Inventory full — {remaining} scrip left at your feet."),
+        );
+    }
+    granted
+}
+
+fn settle_first_extraction_turn_in(ctx: &ReducerContext, owner: Identity) {
+    delete_player_items_with_def_id(ctx, owner, FIRST_EXTRACTION_ITEM_DEF_ID);
+    let scrip = grant_scrip_turn_in_reward(ctx, owner);
+    if scrip == 0 {
+        return;
+    }
+    emit_hud_notice(
+        ctx,
+        owner,
+        format!(
+            "Turn-in logged — {scrip} scrip credited. Rada will send someone when shift turns."
+        ),
+    );
+}
+
 fn mark_first_extraction_collected(ctx: &ReducerContext, owner: Identity) {
     let Some(mut row) = mission_row(ctx, owner) else {
         return;
@@ -206,7 +285,6 @@ fn complete_first_extraction(
     ctx: &ReducerContext,
     owner: Identity,
     deposited: bool,
-    notice: &str,
 ) {
     let Some(mut row) = mission_row(ctx, owner) else {
         return;
@@ -217,6 +295,7 @@ fn complete_first_extraction(
     if !first_extraction_active(&row) && row.status != MISSION_STATUS_COLLECTED {
         return;
     }
+    settle_first_extraction_turn_in(ctx, owner);
     row.item_collected = true;
     row.item_deposited = deposited;
     row.status = MISSION_STATUS_COMPLETE;
@@ -224,7 +303,6 @@ fn complete_first_extraction(
     row.active_mission_id.clear();
     update_mission_row(ctx, row);
     clear_first_extraction_world_loot(ctx);
-    emit_hud_notice(ctx, owner, notice.to_string());
 }
 
 fn fail_first_extraction(ctx: &ReducerContext, owner: Identity, notice: &str) {
@@ -277,12 +355,7 @@ pub(crate) fn on_mission_stash_push(
     if player_footlocker_quantity(ctx, owner, FIRST_EXTRACTION_ITEM_DEF_ID) == 0 {
         return;
     }
-    complete_first_extraction(
-        ctx,
-        owner,
-        true,
-        "Fuse wire pack stashed. Rada will send someone when shift turns.",
-    );
+    complete_first_extraction(ctx, owner, true);
 }
 
 pub(crate) fn sync_mission_progress_from_inventory(ctx: &ReducerContext, owner: Identity) {
@@ -293,12 +366,7 @@ pub(crate) fn sync_mission_progress_from_inventory(ctx: &ReducerContext, owner: 
         return;
     }
     if player_footlocker_quantity(ctx, owner, FIRST_EXTRACTION_ITEM_DEF_ID) > 0 {
-        complete_first_extraction(
-            ctx,
-            owner,
-            true,
-            "Fuse wire pack stashed. Rada will send someone when shift turns.",
-        );
+        complete_first_extraction(ctx, owner, true);
         return;
     }
     if first_extraction_active(&row)
@@ -325,12 +393,7 @@ pub(crate) fn evaluate_mission_before_day_rollover(
     }
 
     if player_footlocker_quantity(ctx, owner, FIRST_EXTRACTION_ITEM_DEF_ID) > 0 {
-        complete_first_extraction(
-            ctx,
-            owner,
-            true,
-            "Fuse wire pack stashed. Rada will send someone when shift turns.",
-        );
+        complete_first_extraction(ctx, owner, true);
         return;
     }
 
@@ -338,12 +401,7 @@ pub(crate) fn evaluate_mission_before_day_rollover(
     let inside_home = apartments::player_feet_inside_owned_apartment(ctx, owner);
 
     if kind == SleepRolloverKind::Collapse && inside_home && carrying {
-        complete_first_extraction(
-            ctx,
-            owner,
-            false,
-            "You passed out at home with the fuse wire pack. Rada will hear about it.",
-        );
+        complete_first_extraction(ctx, owner, false);
         return;
     }
 

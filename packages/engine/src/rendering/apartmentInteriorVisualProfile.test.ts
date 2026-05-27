@@ -50,6 +50,14 @@ describe("APARTMENT_INTERIOR_VISUAL_PROFILE", () => {
     expect(practical.chandelier.intensity).toBeGreaterThan(bounceLift * 10);
     expect(exposure.interior).toBeLessThan(exposure.exterior);
   });
+
+  it("keeps circulation darker than exterior but brighter than full unit mood", () => {
+    const { circulation, exposure } = APARTMENT_INTERIOR_VISUAL_PROFILE;
+    expect(circulation.interiorDarkTarget).toBeGreaterThan(0.2);
+    expect(circulation.interiorDarkTarget).toBeLessThan(1);
+    expect(circulation.bounceScale).toBeGreaterThan(1);
+    expect(exposure.interior).toBeLessThan(exposure.exterior);
+  });
 });
 
 describe("mammothApartmentInteriorBlend01", () => {

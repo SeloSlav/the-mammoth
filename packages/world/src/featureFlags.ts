@@ -26,10 +26,22 @@ export const ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER = false;
 export const ENABLE_STAIRWELL_GRAFFITI_DECALS = false;
 
 /**
- * Stairwell flush ceiling fixtures (world mount) and floor-19 corridor ceiling decor meshes.
- * Off by default while perf is tuned; flip to `true` to re-enable fixture geometry + emissive.
+ * Floor-19 corridor flush ceiling fixtures — emissive bulb glow only (never runtime SpotLights).
+ * See {@link ENABLE_RUNTIME_CORRIDOR_FIXTURE_PRACTICAL_LIGHTS}.
+ */
+export const ENABLE_CORRIDOR_CEILING_LIGHTS = true;
+
+/**
+ * Stairwell flush ceiling fixtures (world mount). Off while perf is tuned; corridor uses
+ * {@link ENABLE_CORRIDOR_CEILING_LIGHTS} separately.
  */
 export const ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS = false;
+
+/**
+ * Corridor ceiling mounts are emissive-only — always `false` until a cheap shared-space path exists.
+ * Stairwell practicals use {@link ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS}.
+ */
+export const ENABLE_RUNTIME_CORRIDOR_FIXTURE_PRACTICAL_LIGHTS = false;
 
 /**
  * Runtime SpotLights for gameplay/mood screens (TV, computer). Small count, no shadows.

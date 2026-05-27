@@ -1,4 +1,4 @@
-let open = false;
+let open = true;
 const listeners = new Set<() => void>();
 
 export function getFpMissionsPanelOpen(): boolean {

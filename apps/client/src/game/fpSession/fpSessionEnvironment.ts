@@ -196,7 +196,7 @@ export type FpSessionEnvironmentHandle = {
       maxY: number;
       maxZ: number;
     } | null;
-    /** 0 = outdoor / true exterior; 1 = full abandoned-flat dimming (units, corridors, cores). */
+    /** 0 = outdoor / true exterior; 1 = full unit mood; circulation uses profile partial target. */
     apartmentInteriorDark01?: number;
     /**
      * Atmosphere + render-layer gate — defaults to {@link apartmentInteriorDark01}. Pass a lower
@@ -213,6 +213,8 @@ export type FpSessionEnvironmentHandle = {
      * {@link mountFpSession}).
      */
     stairwellInteriorDark01?: number;
+    /** Hallway circulation bounce multiplier — see profile `circulation.bounceScale`. */
+    apartmentInteriorBounceScale?: number;
   }) => FpSessionEnvironmentFrameTimings;
 };
 
@@ -652,6 +654,7 @@ export function attachFpSessionEnvironment(
       apartmentInteriorAtmosphere01,
       interiorRenderLayersEnabled = false,
       stairwellInteriorDark01 = 0,
+      apartmentInteriorBounceScale = 1,
     }) => {
       const t0 = performance.now();
       const renderIsoSky = isFpDebugRenderIsolationEnabled("environmentSky");
@@ -696,6 +699,7 @@ export function attachFpSessionEnvironment(
             bounce: apartmentInteriorBounce,
             global: { hemi, fill, dir },
             exteriorLightScale: stairwellScale,
+            interiorBounceScale: apartmentInteriorBounceScale,
           })
         : 0;
       const atmosphereInterior01 = renderIsoLighting
