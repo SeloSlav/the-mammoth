@@ -6,18 +6,26 @@ import {
   summarizeApartmentDecorCrossPlacementInstancingInScene,
 } from "./apartmentDecorCrossPlacementInstancing.js";
 
-function decorPropGroup(modelRelPath: string, placedKind?: string): THREE.Group {
+function decorPropGroup(
+  modelRelPath: string,
+  opts?: { placedKind?: string; meshCount?: number },
+): THREE.Group {
   const root = new THREE.Group();
   root.userData.mammothApartmentDecorProp = true;
   root.userData.mammothApartmentDecorModelRelPath = modelRelPath;
-  if (placedKind !== undefined) {
-    root.userData.mammothApartmentDecorPlacedKind = placedKind;
+  if (opts?.placedKind !== undefined) {
+    root.userData.mammothApartmentDecorPlacedKind = opts.placedKind;
   }
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(0.2, 0.2, 0.2),
-    new THREE.MeshBasicMaterial(),
-  );
-  root.add(mesh);
+  const meshCount = opts?.meshCount ?? 1;
+  for (let i = 0; i < meshCount; i++) {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.2, 0.2, 0.2),
+      new THREE.MeshBasicMaterial({ color: 0xffffff * (i + 1) }),
+    );
+    mesh.position.set(i * 0.3, 0, 0);
+    mesh.name = `part_${i}`;
+    root.add(mesh);
+  }
   return root;
 }
 
@@ -86,17 +94,33 @@ describe("applyApartmentDecorCrossPlacementInstancing", () => {
     const unitRoot = new THREE.Group();
     const stashPath = "static/models/objects/footlocker.glb";
     for (let i = 0; i < 3; i++) {
-      unitRoot.add(decorPropGroup(stashPath, "wardrobe_stash"));
+      unitRoot.add(decorPropGroup(stashPath, { placedKind: "wardrobe_stash" }));
     }
     for (let i = 0; i < 3; i++) {
-      unitRoot.add(
-        decorPropGroup("static/models/objects/notebook.glb"),
-      );
+      unitRoot.add(decorPropGroup("static/models/objects/notebook.glb"));
     }
 
     applyApartmentDecorCrossPlacementInstancing(unitRoot);
 
     expect(unitRoot.children.some((c) => c instanceof THREE.InstancedMesh)).toBe(false);
     expect(getLastApartmentDecorInstancingSummary()).toBeNull();
+  });
+
+  it("batches every submesh when a prop has multiple meshes (post-merge fallback)", () => {
+    const unitRoot = new THREE.Group();
+    const path = "static/models/objects/cigarette.glb";
+    for (let i = 0; i < 3; i++) {
+      const g = decorPropGroup(path, { meshCount: 2 });
+      g.position.set(i, 0, 0);
+      unitRoot.add(g);
+    }
+
+    applyApartmentDecorCrossPlacementInstancing(unitRoot);
+
+    const instanced = unitRoot.children.filter(
+      (c) => c instanceof THREE.InstancedMesh,
+    ) as THREE.InstancedMesh[];
+    expect(instanced).toHaveLength(2);
+    expect(instanced.every((m) => m.count === 3)).toBe(true);
   });
 });

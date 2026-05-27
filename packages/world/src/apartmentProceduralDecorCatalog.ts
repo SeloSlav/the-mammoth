@@ -48,11 +48,19 @@ export function postProcessApartmentDecorGltfScene(
   // Authored GLBs are expected to carry their final materials and geometry.
 }
 
-/** Procedural decor uses custom materials (glass/water) — never batch-merge its meshes. */
-export function tagProceduralApartmentDecorMeshesSkipMerge(root: THREE.Object3D): void {
+/**
+ * Skip client decor material merge. Editor never merges; game merge breaks Draco/KTX2 GLBs
+ * (empty or corrupt geometry after `mergeGeometries`).
+ */
+export function tagApartmentDecorMeshesSkipMaterialMerge(root: THREE.Object3D): void {
   root.traverse((obj) => {
     if (obj instanceof THREE.Mesh) {
       obj.userData.mammothSkipFloorGeometryMerge = true;
     }
   });
+}
+
+/** @deprecated Use {@link tagApartmentDecorMeshesSkipMaterialMerge}. */
+export function tagProceduralApartmentDecorMeshesSkipMerge(root: THREE.Object3D): void {
+  tagApartmentDecorMeshesSkipMaterialMerge(root);
 }

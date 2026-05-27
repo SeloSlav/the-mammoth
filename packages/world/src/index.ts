@@ -224,6 +224,7 @@ export {
   isProceduralApartmentDecorModelPath,
   mergeApartmentDecorManifestPaths,
   postProcessApartmentDecorGltfScene,
+  tagApartmentDecorMeshesSkipMaterialMerge,
   tagProceduralApartmentDecorMeshesSkipMerge,
   type ApartmentProceduralDecorModelPath,
 } from "./apartmentProceduralDecorCatalog.js";

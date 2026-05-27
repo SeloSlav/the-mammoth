@@ -169,15 +169,15 @@ function decorRootHasDedicatedPick(root: THREE.Object3D): boolean {
   return found;
 }
 
-function firstInstancingMesh(root: THREE.Object3D): THREE.Mesh | null {
-  let hit: THREE.Mesh | null = null;
+function collectInstancingMeshes(root: THREE.Object3D): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = [];
   root.traverse((obj) => {
-    if (hit || !(obj instanceof THREE.Mesh)) return;
+    if (!(obj instanceof THREE.Mesh)) return;
     if (obj.userData.mammothCeilingLensGlowMesh === true) return;
     if (!(obj.geometry instanceof THREE.BufferGeometry)) return;
-    hit = obj;
+    meshes.push(obj);
   });
-  return hit;
+  return meshes;
 }
 
 function isDevLog(): boolean {
@@ -208,7 +208,7 @@ export function applyApartmentDecorCrossPlacementInstancing(
     const path = root.userData.mammothApartmentDecorModelRelPath as string;
     if (!decorPathEligible(path, root.userData.mammothApartmentDecorPlacedKind)) continue;
     if (decorRootHasDedicatedPick(root)) continue;
-    if (firstInstancingMesh(root) === null) continue;
+    if (collectInstancingMeshes(root).length === 0) continue;
     const key = normalizeApartmentDecorModelRelPath(path) ?? path;
     const list = byPath.get(key) ?? [];
     list.push(root);
@@ -223,33 +223,46 @@ export function applyApartmentDecorCrossPlacementInstancing(
 
   for (const [path, roots] of byPath) {
     if (roots.length < MIN_INSTANCES_PER_PATH) continue;
-    const templateMesh = firstInstancingMesh(roots[0]!);
-    if (!templateMesh) continue;
-
-    const geometry = templateMesh.geometry;
-    const material = templateMesh.material;
-    if (Array.isArray(material)) continue;
-
-    const instanced = new THREE.InstancedMesh(geometry, material, roots.length);
-    instanced.name = `decor_inst:${path.split("/").pop() ?? path}`;
-    instanced.frustumCulled = true;
-    instanced.userData.mammothApartmentDecorInstancedBatch = path;
-    instanced.userData.mammothSkipFloorGeometryMerge = true;
-    instanced.layers.mask = templateMesh.layers.mask;
+    const templateMeshes = collectInstancingMeshes(roots[0]!);
+    if (templateMeshes.length === 0) continue;
 
     batchParent.updateMatrixWorld(true);
     parentInv.copy(batchParent.matrixWorld).invert();
 
-    for (let i = 0; i < roots.length; i++) {
-      const root = roots[i]!;
-      root.updateMatrixWorld(true);
-      scratchMatrix.multiplyMatrices(parentInv, root.matrixWorld);
-      instanced.setMatrixAt(i, scratchMatrix);
-      root.visible = false;
-      root.userData.mammothApartmentDecorInstanced = true;
+    let pathBatched = false;
+    for (let meshIndex = 0; meshIndex < templateMeshes.length; meshIndex++) {
+      const templateMesh = templateMeshes[meshIndex]!;
+      const geometry = templateMesh.geometry;
+      const material = templateMesh.material;
+      if (Array.isArray(material)) continue;
+
+      const instanced = new THREE.InstancedMesh(geometry, material, roots.length);
+      instanced.name = `decor_inst:${path.split("/").pop() ?? path}:${templateMesh.name || meshIndex}`;
+      instanced.frustumCulled = true;
+      instanced.userData.mammothApartmentDecorInstancedBatch = path;
+      instanced.userData.mammothSkipFloorGeometryMerge = true;
+      instanced.layers.mask = templateMesh.layers.mask;
+
+      for (let i = 0; i < roots.length; i++) {
+        const root = roots[i]!;
+        root.updateMatrixWorld(true);
+        const instanceMeshes = collectInstancingMeshes(root);
+        const sourceMesh = instanceMeshes[meshIndex];
+        if (!sourceMesh) continue;
+        sourceMesh.updateMatrixWorld(true);
+        scratchMatrix.multiplyMatrices(parentInv, sourceMesh.matrixWorld);
+        instanced.setMatrixAt(i, scratchMatrix);
+        if (!pathBatched) {
+          root.visible = false;
+          root.userData.mammothApartmentDecorInstanced = true;
+        }
+      }
+      instanced.instanceMatrix.needsUpdate = true;
+      batchParent.add(instanced);
+      pathBatched = true;
     }
-    instanced.instanceMatrix.needsUpdate = true;
-    batchParent.add(instanced);
+
+    if (!pathBatched) continue;
 
     batchCount += 1;
     instanceCount += roots.length;

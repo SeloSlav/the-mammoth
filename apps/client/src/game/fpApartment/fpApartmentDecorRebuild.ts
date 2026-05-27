@@ -10,7 +10,7 @@ import {
   buildProceduralApartmentDecorVisual,
   isProceduralApartmentDecorModelPath,
   postProcessApartmentDecorGltfScene,
-  tagProceduralApartmentDecorMeshesSkipMerge,
+  tagApartmentDecorMeshesSkipMaterialMerge,
   MAMMOTH_FP_INTERIOR_PARTITION_SOLID,
 } from "@the-mammoth/world";
 import {
@@ -30,7 +30,6 @@ import {
   isApartmentNotebookModelRelPath,
 } from "@the-mammoth/schemas";
 import type { DbConnection } from "../../module_bindings";
-import { mergeGroupDescendantsByMaterialYielding } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
 import { FP_INTERACTION_PICK_LAYER } from "../fpSession/fpSessionConstants.js";
 import {
   tagApartmentDecorPropMeshesForMirrorExclusion,
@@ -630,10 +629,12 @@ export async function runFpApartmentDecorFullRebuild(
         if (ctx.isBuildStale(epoch)) return;
         template.userData.mammothApartmentDecorTemplate = templateCacheKey;
         ctx.templateByUrl.set(templateCacheKey, template);
-      } catch {
+      } catch (err) {
         console.warn(
           "[mountFpApartmentDecorMeshes] failed to load decor asset",
+          effectiveModelRelPath,
           templateCacheKey,
+          err,
         );
         continue;
       }
@@ -682,26 +683,19 @@ export async function runFpApartmentDecorFullRebuild(
       vis.scale.setScalar(ownedApartmentPlacedItemAuthoringAssetVisScale(d.placedKind));
       vis.updateMatrixWorld(true);
 
-      if (isProceduralApartmentDecorModelPath(effectiveModelRelPath)) {
-        tagProceduralApartmentDecorMeshesSkipMerge(vis);
-      }
+      tagApartmentDecorMeshesSkipMaterialMerge(vis);
 
       g.add(vis);
       if (d.source === "content" && !ownedApartmentPlacedItemKindHasStash(d.placedKind)) {
         centerVisualBoundsOnRoot(g);
       }
-      await mergeGroupDescendantsByMaterialYielding(g, ctx.yieldToMain);
+      // No material merge — same as editor preview; merge breaks Draco/KTX2 apartment GLBs.
       attachApartmentWarmFixtureBulbGlow(g, d.modelRelPath);
       bindMammothApartmentPropReadableEnv(g, ctx.metallicReadableEnv());
 
       const fishTankNormalizedPath =
         normalizeApartmentDecorModelRelPath(effectiveModelRelPath) ?? effectiveModelRelPath;
       if (isApartmentFishTankModelRelPath(fishTankNormalizedPath)) {
-        // Material merge removes `vis` from the decor root while baking tank meshes onto `g`.
-        // Fish swim in GLB-local space — keep the visual root in the scene graph for mounting.
-        if (vis.parent !== g) {
-          g.add(vis);
-        }
         const swimKey =
           d.decorId !== null
             ? `${d.unit.unitKey}:decor:${d.decorId.toString()}`
