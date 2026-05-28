@@ -20,6 +20,8 @@ export type FpSessionUnitInteriorMeshEntry = {
   plateLevelIndex: number | null;
   /** Corridor hollow shell + corridor-only signage on double-loaded plates. */
   corridorHallwayShell: boolean;
+  /** Merged stair-shaft interior — visibility follows {@link mammothStairColumnRoot} segments, not hallway filler rules. */
+  underStairColumnRoot: boolean;
 };
 
 /** Plaster hollow shell pieces for a `unit_*` placed object (not exterior cladding or glass). */
@@ -53,7 +55,11 @@ function resolveUnitInteriorMeshEntry(
   let apartmentSwingDoor = false;
   let plateLevelIndex: number | null = null;
   let corridorHallwayShell = false;
+  let underStairColumnRoot = false;
   for (let cur: THREE.Object3D | null = mesh; cur; cur = cur.parent) {
+    if (cur.userData.mammothStairColumnRoot === true) {
+      underStairColumnRoot = true;
+    }
     if (plateLevelIndex === null && typeof cur.userData.mammothPlateLevelIndex === "number") {
       plateLevelIndex = cur.userData.mammothPlateLevelIndex;
     }
@@ -98,6 +104,7 @@ function resolveUnitInteriorMeshEntry(
     isResidentialShellPlaster: isResidentialUnitShellPlasterMesh(mesh),
     plateLevelIndex,
     corridorHallwayShell,
+    underStairColumnRoot,
   };
 }
 

@@ -166,4 +166,22 @@ describe("collectFpSessionUnitInteriorMeshEntries", () => {
     expect(result[0]?.apartmentUnitKey).toBe(null);
     expect(result[0]?.plateLevelIndex).toBe(20);
   });
+
+  it("marks stair-column merged interiors as underStairColumnRoot", () => {
+    const buildingRoot = new THREE.Group();
+    const col = new THREE.Group();
+    col.userData.mammothStairColumnRoot = true;
+    const segment = new THREE.Group();
+    segment.userData.mammothPlateLevelIndex = 17;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+    mesh.userData.mammothUnitInterior = true;
+    segment.add(mesh);
+    col.add(segment);
+    buildingRoot.add(col);
+
+    const result = collectFpSessionUnitInteriorMeshEntries(buildingRoot);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.underStairColumnRoot).toBe(true);
+    expect(result[0]?.plateLevelIndex).toBe(17);
+  });
 });

@@ -196,6 +196,23 @@ export function fpApplyResidentialInteriorPlateBandOverride(input: {
  * Abandoned extraction storeys share the corridor lighting rig inside units — keep same-storey
  * corridor shells/signage visible through open thresholds; residential floors still cull them.
  */
+/**
+ * Floor plates use {@link fpBuildingFloorPlateVisibilityBand}; unit interior meshes must share that
+ * band or every `mammothUnitInterior` child stays `.visible` while plates are off (see band comment
+ * in `fpBuildingFloorPlateVisibilityBand.ts`).
+ */
+export function fpUnitInteriorMeshInActivePlateBand(input: {
+  plateLevelIndex: number | null;
+  activePlateBandLo: number;
+  activePlateBandHi: number;
+}): boolean {
+  const { plateLevelIndex, activePlateBandLo, activePlateBandHi } = input;
+  if (plateLevelIndex == null) return true;
+  return (
+    plateLevelIndex >= activePlateBandLo && plateLevelIndex <= activePlateBandHi
+  );
+}
+
 export function fpKeepCorridorShellVisibleInsideExtractionBandUnit(input: {
   containingStoryLevelIndex: number | null;
   entry: {
@@ -220,6 +237,7 @@ export function fpResolveUnitInteriorMeshVisible(input: {
     | "genericInteriorVisibleInResidentialUnit"
     | "apartmentSwingDoor"
     | "isResidentialShellPlaster"
+    | "underStairColumnRoot"
   > & { plateLevelIndex?: number | null; corridorHallwayShell?: boolean };
   unitInteriorVisible: boolean;
   apartmentDecorInteriorVisible: boolean;
@@ -237,8 +255,27 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   retainedResidentialUnitKey?: string | null;
   /** Building `levelIndex` for the unit hull feet occupy (when indoors). */
   containingStoryLevelIndex?: number | null;
+  /** Smoothed plate band — same as `buildingRoot` child `mammothPlateLevelIndex` toggles. */
+  activePlateBandLo?: number;
+  activePlateBandHi?: number;
 }): boolean {
   const { entry } = input;
+  const inPlateBand = fpUnitInteriorMeshInActivePlateBand({
+    plateLevelIndex: entry.plateLevelIndex ?? null,
+    activePlateBandLo: input.activePlateBandLo ?? 1,
+    activePlateBandHi: input.activePlateBandHi ?? 999,
+  });
+  if (!inPlateBand) {
+    return false;
+  }
+  if (entry.underStairColumnRoot) {
+    /**
+     * Stair column segments toggle `.visible` on their storey groups; merged shaft interiors are
+     * also tagged `mammothUnitInterior` and must not be forced off by the hallway filler rule.
+     * Litter / props still use {@link setStairSegmentDetailVisible} on the segment subtree.
+     */
+    return input.unitInteriorVisible;
+  }
   if (entry.apartmentSwingDoor) {
     /**
      * Instanced corridor doors are not tied to a single `residentialUnitId` mesh. They must stay
@@ -287,10 +324,23 @@ export function fpResolveUnitInteriorMeshVisible(input: {
       );
     }
     /**
-     * Exterior unit glass is part of the facade, so keep it available for outside/perimeter views.
-     * Once inside a unit, the branch above hides every other unit's transparent glass.
+     * Exterior glass: in the hallway only units in door PVS (open peek), not every pane on the slab.
+     * Outside the lighting envelope, keep glass for façade / perimeter views.
      */
-    if (entry.residentialExteriorGlass) return true;
+    if (entry.residentialExteriorGlass) {
+      if (input.insideApartmentInteriorLightingZone && !input.insideResidentialUnit) {
+        const pvsIds = input.corridorPvsVisibleUnitIds;
+        return (
+          entry.residentialUnitId !== null &&
+          pvsIds !== undefined &&
+          pvsIds.has(entry.residentialUnitId)
+        );
+      }
+      if (!input.insideApartmentInteriorLightingZone) {
+        return true;
+      }
+      return input.unitInteriorVisible || input.exteriorShellPlasterVisible;
+    }
     if (
       entry.isResidentialShellPlaster &&
       (input.unitInteriorVisible || input.exteriorShellPlasterVisible)
@@ -316,6 +366,10 @@ export function fpResolveUnitInteriorMeshVisible(input: {
      * Extraction-band units are the exception — corridor shells stay live on the same storey (see above).
      */
     return false;
+  }
+  if (input.insideApartmentInteriorLightingZone && !input.insideResidentialUnit) {
+    if (!input.unitInteriorVisible) return false;
+    return entry.corridorHallwayShell === true;
   }
   return input.unitInteriorVisible;
 }
@@ -417,6 +471,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
 
   let _lastBandLo = -999;
   let _lastBandHi = -999;
+  let _lastUnitVisPlateBandLo = -999;
+  let _lastUnitVisPlateBandHi = -999;
   let _lastStairBandLo = -999;
   let _lastStairBandHi = -999;
   let _lastStairDetailLo = -999;
@@ -789,8 +845,12 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       containingResidentialUnitKey !== _lastContainingResidentialUnitKey ||
       retainedResidentialUnitId !== _lastRetainedResidentialUnitId ||
       insideApartmentInteriorLightingZone !== _lastInsideApartmentInteriorLightingZone ||
-      corridorPvsChanged;
+      corridorPvsChanged ||
+      _visBandSmoothLo !== _lastUnitVisPlateBandLo ||
+      _visBandSmoothHi !== _lastUnitVisPlateBandHi;
     if (unitInteriorVisibilityChanged || insideResidentialUnit) {
+      _lastUnitVisPlateBandLo = _visBandSmoothLo;
+      _lastUnitVisPlateBandHi = _visBandSmoothHi;
       _lastUnitInteriorVisible = unitInteriorVisible;
       _lastExteriorShellPlasterVisible = exteriorShellPlasterVisible;
       _lastTrueExteriorView = trueExteriorView;
@@ -819,6 +879,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
             corridorPvsVisibleUnitKeys: corridorPvs.unitKeys,
             retainedResidentialUnitKey,
             containingStoryLevelIndex: containingResidentialUnit?.level ?? null,
+            activePlateBandLo: _visBandSmoothLo,
+            activePlateBandHi: _visBandSmoothHi,
           });
         entry.mesh.frustumCulled = true;
         if (

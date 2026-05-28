@@ -3,6 +3,8 @@ import {
   landingKatSignText,
   landingKatSignTextForStory,
   oppositeCardinalFace,
+  stairwellInteriorKatSignTangentCenter,
+  stairwellInteriorKatSignViewerRightTangentSign,
 } from "./elevatorLandingKatSign.js";
 
 describe("landingKatSignTextForStory", () => {
@@ -35,5 +37,27 @@ describe("oppositeCardinalFace", () => {
     expect(oppositeCardinalFace("w")).toBe("e");
     expect(oppositeCardinalFace("n")).toBe("s");
     expect(oppositeCardinalFace("s")).toBe("n");
+  });
+});
+
+describe("stairwellInteriorKatSignViewerRightTangentSign", () => {
+  it("matches stair door viewer-right convention", () => {
+    expect(stairwellInteriorKatSignViewerRightTangentSign("e")).toBe(1);
+    expect(stairwellInteriorKatSignViewerRightTangentSign("s")).toBe(1);
+    expect(stairwellInteriorKatSignViewerRightTangentSign("w")).toBe(-1);
+    expect(stairwellInteriorKatSignViewerRightTangentSign("n")).toBe(-1);
+  });
+});
+
+describe("stairwellInteriorKatSignTangentCenter", () => {
+  it("offsets to viewer-right of the door along the wall", () => {
+    const sx = 4;
+    const sz = 4;
+    const doorHalfW = 0.45;
+    const doorT = 0;
+    const east = stairwellInteriorKatSignTangentCenter("e", doorT, doorHalfW, sx, sz);
+    const west = stairwellInteriorKatSignTangentCenter("w", doorT, doorHalfW, sx, sz);
+    expect(east).toBeGreaterThan(doorT);
+    expect(west).toBeLessThan(doorT);
   });
 });

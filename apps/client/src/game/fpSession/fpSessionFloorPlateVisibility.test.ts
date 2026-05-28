@@ -7,7 +7,10 @@ import {
   fpResolveUnitInteriorMeshVisible,
   fpKeepCorridorShellVisibleInsideExtractionBandUnit,
   fpShouldExpandContainingResidentialShellFrustumBounds,
+  fpUnitInteriorMeshInActivePlateBand,
 } from "./fpSessionFloorPlateVisibility";
+
+const deck16PlateBand = { activePlateBandLo: 17, activePlateBandHi: 17 } as const;
 
 describe("fpApplyResidentialInteriorPlateBandOverride", () => {
   it("clamps a residential interior view back to the local storey", () => {
@@ -142,7 +145,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
     ).toBe(false);
   });
 
-  it("keeps anonymous corridor shells visible in the hallway lighting zone", () => {
+  it("keeps tagged hallway corridor shells on the active plate band only", () => {
     expect(
       fpResolveUnitInteriorMeshVisible({
         entry: {
@@ -152,6 +155,8 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
           genericInteriorVisibleInResidentialUnit: false,
           apartmentSwingDoor: false,
           isResidentialShellPlaster: false,
+          corridorHallwayShell: true,
+          plateLevelIndex: 17,
         },
         unitInteriorVisible: true,
         apartmentDecorInteriorVisible: true,
@@ -160,8 +165,123 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         containingResidentialUnitId: null,
         containingResidentialUnitKey: null,
         exteriorShellPlasterVisible: false,
+        ...deck16PlateBand,
       }),
     ).toBe(true);
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: {
+          apartmentUnitKey: null,
+          residentialUnitId: null,
+          residentialExteriorGlass: false,
+          genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
+          isResidentialShellPlaster: false,
+          corridorHallwayShell: true,
+          plateLevelIndex: 16,
+        },
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: true,
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
+        exteriorShellPlasterVisible: false,
+        ...deck16PlateBand,
+      }),
+    ).toBe(false);
+  });
+
+  it("hides untagged anonymous interior filler in the hallway", () => {
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: {
+          apartmentUnitKey: null,
+          residentialUnitId: null,
+          residentialExteriorGlass: false,
+          genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
+          isResidentialShellPlaster: false,
+          corridorHallwayShell: false,
+          underStairColumnRoot: false,
+          plateLevelIndex: 17,
+        },
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: true,
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
+        exteriorShellPlasterVisible: false,
+        ...deck16PlateBand,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps merged stair-shaft interiors visible in the hallway (segment band owns off-storeys)", () => {
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: {
+          apartmentUnitKey: null,
+          residentialUnitId: null,
+          residentialExteriorGlass: false,
+          genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
+          isResidentialShellPlaster: false,
+          corridorHallwayShell: false,
+          underStairColumnRoot: true,
+          plateLevelIndex: 17,
+        },
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: true,
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
+        exteriorShellPlasterVisible: false,
+        ...deck16PlateBand,
+      }),
+    ).toBe(true);
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: {
+          apartmentUnitKey: null,
+          residentialUnitId: null,
+          residentialExteriorGlass: false,
+          genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
+          isResidentialShellPlaster: false,
+          corridorHallwayShell: false,
+          underStairColumnRoot: true,
+          plateLevelIndex: 17,
+        },
+        unitInteriorVisible: false,
+        apartmentDecorInteriorVisible: true,
+        insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: true,
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
+        exteriorShellPlasterVisible: false,
+        ...deck16PlateBand,
+      }),
+    ).toBe(false);
+  });
+
+  it("culls unit interior meshes outside the active floor plate band", () => {
+    expect(
+      fpUnitInteriorMeshInActivePlateBand({
+        plateLevelIndex: 17,
+        activePlateBandLo: 17,
+        activePlateBandHi: 17,
+      }),
+    ).toBe(true);
+    expect(
+      fpUnitInteriorMeshInActivePlateBand({
+        plateLevelIndex: 5,
+        activePlateBandLo: 17,
+        activePlateBandHi: 17,
+      }),
+    ).toBe(false);
   });
 
   it("shows furnished props for corridor PVS unit keys while walking the hallway", () => {

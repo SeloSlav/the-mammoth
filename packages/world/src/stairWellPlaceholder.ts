@@ -40,6 +40,7 @@ import { attachStairWellLandingProps } from "./stairWellLandingProps.js";
 import { attachStairWellCeilingProps } from "./stairWellCeilingProps.js";
 import { attachStairwellCigaretteLitter } from "./stairwellCigaretteLitter.js";
 import { tagShaftShellMeshesSkipFloorGeometryMerge } from "./elevatorShaftPlaceholder.js";
+import { addStairwellInteriorKatSignMeshes } from "./elevatorLandingKatSign.js";
 
 export type StairWellPreviewOpeningSpec = {
   proxyId: StairWellOpeningProxyId;
@@ -121,6 +122,9 @@ export type StairWellPlaceholderOpts = SwitchbackStairOpts & {
    * cap). Enables roof-landing props opposite the authored `entryOpening`.
    */
   isTopOccupiedStairStorey?: boolean;
+  /** Building stack storey index for corridor-door KAT signage (see {@link landingKatSignText}). */
+  storyLevelIndex?: number;
+  storyShortLabel?: string;
 };
 
 export function tagGeneratedStairWellShellParts(
@@ -359,6 +363,24 @@ export function addStairWellPlaceholder(
       opening,
     })),
   ]);
+  if (resolvedGroundDoor && opts?.storyLevelIndex != null) {
+    addStairwellInteriorKatSignMeshes(
+      group,
+      sx,
+      sy,
+      sz,
+      opts.storyLevelIndex,
+      opts.storyShortLabel,
+      [
+        {
+          doorFace: resolvedGroundDoor.face,
+          tangentOffsetAlongWall: resolvedGroundDoor.tangentOffsetAlongWallM,
+          doorHalfW: resolvedGroundDoor.doorHalfW,
+          yDoorTop: resolvedGroundDoor.y1Local,
+        },
+      ],
+    );
+  }
 
   const boundary = lowerFlightLegBoundary(L.legTreadCounts);
 

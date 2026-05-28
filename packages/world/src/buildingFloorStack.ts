@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import type { BuildingDoc, FloorDoc, StairWellDef } from "@the-mammoth/schemas";
-import { shortFloorLabelForRef } from "./buildingFloorLabels.js";
+import {
+  buildFloorShortLabelMap,
+  shortFloorLabelForRef,
+} from "./buildingFloorLabels.js";
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import { buildFloorMeshes } from "./floorPlaceholderMeshes.js";
 import { elevatorDoorFacesFromGroundFloorDoc } from "./elevatorDoorFacesFromGroundFloorDoc.js";
@@ -67,6 +70,7 @@ type BuildingFloorStackBuildContext = {
   spacing: number;
   o: readonly [number, number, number] | undefined;
   options: InstantiateBuildingFloorStackOptions | undefined;
+  floorShortLabelMap: ReturnType<typeof buildFloorShortLabelMap>;
 };
 
 function createBuildingFloorStackBuildContext(
@@ -125,6 +129,7 @@ function createBuildingFloorStackBuildContext(
     spacing,
     o,
     options,
+    floorShortLabelMap: buildFloorShortLabelMap(building),
   };
 }
 
@@ -191,6 +196,7 @@ async function createBuildingFloorStackBuildContextYielding(
     spacing,
     o,
     options,
+    floorShortLabelMap: buildFloorShortLabelMap(building),
   };
 }
 
@@ -218,7 +224,12 @@ function addSingleFloorPlateToStack(ctx: BuildingFloorStackBuildContext, ref: Bu
 
 function finalizeBuildingFloorStackStairColumns(ctx: BuildingFloorStackBuildContext): void {
   if (ctx.stairShaftSpecs.length > 0) {
-    addBuildingStairShaftColumnsToRoot(ctx.root, ctx.stairShaftSpecs, ctx.options?.stairWellDef);
+    addBuildingStairShaftColumnsToRoot(
+      ctx.root,
+      ctx.stairShaftSpecs,
+      ctx.options?.stairWellDef,
+      ctx.floorShortLabelMap,
+    );
   }
 }
 
@@ -232,6 +243,7 @@ async function finalizeBuildingFloorStackStairColumnsYielding(
     ctx.stairShaftSpecs,
     ctx.options?.stairWellDef,
     yieldBetweenColumns,
+    ctx.floorShortLabelMap,
   );
 }
 

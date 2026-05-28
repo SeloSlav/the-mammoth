@@ -1,10 +1,44 @@
 import * as THREE from "three";
+import { clampStairDoorTangentAlongInnerWall } from "./stairWellGeometry.js";
 import type { CardinalFace } from "./wallWithDoorCutout.js";
 import { MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD } from "./mammothMeshUserData.js";
 
 /** Corridor wall quad (m) — large landing label, similar width to Končar bay signage. */
 const KAT_CORRIDOR_PLANE_W = 1.34;
 const KAT_CORRIDOR_PLANE_H = 0.4;
+const KAT_SIGN_DOOR_GAP_M = 0.07;
+
+/** Room-local anchor for a KAT sign beside the corridor door, viewed from inside the shaft. */
+export type StairwellInteriorKatSignPlacement = {
+  doorFace: CardinalFace;
+  tangentOffsetAlongWall: number;
+  doorHalfW: number;
+  yDoorTop: number;
+};
+
+/**
+ * +1 / −1 along the door-wall tangent for the viewer's right when facing the opening from inside
+ * the shaft (same convention as {@link shiftStairDoorTangentViewerRightFromInside}).
+ */
+export function stairwellInteriorKatSignViewerRightTangentSign(face: CardinalFace): number {
+  return face === "e" || face === "s" ? 1 : -1;
+}
+
+/** Along-wall center (m) for the sign mesh — clamped to the inner wall span. */
+export function stairwellInteriorKatSignTangentCenter(
+  face: CardinalFace,
+  doorTangent: number,
+  doorHalfW: number,
+  sx: number,
+  sz: number,
+  wt = 0.11,
+): number {
+  const signHalfW = KAT_CORRIDOR_PLANE_W * 0.5;
+  const rightSign = stairwellInteriorKatSignViewerRightTangentSign(face);
+  const raw =
+    doorTangent + rightSign * (doorHalfW + KAT_SIGN_DOOR_GAP_M + signHalfW);
+  return clampStairDoorTangentAlongInnerWall(face, raw, signHalfW, sx, sz, wt);
+}
 
 /**
  * Croatian-style storey label for elevator landing signage (`"${n} KAT"`).
@@ -139,6 +173,68 @@ export function addOppositeCorridorKatSignMeshes(
       const z = -hz + wt + inset;
       mesh.position.set(pl.xMid, y, z);
       mesh.lookAt(pl.xMid, y, z + lookDepth);
+    }
+    group.add(mesh);
+  }
+}
+
+/**
+ * “N KAT” signs on the **stairwell interior** wall, to the viewer's right of each corridor door
+ * (same canvas as elevator landing labels).
+ */
+export function addStairwellInteriorKatSignMeshes(
+  group: THREE.Group,
+  sx: number,
+  _sy: number,
+  sz: number,
+  storyLevelIndex: number,
+  storyShortLabel: string | undefined,
+  placements: readonly StairwellInteriorKatSignPlacement[],
+): void {
+  const label = landingKatSignText(storyLevelIndex, storyShortLabel);
+  if (!label || placements.length === 0) return;
+  const mat = createElevatorKatSignMaterial(label);
+  if (!mat) return;
+
+  const wt = 0.11;
+  const hx = sx * 0.5;
+  const hz = sz * 0.5;
+  const geo = new THREE.PlaneGeometry(KAT_CORRIDOR_PLANE_W, KAT_CORRIDOR_PLANE_H);
+  const inset = 0.014;
+  const lookDepth = 2.5;
+
+  let i = 0;
+  for (const pl of placements) {
+    const wall = pl.doorFace;
+    const tang = stairwellInteriorKatSignTangentCenter(
+      wall,
+      pl.tangentOffsetAlongWall,
+      pl.doorHalfW,
+      sx,
+      sz,
+      wt,
+    );
+    const y = pl.yDoorTop + 0.07 + KAT_CORRIDOR_PLANE_H * 0.5;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = `stairwell_sign_kat_interior_${i++}`;
+    mesh.userData.mammothSkipFloorGeometryMerge = true;
+
+    if (wall === "e") {
+      const x = hx - wt - inset;
+      mesh.position.set(x, y, tang);
+      mesh.lookAt(x - lookDepth, y, tang);
+    } else if (wall === "w") {
+      const x = -hx + wt + inset;
+      mesh.position.set(x, y, tang);
+      mesh.lookAt(x + lookDepth, y, tang);
+    } else if (wall === "n") {
+      const z = hz - wt - inset;
+      mesh.position.set(tang, y, z);
+      mesh.lookAt(tang, y, z - lookDepth);
+    } else {
+      const z = -hz + wt + inset;
+      mesh.position.set(tang, y, z);
+      mesh.lookAt(tang, y, z + lookDepth);
     }
     group.add(mesh);
   }

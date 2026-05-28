@@ -359,9 +359,13 @@ export {
 } from "./elevatorCollisionTuning.js";
 export {
   addOppositeCorridorKatSignMeshes,
+  addStairwellInteriorKatSignMeshes,
   landingKatSignTextForStory,
   oppositeCardinalFace,
+  stairwellInteriorKatSignTangentCenter,
+  stairwellInteriorKatSignViewerRightTangentSign,
 } from "./elevatorLandingKatSign.js";
+export type { StairwellInteriorKatSignPlacement } from "./elevatorLandingKatSign.js";
 export {
   applyCabMaterialSlot,
   applyLandingFrameSlot,

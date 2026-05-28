@@ -13,6 +13,10 @@ import {
 } from "./exteriorFaceExposure.js";
 import { shaftDoorTowardPointFromFloorCorridors } from "./shaftCorridorFlush.js";
 import type { CardinalFace } from "./wallWithDoorCutout.js";
+import {
+  type FloorShortLabelMap,
+  shortFloorLabelForLevel,
+} from "./buildingFloorLabels.js";
 
 /**
  * Reads optional authored facade direction on stair/elevator `PlacedObject.metadata`
@@ -218,6 +222,7 @@ export function addBuildingStairShaftColumnToRoot(
   root: THREE.Group,
   s: BuildingStairShaftSpec,
   stairWellDef?: StairWellDef,
+  floorShortLabels?: FloorShortLabelMap,
 ): void {
   const col = new THREE.Group();
   col.name = `stair_shaft:${s.id}`;
@@ -258,6 +263,7 @@ export function addBuildingStairShaftColumnToRoot(
       }
     }
     col.add(segment);
+    const storyLevelIndex = s.minLevelIndex + i;
     addStairWellPlaceholder(segment, s.sx, sySeg, s.sz, {
       omitGroundStoreyCornerLandings: i === 0,
       def: stairWellDef,
@@ -273,6 +279,8 @@ export function addBuildingStairShaftColumnToRoot(
       interiorWallUvAlternated: (s.minLevelIndex + i - 1) % 2 === 1,
       segmentScatterSeed: stairwellLitterScatterSeed(s.planKey, i),
       stairGraphicsMergeRoot: col,
+      storyLevelIndex,
+      storyShortLabel: shortFloorLabelForLevel(storyLevelIndex, floorShortLabels),
     });
   }
   root.add(col);
@@ -283,10 +291,11 @@ export function addBuildingStairShaftColumnsToRoot(
   root: THREE.Group,
   specs: readonly BuildingStairShaftSpec[],
   stairWellDef?: StairWellDef,
+  floorShortLabels?: FloorShortLabelMap,
 ): void {
   if (specs.length === 0) return;
   for (const s of specs) {
-    addBuildingStairShaftColumnToRoot(root, s, stairWellDef);
+    addBuildingStairShaftColumnToRoot(root, s, stairWellDef, floorShortLabels);
   }
 }
 
@@ -299,10 +308,11 @@ export async function addBuildingStairShaftColumnsToRootYielding(
   specs: readonly BuildingStairShaftSpec[],
   stairWellDef: StairWellDef | undefined,
   yieldAfterEachColumn: () => Promise<void>,
+  floorShortLabels?: FloorShortLabelMap,
 ): Promise<void> {
   if (specs.length === 0) return;
   for (const s of specs) {
-    addBuildingStairShaftColumnToRoot(root, s, stairWellDef);
+    addBuildingStairShaftColumnToRoot(root, s, stairWellDef, floorShortLabels);
     await yieldAfterEachColumn();
   }
 }

@@ -346,6 +346,8 @@ export function buildFloorMeshes(
           segmentScatterSeed: stairwellLitterScatterSeed(sk, story),
           stairGraphicsMergeRoot: room.parent ?? room,
           isTopOccupiedStairStorey: typicalTop,
+          storyLevelIndex: story,
+          storyShortLabel: opts?.storyShortLabel,
         });
       }
     } else {
