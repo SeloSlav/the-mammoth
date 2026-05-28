@@ -11,24 +11,11 @@ import {
   resetFpAuthoringAdsFovPreview,
   setFpAuthoringAdsFovPreview,
 } from "../fpSession/fpSessionAuthoringAdsFov.js";
-import {
-  FP_COMBAT_AIM_FOV_DEG,
-  FP_COMBAT_HIP_FOV_DEG,
-  snapFpCombatAimFov,
-} from "../fpSession/fpSessionCombatAim.js";
-import { subscribeFpHotbarSelection } from "../fpHotbar/fpHotbarSelection.js";
+import { snapFpCombatAimFov } from "../fpSession/fpSessionCombatAim.js";
 import {
   revertLocalWeaponPresentationFromDisk,
   saveLocalWeaponPresentationFromAuthoring,
 } from "./weaponPresentationDevDiskSave.js";
-
-/** Hip authoring gizmo screen size (TransformControls). */
-const FP_AUTHOR_GIZMO_SIZE_HIP = 0.78;
-/** Compensate for narrower ADS FOV so handles stay usable. */
-const FP_AUTHOR_GIZMO_SIZE_ADS =
-  FP_AUTHOR_GIZMO_SIZE_HIP * (FP_COMBAT_HIP_FOV_DEG / FP_COMBAT_AIM_FOV_DEG) * 1.35;
-/** Lift ADS gizmo along camera up so rings sit above the zoomed weapon mesh. */
-const FP_AUTHOR_AIM_GIZMO_CAMERA_LIFT_M = 0.12;
 
 export type FpViewmodelAuthoringOpts = {
   scene: THREE.Scene;
@@ -77,74 +64,10 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
 
   const transformControls = new TransformControls(camera, canvas);
   patchFpTransformControlsPointerForCaptureCompat(transformControls);
-  transformControls.setSize(FP_AUTHOR_GIZMO_SIZE_HIP);
+  transformControls.setSize(0.78);
   transformControls.setSpace("world");
   const transformHelper = transformControls.getHelper();
   scene.add(transformHelper);
-
-  const aimGizmoPivot = new THREE.Object3D();
-  aimGizmoPivot.name = "fp_author_aim_gizmo_pivot";
-  scene.add(aimGizmoPivot);
-
-  const _gizmoCamUp = new THREE.Vector3();
-  const _gizmoWorldPos = new THREE.Vector3();
-  const _gizmoWorldQuat = new THREE.Quaternion();
-  const _gizmoParentWorldQuat = new THREE.Quaternion();
-  const _gizmoLocalQuat = new THREE.Quaternion();
-
-  const isAuthoringAdsGizmoMode = () =>
-    panelVisible &&
-    presentation.getFpAuthoringPoseMode() === "aim" &&
-    localWeaponSupportsAimAuthoring(presentation);
-
-  const cameraUpWorld = (out: THREE.Vector3) => {
-    out.set(0, 1, 0).applyQuaternion(camera.quaternion);
-  };
-
-  const syncAimGizmoPivotFromRig = (rig: THREE.Object3D) => {
-    cameraUpWorld(_gizmoCamUp);
-    rig.getWorldPosition(_gizmoWorldPos);
-    aimGizmoPivot.position.copy(_gizmoWorldPos).addScaledVector(_gizmoCamUp, FP_AUTHOR_AIM_GIZMO_CAMERA_LIFT_M);
-    rig.getWorldQuaternion(_gizmoWorldQuat);
-    aimGizmoPivot.quaternion.copy(_gizmoWorldQuat);
-    aimGizmoPivot.scale.set(1, 1, 1);
-  };
-
-  const applyAimGizmoPivotToRig = (rig: THREE.Object3D) => {
-    const parent = rig.parent;
-    if (!parent) return;
-    cameraUpWorld(_gizmoCamUp);
-    aimGizmoPivot.getWorldPosition(_gizmoWorldPos);
-    _gizmoWorldPos.addScaledVector(_gizmoCamUp, -FP_AUTHOR_AIM_GIZMO_CAMERA_LIFT_M);
-    parent.worldToLocal(_gizmoWorldPos);
-    rig.position.copy(_gizmoWorldPos);
-    aimGizmoPivot.getWorldQuaternion(_gizmoWorldQuat);
-    parent.getWorldQuaternion(_gizmoParentWorldQuat);
-    _gizmoLocalQuat.copy(_gizmoParentWorldQuat).invert().multiply(_gizmoWorldQuat);
-    rig.quaternion.copy(_gizmoLocalQuat);
-  };
-
-  const syncTransformGizmoAppearance = () => {
-    transformControls.setSize(isAuthoringAdsGizmoMode() ? FP_AUTHOR_GIZMO_SIZE_ADS : FP_AUTHOR_GIZMO_SIZE_HIP);
-    transformHelper.traverse((o) => {
-      if (!(o instanceof THREE.Mesh)) return;
-      const mats = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of mats) {
-        m.depthTest = false;
-        m.depthWrite = false;
-        m.transparent = true;
-      }
-    });
-  };
-
-  let aimGizmoPivotRaf = 0;
-  const tickAimGizmoPivotFollow = () => {
-    aimGizmoPivotRaf = requestAnimationFrame(tickAimGizmoPivotFollow);
-    if (!panelVisible || transformControls.dragging || !isAuthoringAdsGizmoMode()) return;
-    const rig = presentation.getFpAuthoringPickList()[0]?.object;
-    if (rig) syncAimGizmoPivotFromRig(rig);
-  };
-  aimGizmoPivotRaf = requestAnimationFrame(tickAimGizmoPivotFollow);
 
   let panelVisible = new URLSearchParams(location.search).has("fpAuthor");
   activeRef.active = panelVisible;
@@ -340,7 +263,6 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
     presentation.setFpAuthoringPoseMode(mode);
     syncPoseUi();
     syncAuthoringAdsFovPreview();
-    syncTransformGizmoAppearance();
     attachAuthoringTarget();
   };
 
@@ -367,25 +289,11 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
   syncPoseUi();
   syncAuthoringAdsFovPreview();
 
-  const refreshAuthoringAfterWeaponVisual = () => {
-    if (!panelVisible) return;
-    syncPoseUi();
-    syncAuthoringAdsFovPreview();
-    attachAuthoringTarget();
-  };
-
   const attachAuthoringTarget = () => {
     const picks = presentation.getFpAuthoringPickList();
-    const rig = picks[0]?.object;
-    syncTransformGizmoAppearance();
-    if (!rig) {
-      transformControls.detach();
-    } else if (isAuthoringAdsGizmoMode()) {
-      syncAimGizmoPivotFromRig(rig);
-      transformControls.attach(aimGizmoPivot);
-    } else {
-      transformControls.attach(rig);
-    }
+    const target = picks[0];
+    if (target) transformControls.attach(target.object);
+    else transformControls.detach();
     ta.value = buildExportJson(presentation);
   };
 
@@ -452,8 +360,6 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
 
   const onTransformChange = () => {
     if (presentation.getFpAuthoringPoseMode() === "aim") {
-      const rig = presentation.getFpAuthoringPickList()[0]?.object;
-      if (rig) applyAimGizmoPivotToRig(rig);
       presentation.syncLocalFpAuthoringRigAimFromAttachedRig();
     }
     refreshExport();
@@ -463,17 +369,8 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
   const onDraggingChanged = (ev: unknown) => {
     const on = Boolean((ev as { value?: boolean }).value);
     if (on) void document.exitPointerLock();
-    if (!on && isAuthoringAdsGizmoMode()) {
-      const rig = presentation.getFpAuthoringPickList()[0]?.object;
-      if (rig) syncAimGizmoPivotFromRig(rig);
-    }
   };
   transformControls.addEventListener("dragging-changed", onDraggingChanged);
-
-  const unsubHotbar = subscribeFpHotbarSelection(refreshAuthoringAfterWeaponVisual);
-  const unsubWeaponVisual = presentation.subscribeLocalWeaponVisualApplied(
-    refreshAuthoringAfterWeaponVisual,
-  );
 
   const onWinKeydown = (e: KeyboardEvent) => {
     if (e.code !== "Backquote" || e.repeat) return;
@@ -497,13 +394,9 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
   window.addEventListener("keydown", onWinKeydown);
 
   return () => {
-    cancelAnimationFrame(aimGizmoPivotRaf);
-    unsubHotbar();
-    unsubWeaponVisual();
     window.removeEventListener("keydown", onWinKeydown);
     transformControls.removeEventListener("dragging-changed", onDraggingChanged);
     transformControls.removeEventListener("change", onTransformChange);
-    scene.remove(aimGizmoPivot);
     scene.remove(transformHelper);
     transformControls.dispose();
     shell.remove();

@@ -679,6 +679,7 @@ export class LocalFirstPersonPresenter {
     if (!this.viewmodelReady || !this.handScene || !this.weaponGripAnchor) return;
     this.refreshRigRestFromDefinition();
     this.aimBlend01 = 0;
+    this.applyRigRestToRightHandRig();
     const lay = this.resolveFpViewmodelLayout();
     this.handScene.position.copy(lay.handPosition);
     this.handScene.rotation.copy(lay.handEuler);
@@ -686,15 +687,7 @@ export class LocalFirstPersonPresenter {
     this.syncGripAnchorFromLiveHandHierarchy();
     this.equipWeaponFromDefinition();
     this.refreshRigAimFromDefinition();
-    this.reapplyAuthoringFrozenPose();
     this.applyFpHandMeshVisibility();
-  }
-
-  /** After hotbar swap / layout reload while the dev authoring panel is open. */
-  private reapplyAuthoringFrozenPose(): void {
-    if (!this.authoringFrozen) return;
-    if (this.authoringPoseMode === "aim") this.applyRigAimToRightHandRig();
-    else this.applyRigRestToRightHandRig();
   }
 
   private equipWeaponFromDefinition(): void {
