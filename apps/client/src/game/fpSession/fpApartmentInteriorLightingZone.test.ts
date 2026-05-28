@@ -58,25 +58,38 @@ describe("fpResolveApartmentInteriorLightingZone", () => {
 });
 
 describe("fpResolveApartmentInteriorDarkTarget01", () => {
-  it("maps units to full interior dark and circulation to partial fill", () => {
+  it("maps lived-in units to full interior dark and circulation to partial fill", () => {
     expect(
       fpResolveApartmentInteriorDarkTarget01({
         insideApartmentInteriorLightingZone: true,
         insideResidentialUnit: true,
+        storyLevelIndex: 18,
       }),
     ).toBe(1);
     expect(
       fpResolveApartmentInteriorDarkTarget01({
         insideApartmentInteriorLightingZone: true,
         insideResidentialUnit: false,
+        storyLevelIndex: 18,
       }),
     ).toBe(APARTMENT_INTERIOR_VISUAL_PROFILE.circulation.interiorDarkTarget);
     expect(
       fpResolveApartmentInteriorDarkTarget01({
         insideApartmentInteriorLightingZone: false,
         insideResidentialUnit: false,
+        storyLevelIndex: 18,
       }),
     ).toBe(0);
+  });
+
+  it("uses hallway rig inside extraction-band units (display ≤ 16)", () => {
+    expect(
+      fpResolveApartmentInteriorDarkTarget01({
+        insideApartmentInteriorLightingZone: true,
+        insideResidentialUnit: true,
+        storyLevelIndex: 17,
+      }),
+    ).toBe(APARTMENT_INTERIOR_VISUAL_PROFILE.circulation.interiorDarkTarget);
   });
 });
 
@@ -86,19 +99,32 @@ describe("fpResolveApartmentInteriorBounceScale", () => {
       fpResolveApartmentInteriorBounceScale({
         insideApartmentInteriorLightingZone: true,
         insideResidentialUnit: false,
+        storyLevelIndex: 18,
       }),
     ).toBe(APARTMENT_INTERIOR_VISUAL_PROFILE.circulation.bounceScale);
     expect(
       fpResolveApartmentInteriorBounceScale({
         insideApartmentInteriorLightingZone: true,
         insideResidentialUnit: true,
+        storyLevelIndex: 18,
       }),
     ).toBe(1);
     expect(
       fpResolveApartmentInteriorBounceScale({
         insideApartmentInteriorLightingZone: false,
         insideResidentialUnit: false,
+        storyLevelIndex: 18,
       }),
     ).toBe(1);
+  });
+
+  it("boosts bounce inside extraction-band units like the hallway", () => {
+    expect(
+      fpResolveApartmentInteriorBounceScale({
+        insideApartmentInteriorLightingZone: true,
+        insideResidentialUnit: true,
+        storyLevelIndex: 17,
+      }),
+    ).toBe(APARTMENT_INTERIOR_VISUAL_PROFILE.circulation.bounceScale);
   });
 });

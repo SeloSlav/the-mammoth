@@ -20,6 +20,10 @@ describe("createFpSessionCorridorPvsContext", () => {
     });
     const snap = ctx.resolveSnapshot({
       feetY: 6.5,
+      cameraX: 0,
+      cameraZ: 0,
+      viewDirX: 0,
+      viewDirZ: -1,
       insideResidentialUnit: false,
       insideApartmentInteriorLightingZone: true,
       containingUnitKey: null,

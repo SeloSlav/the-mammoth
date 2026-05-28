@@ -284,6 +284,7 @@ export class FpElevatorShaftVisual {
       map: this.hailBtnIconTex,
       transparent: true,
       depthWrite: false,
+      side: THREE.DoubleSide,
     });
     this.root.add(this.landingRoot);
     this.root.add(this.landingDoorPickRoot);
@@ -614,7 +615,7 @@ export class FpElevatorShaftVisual {
       hailPickUserData;
     /** Forgiving crosshair target — cylinder/icon are easy to miss at arm's length. */
     const pickSphere = new THREE.Mesh(
-      new THREE.SphereGeometry(0.32, 12, 12),
+      new THREE.SphereGeometry(0.38, 12, 12),
       new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 }),
     );
     pickSphere.name = `elev_landing_hail_pick_sphere_${level}`;
@@ -685,6 +686,15 @@ export class FpElevatorShaftVisual {
 
   getLandingExteriorDoorPickForLevel(level: number): THREE.Object3D | undefined {
     return this.landingDoorPickByLevel.get(level);
+  }
+
+  /** World-space center of the hail pick sphere (icon face), not the panel group origin. */
+  sampleLandingHailPickCenterWorld(level: number, out: THREE.Vector3): boolean {
+    const wrap = this.landingHailPickByLevel.get(level);
+    if (!wrap) return false;
+    const sphere = wrap.getObjectByName(`elev_landing_hail_pick_sphere_${level}`);
+    (sphere ?? wrap).getWorldPosition(out);
+    return true;
   }
 
   /**

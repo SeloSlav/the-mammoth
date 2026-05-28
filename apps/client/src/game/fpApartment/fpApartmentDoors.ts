@@ -31,7 +31,10 @@
  */
 import * as THREE from "three";
 import type { BuildingDoc, LandingKitDef } from "@the-mammoth/schemas";
-import { LandingKitDefSchema } from "@the-mammoth/schemas";
+import {
+  apartmentUnitEntryDoorsEnabledForStoryLevel,
+  LandingKitDefSchema,
+} from "@the-mammoth/schemas";
 import {
   APARTMENT_DOOR_TEMPLATES,
   apartmentDoorInteractPromptKindFromTemplateId,
@@ -88,6 +91,12 @@ const APARTMENT_DOOR_DIMS: SwingDoorDimensions = {
   panelW: APARTMENT_KIT?.panelWidthM ?? 1.26,
   panelH: APARTMENT_KIT?.panelHeightM ?? 2.06,
 };
+
+/** `unit_e_*` / `unit_w_*` corridor entries only — stair / manual shaft doors use other template ids. */
+function isResidentialCorridorUnitDoorTemplate(templateId: string): boolean {
+  const uid = templateId.split("|")[0] ?? "";
+  return uid.startsWith("unit_e_") || uid.startsWith("unit_w_");
+}
 
 const _hingeComposePos = new THREE.Vector3();
 const _hingeComposeQuat = new THREE.Quaternion();
@@ -651,11 +660,18 @@ export function mountFpApartmentDoors(
     const templates = templatesByDocId.get(ref.floorDocId);
     if (!templates || templates.length === 0) continue;
 
+    const doorsEnabledForLevel = apartmentUnitEntryDoorsEnabledForStoryLevel(ref.levelIndex);
+    const mountTemplates = templates.filter(
+      (t) =>
+        !isResidentialCorridorUnitDoorTemplate(t.templateId) || doorsEnabledForLevel,
+    );
+    if (mountTemplates.length === 0) continue;
+
     // Partition the floor's templates into the two visual flavors without allocating new arrays
     // if the floor is entirely one kind (the common case).
     let solidCount = 0;
     let glazedCount = 0;
-    for (const t of templates) {
+    for (const t of mountTemplates) {
       if (isGlazedApartmentDoorTemplate(t.templateId)) glazedCount += 1;
       else solidCount += 1;
     }
@@ -678,7 +694,7 @@ export function mountFpApartmentDoors(
     let nextSolidIdx = 0;
     let nextGlazedIdx = 0;
 
-    for (const t of templates) {
+    for (const t of mountTemplates) {
       const glazed = isGlazedApartmentDoorTemplate(t.templateId);
       const group = glazed ? glazedGroup : solidGroup;
       if (!group) continue; // unreachable: counts above ensure the matching group exists.
@@ -1084,15 +1100,22 @@ export function mountFpApartmentDoors(
       const out: BuildingCorridorPvsDoorEntry[] = [];
       for (let i = 0; i < allSlots.length; i++) {
         const slot = allSlots[i]!;
+        if (!apartmentUnitEntryDoorsEnabledForStoryLevel(slot.level)) continue;
         if (!slot.templateId.includes("unit_")) continue;
         const unitId = slot.templateId.split("|")[0] ?? "";
         if (!unitId.startsWith("unit_")) continue;
+        const tangent = swingDoorTangentRest(slot.face);
         out.push({
           unitKey: residentUnitKeyFromParts(slot.floorDocId, slot.level, slot.templateId),
           unitId,
           level: slot.level,
           open01: slot.swingOpen01,
           isResidentialUnitDoor: true,
+          hingeX: slot.hingeX,
+          hingeZ: slot.hingeZ,
+          tangentX: tangent.x,
+          tangentZ: tangent.z,
+          panelWidthM: slot.panelWidthM,
         });
       }
       return out;

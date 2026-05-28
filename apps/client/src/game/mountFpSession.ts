@@ -1257,6 +1257,7 @@ export async function mountFpSession(
     getCorridorPvsVisibleUnitKeys,
     getCorridorPvsVisibleUnitIds,
     getActiveFloorPlateBand,
+    getStoryLevelIndexForLighting,
   } =
     createFpSessionFloorPlateVisibility({
       camera,
@@ -1425,6 +1426,9 @@ export async function mountFpSession(
   const getActiveFloorPlateBandForFrame = isCombatSim
     ? () => ({ lo: 1, hi: maxBuildingLevel })
     : getActiveFloorPlateBand;
+  const getStoryLevelIndexForLightingForFrame = isCombatSim
+    ? () => 1
+    : getStoryLevelIndexForLighting;
   const getContainingResidentialUnitBoundsForFrame = isCombatSim
     ? () => null
     : getContainingResidentialUnitBounds;
@@ -2504,6 +2508,7 @@ export async function mountFpSession(
     getContainingResidentialUnitBounds: getContainingResidentialUnitBoundsForFrame,
     isApartmentDecorInteriorVisible: isApartmentDecorInteriorVisibleForFrame,
     isExteriorFacadeDecorVisible: isExteriorFacadeDecorVisibleForFrame,
+    getStoryLevelIndexForLighting: getStoryLevelIndexForLightingForFrame,
     selectedHotbarRow,
     logFpPerf,
     tickFpSessionElevDebug,

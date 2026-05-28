@@ -166,6 +166,18 @@ pub(crate) fn is_residential_corridor_unit_door(template_id: &str) -> bool {
     uid.starts_with("unit_e_") || uid.starts_with("unit_w_")
 }
 
+/// Podium (`mammoth.json` levelIndex 1) — keeps stair / manual corridor doors.
+const APARTMENT_PR_LEVEL: u32 = 1;
+
+/// Residential `unit_e_*` / `unit_w_*` on extraction storeys (display ≤ 16, levels 2–17) are omitted.
+#[inline]
+pub(crate) fn apartment_unit_entry_doors_enabled_for_level(level: u32) -> bool {
+    if level == APARTMENT_PR_LEVEL {
+        return true;
+    }
+    !(level > APARTMENT_PR_LEVEL && level < RESIDENTIAL_BAND_MIN_LEVEL)
+}
+
 /// Default openness for residential **unit** corridor doors (`unit_e_*`/`unit_w_*`). Other templates
 /// (manual stair shafts, elevators) stay closed (`0`).
 #[inline]
@@ -210,6 +222,14 @@ pub fn seed_apartment_doors(ctx: &ReducerContext) {
         }
         for t in templates {
             let rk = row_key(floor_doc_id, level, t.template_id);
+            if is_residential_corridor_unit_door(t.template_id)
+                && !apartment_unit_entry_doors_enabled_for_level(level)
+            {
+                if ctx.db.apartment_door().row_key().find(&rk).is_some() {
+                    ctx.db.apartment_door().row_key().delete(rk);
+                }
+                continue;
+            }
             seen.insert(rk.clone());
             if let Some(mut row) = ctx.db.apartment_door().row_key().find(&rk) {
                 let mut changed = false;
@@ -771,6 +791,18 @@ mod tests {
             desired_open: 0,
             swing_open_01: 0.0,
         }
+    }
+
+    #[test]
+    fn extraction_band_omits_residential_unit_entry_doors_except_pr() {
+        assert!(apartment_unit_entry_doors_enabled_for_level(APARTMENT_PR_LEVEL));
+        assert!(!apartment_unit_entry_doors_enabled_for_level(2));
+        assert!(!apartment_unit_entry_doors_enabled_for_level(
+            RESIDENTIAL_BAND_MIN_LEVEL - 1
+        ));
+        assert!(apartment_unit_entry_doors_enabled_for_level(
+            RESIDENTIAL_BAND_MIN_LEVEL
+        ));
     }
 
     #[test]

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { apartmentStoryLevelIsExtractionBand } from "@the-mammoth/schemas";
 import { estimateStoreyFromFeetY, type BuildingStairShaftSpec } from "@the-mammoth/world";
 import {
   fpBuildingExteriorViewShouldRevealFullStack,
@@ -161,6 +162,10 @@ export type FpSessionFloorPlateVisibilityOpts = {
   /** Door-aware corridor PVS — resolved each visibility pass when mounted. */
   resolveCorridorPvsSnapshot?: (input: {
     feetY: number;
+    cameraX: number;
+    cameraZ: number;
+    viewDirX: number;
+    viewDirZ: number;
     insideResidentialUnit: boolean;
     insideApartmentInteriorLightingZone: boolean;
     containingUnitKey: string | null;
@@ -196,6 +201,7 @@ export function fpResolveUnitInteriorMeshVisible(input: {
     | "genericInteriorVisibleInResidentialUnit"
     | "apartmentSwingDoor"
     | "isResidentialShellPlaster"
+    | "corridorHallwayShell"
   > & { plateLevelIndex?: number | null };
   unitInteriorVisible: boolean;
   apartmentDecorInteriorVisible: boolean;
@@ -208,8 +214,21 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   containingResidentialUnitKey: string | null;
   /** Door-aware corridor PVS — unit ids eligible for interior peek from hallway. */
   corridorPvsVisibleUnitIds?: ReadonlySet<string>;
+  /**
+   * Extraction-band hallway (display ≤ 16): only corridor shell / anon geo — no neighbor unit
+   * plaster or furnished props through rotted doorways.
+   */
+  extractionBandCorridorOnly?: boolean;
 }): boolean {
   const { entry } = input;
+  if (input.extractionBandCorridorOnly) {
+    if (entry.apartmentSwingDoor) return input.unitInteriorVisible;
+    if (entry.corridorHallwayShell) return input.unitInteriorVisible;
+    if (entry.residentialUnitId === null && entry.apartmentUnitKey === null) {
+      return input.unitInteriorVisible;
+    }
+    return false;
+  }
   if (entry.apartmentSwingDoor) {
     /**
      * Instanced corridor doors are not tied to a single `residentialUnitId` mesh. They must stay
@@ -341,6 +360,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   getCorridorPvsVisibleUnitKeys: () => ReadonlySet<string>;
   getCorridorPvsVisibleUnitIds: () => ReadonlySet<string>;
   getActiveFloorPlateBand: () => { lo: number; hi: number };
+  /** Last plate-anchor storey used for visibility / lighting (feet or in-unit level). */
+  getStoryLevelIndexForLighting: () => number;
 } {
   const {
     camera,
@@ -392,6 +413,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastInsideResidentialUnit = false;
   let _lastInsideStairwellShaft = false;
   let _lastInsideApartmentInteriorLightingZone = false;
+  let _lastExtractionBandCorridorOnly = false;
+  let _lastStoryLevelIndexForLighting = 1;
   let _lastExteriorShellPlasterVisible = false;
   let _lastTrueExteriorView = false;
 
@@ -575,6 +598,11 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       insideElevatorCab,
       insideStairShaft,
     });
+    _lastStoryLevelIndexForLighting = storeyPlateAnchor;
+    const extractionBandCorridorOnly =
+      apartmentStoryLevelIsExtractionBand(storeyPlateAnchor) &&
+      insideApartmentInteriorLightingZone &&
+      !insideResidentialUnit;
     if (containingResidentialUnitKey !== null) {
       _lastVisitedResidentialUnitKey = containingResidentialUnitKey;
     } else if (!insideApartmentInteriorLightingZone) {
@@ -701,16 +729,20 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         floorVisCamWorld.y,
         floorVisCamWorld.z,
       ) ||
-      fpCameraInsideBuildingFootprintXZ({
-        cameraX: floorVisCamWorld.x,
-        cameraZ: floorVisCamWorld.z,
-        boundsMinX: buildingWorldBounds.min.x,
-        boundsMaxX: buildingWorldBounds.max.x,
-        boundsMinZ: buildingWorldBounds.min.z,
-        boundsMaxZ: buildingWorldBounds.max.z,
-      });
+        fpCameraInsideBuildingFootprintXZ({
+          cameraX: floorVisCamWorld.x,
+          cameraZ: floorVisCamWorld.z,
+          boundsMinX: buildingWorldBounds.min.x,
+          boundsMaxX: buildingWorldBounds.max.x,
+          boundsMinZ: buildingWorldBounds.min.z,
+          boundsMaxZ: buildingWorldBounds.max.z,
+        });
     const corridorPvs = resolveCorridorPvsSnapshot?.({
       feetY: feetPos.y,
+      cameraX: floorVisCamWorld.x,
+      cameraZ: floorVisCamWorld.z,
+      viewDirX: floorVisCamDir.x,
+      viewDirZ: floorVisCamDir.z,
       insideResidentialUnit,
       insideApartmentInteriorLightingZone,
       containingUnitKey: containingResidentialUnitKey,
@@ -734,6 +766,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       containingResidentialUnitKey !== _lastContainingResidentialUnitKey ||
       retainedResidentialUnitId !== _lastRetainedResidentialUnitId ||
       insideApartmentInteriorLightingZone !== _lastInsideApartmentInteriorLightingZone ||
+      extractionBandCorridorOnly !== _lastExtractionBandCorridorOnly ||
       corridorPvsChanged;
     if (unitInteriorVisibilityChanged || insideResidentialUnit) {
       _lastUnitInteriorVisible = unitInteriorVisible;
@@ -745,6 +778,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       _lastContainingResidentialUnitKey = containingResidentialUnitKey;
       _lastRetainedResidentialUnitId = retainedResidentialUnitId;
       _lastInsideApartmentInteriorLightingZone = insideApartmentInteriorLightingZone;
+      _lastExtractionBandCorridorOnly = extractionBandCorridorOnly;
       for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
         const entry = unitInteriorMeshEntries[i]!;
         entry.mesh.visible =
@@ -760,6 +794,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
             containingResidentialUnitId,
             containingResidentialUnitKey,
             corridorPvsVisibleUnitIds: corridorPvs.unitIds,
+            extractionBandCorridorOnly,
           });
         entry.mesh.frustumCulled = true;
         if (
@@ -895,5 +930,6 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     getCorridorPvsVisibleUnitKeys: () => _lastCorridorPvsUnitKeys,
     getCorridorPvsVisibleUnitIds: () => _lastCorridorPvsUnitIds,
     getActiveFloorPlateBand: () => ({ lo: _lastBandLo, hi: _lastBandHi }),
+    getStoryLevelIndexForLighting: () => _lastStoryLevelIndexForLighting,
   };
 }

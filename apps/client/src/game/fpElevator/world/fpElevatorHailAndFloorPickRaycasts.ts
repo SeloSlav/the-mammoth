@@ -25,6 +25,11 @@ import {
 import { fpElevSuppressLandingHailBecauseCabAtLandingSupport } from "../fpElevatorLandingHailSuppress.js";
 import { elevatorLandingFloorHudLabel } from "../fpElevatorLabels.js";
 import {
+  crosshairHitsLandingHailPanelDisk,
+  landingHailPanelOutwardNormal,
+  LANDING_HAIL_PANEL_PICK_DISK_RADIUS_M,
+} from "../fpElevatorLandingHailPanelPick.js";
+import {
   fpElevCarPanelDoorwayViewLocal,
   fpElevFloorPickRaycastShouldProceed,
   fpElevatorHudCarContainsLocalPoint,
@@ -100,6 +105,11 @@ export function createFpElevatorHailAndFloorPickRaycasts(
   const _cameraWorldPos = new THREE.Vector3();
   const _aimScratch = new THREE.Vector3();
   const _panelWorld = new THREE.Vector3();
+  const _panelOutward = new THREE.Vector3();
+  const _panelDiskScratch = {
+    plane: new THREE.Plane(),
+    hit: new THREE.Vector3(),
+  };
   const {
     raycaster,
     screenCenterNdc,
@@ -158,6 +168,59 @@ export function createFpElevatorHailAndFloorPickRaycasts(
     return [Math.max(1, storey - 1), Math.min(maxLevel, storey + 1)];
   };
 
+  const isLandingHailPickSuppressed = (pick: FpElevLandingHailPick): boolean => {
+    const layout = layoutByKey.get(pick.shaftKey);
+    if (!layout) return true;
+    const row = latest.get(pick.shaftKey);
+    if (!row) return false;
+    const cabY = getCabY(pick.shaftKey);
+    if (!Number.isFinite(cabY)) return false;
+    const landingSupportY = feetYForLayout(layout, pick.level);
+    return (
+      row.phase !== ELEVATOR_PHASE_MOVING &&
+      getDoor(pick.shaftKey, performance.now()) >= 0.92 &&
+      fpElevSuppressLandingHailBecauseCabAtLandingSupport(cabY, landingSupportY)
+    );
+  };
+
+  const resolveLandingHailPickFromPanelDisk = (
+    camera: THREE.PerspectiveCamera,
+    playerPos: THREE.Vector3,
+  ): FpElevLandingHailPick | null => {
+    let best: (FpElevLandingHailPick & { d: number }) | null = null;
+    const [levelLo, levelHi] = candidateLandingLevelsForFeetY(playerPos.y);
+    for (const [shaftKey, layout] of layoutByKey) {
+      if (!latest.has(shaftKey)) continue;
+      const vis = visuals.get(shaftKey);
+      if (!vis) continue;
+      landingHailPanelOutwardNormal(layout.doorFace, _panelOutward);
+      for (let level = levelLo; level <= levelHi; level++) {
+        const pick: FpElevLandingHailPick = { shaftKey, level };
+        if (isLandingHailPickSuppressed(pick)) continue;
+        if (!vis.sampleLandingHailPickCenterWorld(level, _panelWorld)) continue;
+        if (
+          !crosshairHitsLandingHailPanelDisk(
+            raycaster,
+            screenCenterNdc,
+            camera,
+            _panelWorld,
+            _panelOutward,
+            LANDING_HAIL_PANEL_PICK_DISK_RADIUS_M,
+            _panelDiskScratch,
+          )
+        ) {
+          continue;
+        }
+        camera.getWorldPosition(_cameraWorldPos);
+        const d = _panelWorld.distanceTo(_cameraWorldPos);
+        if (best == null || d < best.d) {
+          best = { shaftKey, level, d };
+        }
+      }
+    }
+    return best == null ? null : { shaftKey: best.shaftKey, level: best.level };
+  };
+
   const resolveLandingHailPickFromRaycast = (
     camera: THREE.PerspectiveCamera,
     playerPos: THREE.Vector3,
@@ -182,21 +245,6 @@ export function createFpElevatorHailAndFloorPickRaycasts(
     return best == null ? null : { shaftKey: best.shaftKey, level: best.level };
   };
 
-  const isLandingHailPickSuppressed = (pick: FpElevLandingHailPick): boolean => {
-    const layout = layoutByKey.get(pick.shaftKey);
-    if (!layout) return true;
-    const row = latest.get(pick.shaftKey);
-    if (!row) return false;
-    const cabY = getCabY(pick.shaftKey);
-    if (!Number.isFinite(cabY)) return false;
-    const landingSupportY = feetYForLayout(layout, pick.level);
-    return (
-      row.phase !== ELEVATOR_PHASE_MOVING &&
-      getDoor(pick.shaftKey, performance.now()) >= 0.92 &&
-      fpElevSuppressLandingHailBecauseCabAtLandingSupport(cabY, landingSupportY)
-    );
-  };
-
   const resolveLandingHailPickFromPanelTarget = (
     camera: THREE.PerspectiveCamera,
     playerPos: THREE.Vector3,
@@ -213,9 +261,7 @@ export function createFpElevatorHailAndFloorPickRaycasts(
       for (let level = levelLo; level <= levelHi; level++) {
         const pick: FpElevLandingHailPick = { shaftKey, level };
         if (isLandingHailPickSuppressed(pick)) continue;
-        const panel = vis.getLandingHailPickForLevel(level);
-        if (!panel) continue;
-        panel.getWorldPosition(_panelWorld);
+        if (!vis.sampleLandingHailPickCenterWorld(level, _panelWorld)) continue;
         const inPad = playerInLandingHailPanelPad(
           playerPos,
           _panelWorld.x,
@@ -270,6 +316,8 @@ export function createFpElevatorHailAndFloorPickRaycasts(
     camera: THREE.PerspectiveCamera,
     playerPos: THREE.Vector3,
   ): FpElevLandingHailPick | null => {
+    const diskPick = resolveLandingHailPickFromPanelDisk(camera, playerPos);
+    if (diskPick) return diskPick;
     const rayPick = resolveLandingHailPickFromRaycast(camera, playerPos);
     if (rayPick && !isLandingHailPickSuppressed(rayPick)) return rayPick;
     return resolveLandingHailPickFromPanelTarget(camera, playerPos);

@@ -117,6 +117,7 @@ import {
   STAIRWELL_INTERIOR_DARK_HALF_LIFE_SEC,
 } from "./fpSessionStairwellInteriorDark.js";
 import { fpResolveApartmentInteriorDarkTarget01, fpResolveApartmentInteriorBounceScale } from "./fpApartmentInteriorLightingZone.js";
+import { apartmentStoryLevelIsExtractionBand } from "@the-mammoth/schemas";
 import {
   hotbarDefIdSupportsMeleeAttack,
   hotbarDefIdSupportsRangedAttack,
@@ -298,6 +299,7 @@ export type FpSessionMainRafFrameDeps = {
   } | null;
   isApartmentDecorInteriorVisible: () => boolean;
   isExteriorFacadeDecorVisible: () => boolean;
+  getStoryLevelIndexForLighting: () => number;
   selectedHotbarRow: () => InventoryItem | undefined;
   logFpPerf: () => void;
   tickFpSessionElevDebug: (ctx: FpSessionElevDebugTickCtx) => void;
@@ -764,9 +766,14 @@ export function createFpSessionMainRafFrame(
     const visibleDecorUnitKeys = deps.getCorridorPvsVisibleUnitKeys();
     const practicalLightsUnitKey =
       deps.getActiveApartmentDecorUnitKey(containingResidentialUnitKey);
+    const storyLevelIndexForDecor = deps.getStoryLevelIndexForLighting();
+    const extractionBandCorridorWalk =
+      apartmentStoryLevelIsExtractionBand(storyLevelIndexForDecor) &&
+      deps.isInsideApartmentInteriorLightingZone() &&
+      !deps.isInsideResidentialUnit();
     deps.fpApartmentDecorMeshes.syncVisibility(
       deps.camera,
-      deps.isApartmentDecorInteriorVisible(),
+      deps.isApartmentDecorInteriorVisible() && !extractionBandCorridorWalk,
       visibleDecorUnitKeys.size > 0 ? visibleDecorUnitKeys : null,
       practicalLightsUnitKey,
       deps.isExteriorFacadeDecorVisible(),
@@ -1229,9 +1236,11 @@ export function createFpSessionMainRafFrame(
       dt,
       STAIRWELL_INTERIOR_DARK_HALF_LIFE_SEC,
     );
+    const storyLevelIndexForLighting = deps.getStoryLevelIndexForLighting();
     const apartmentDarkTarget = fpResolveApartmentInteriorDarkTarget01({
       insideApartmentInteriorLightingZone: deps.isInsideApartmentInteriorLightingZone(),
       insideResidentialUnit: deps.isInsideResidentialUnit(),
+      storyLevelIndex: storyLevelIndexForLighting,
     });
     mainRaf.apartmentInteriorDarkSmoothed = fpExpSmoothToward(
       mainRaf.apartmentInteriorDarkSmoothed,
@@ -1269,13 +1278,14 @@ export function createFpSessionMainRafFrame(
         ? mainRaf.apartmentInteriorDarkSmoothed
         : 0,
       interiorRenderLayersEnabled:
-        deps.isInsideResidentialUnit() ||
+        deps.isInsideApartmentInteriorLightingZone() ||
         deps.isApartmentDecorInteriorVisible() ||
         deps.isInsideStairwellShaft(),
       stairwellInteriorDark01: mainRaf.stairwellInteriorDarkSmoothed,
       apartmentInteriorBounceScale: fpResolveApartmentInteriorBounceScale({
         insideApartmentInteriorLightingZone: deps.isInsideApartmentInteriorLightingZone(),
         insideResidentialUnit: deps.isInsideResidentialUnit(),
+        storyLevelIndex: storyLevelIndexForLighting,
       }),
     });
     const _t_afterFpEnv = performance.now();

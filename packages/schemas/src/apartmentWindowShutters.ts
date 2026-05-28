@@ -31,6 +31,35 @@ export function apartmentUnitAbandonedHardwoodFloorForStoryLevel(storyLevelIndex
   );
 }
 
+/** PR / ground podium plate (`mammoth.json` levelIndex 1). */
+export const APARTMENT_PR_STORY_LEVEL_INDEX = 1 as const;
+
+/**
+ * Abandoned extraction band: display floors 1–16 on typical plates (storyLevelIndex 2–17).
+ * PR (story 1) is excluded — podium keeps stair / manual doors only.
+ */
+export function apartmentStoryLevelIsExtractionBand(storyLevelIndex: number): boolean {
+  if (storyLevelIndex === 99) return false;
+  if (storyLevelIndex === APARTMENT_PR_STORY_LEVEL_INDEX) return false;
+  return (
+    apartmentStoryLevelIndexToDisplayFloor(storyLevelIndex) <= BLOWN_OUT_FACADE_MAX_DISPLAY_FLOOR
+  );
+}
+
+/**
+ * Residential `unit_e_*` / `unit_w_*` corridor swing doors — omitted on extraction-band storeys
+ * (fungus-rotted entries). PR podium and lived-in band (display 17+) keep doors.
+ */
+export function apartmentUnitEntryDoorsEnabledForStoryLevel(storyLevelIndex: number): boolean {
+  if (storyLevelIndex === APARTMENT_PR_STORY_LEVEL_INDEX) return true;
+  return !apartmentStoryLevelIsExtractionBand(storyLevelIndex);
+}
+
+/** Smashed-window extraction storeys use the corridor interior lighting rig even inside units. */
+export function apartmentExtractionBandUsesHallwayLighting(storyLevelIndex: number): boolean {
+  return apartmentStoryLevelIsExtractionBand(storyLevelIndex);
+}
+
 export type StandardWindowShutterTemplate = Pick<
   OwnedApartmentPlacedItem,
   | "id"

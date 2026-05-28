@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   adaptStandardWindowShutterPlacementForUnit,
   APARTMENT_STANDARD_WINDOW_SHUTTER_EAST_TEMPLATES,
+  apartmentExtractionBandUsesHallwayLighting,
+  apartmentStoryLevelIsExtractionBand,
   apartmentUnitAbandonedHardwoodFloorForStoryLevel,
+  apartmentUnitEntryDoorsEnabledForStoryLevel,
   apartmentUnitQualifiesForStandardWindowShutters,
   mergeStandardApartmentWindowShuttersIntoPlacedItems,
   standardApartmentWindowShutterPlacedItemsForUnit,
@@ -22,6 +25,17 @@ describe("apartmentWindowShutters", () => {
     expect(apartmentUnitAbandonedHardwoodFloorForStoryLevel(17)).toBe(true);
     expect(apartmentUnitAbandonedHardwoodFloorForStoryLevel(18)).toBe(false);
     expect(apartmentUnitAbandonedHardwoodFloorForStoryLevel(99)).toBe(false);
+  });
+
+  it("omits residential unit entry doors on extraction band but keeps PR podium", () => {
+    expect(apartmentStoryLevelIsExtractionBand(17)).toBe(true);
+    expect(apartmentStoryLevelIsExtractionBand(18)).toBe(false);
+    expect(apartmentStoryLevelIsExtractionBand(1)).toBe(false);
+    expect(apartmentUnitEntryDoorsEnabledForStoryLevel(17)).toBe(false);
+    expect(apartmentUnitEntryDoorsEnabledForStoryLevel(18)).toBe(true);
+    expect(apartmentUnitEntryDoorsEnabledForStoryLevel(1)).toBe(true);
+    expect(apartmentExtractionBandUsesHallwayLighting(17)).toBe(true);
+    expect(apartmentExtractionBandUsesHallwayLighting(18)).toBe(false);
   });
 
   it("qualifies typical residential units on display floors 17–19 only", () => {

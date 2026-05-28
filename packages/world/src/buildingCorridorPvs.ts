@@ -8,6 +8,12 @@
 
 /** Replicated `swing_open_01` at/above this admits corridor PVS into a unit interior. */
 export const APARTMENT_DOOR_PVS_INTERIOR_PEEK_OPEN_01 = 0.15;
+/** Corridor door interiors are expensive; only nearby/open doorways participate in hallway PVS. */
+export const APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M = 9.5;
+/** Very close doorways remain visible even while the player looks sideways across the threshold. */
+export const APARTMENT_DOOR_PVS_INTERIOR_PEEK_NEAR_DIST_M = 2.75;
+/** Beyond the near radius, the doorway must be at least slightly ahead of the camera. */
+export const APARTMENT_DOOR_PVS_INTERIOR_PEEK_MIN_FORWARD_M = 0.35;
 
 export type BuildingCorridorPvsDoorEntry = {
   unitKey: string;
@@ -16,20 +22,67 @@ export type BuildingCorridorPvsDoorEntry = {
   open01: number;
   /** Per-unit apartment entry doors only — excludes stair / manual corridor doors. */
   isResidentialUnitDoor: boolean;
+  /** World-space hinge + closed panel span; optional for old callers/tests that only need level PVS. */
+  hingeX?: number;
+  hingeZ?: number;
+  tangentX?: number;
+  tangentZ?: number;
+  panelWidthM?: number;
+};
+
+export type BuildOpenDoorUnitKeysByLevelOpts = {
+  cameraX?: number;
+  cameraZ?: number;
+  viewDirX?: number;
+  viewDirZ?: number;
 };
 
 export function apartmentDoorAdmitsCorridorInteriorPeek(open01: number): boolean {
   return open01 >= APARTMENT_DOOR_PVS_INTERIOR_PEEK_OPEN_01;
 }
 
+function apartmentDoorPassesCorridorCameraPvs(
+  door: BuildingCorridorPvsDoorEntry,
+  opts?: BuildOpenDoorUnitKeysByLevelOpts,
+): boolean {
+  if (
+    opts?.cameraX === undefined ||
+    opts.cameraZ === undefined ||
+    opts.viewDirX === undefined ||
+    opts.viewDirZ === undefined ||
+    door.hingeX === undefined ||
+    door.hingeZ === undefined ||
+    door.tangentX === undefined ||
+    door.tangentZ === undefined ||
+    door.panelWidthM === undefined
+  ) {
+    return true;
+  }
+
+  const cx = door.hingeX + door.tangentX * door.panelWidthM * 0.5;
+  const cz = door.hingeZ + door.tangentZ * door.panelWidthM * 0.5;
+  const dx = cx - opts.cameraX;
+  const dz = cz - opts.cameraZ;
+  const distSq = dx * dx + dz * dz;
+  if (distSq > APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M ** 2) return false;
+  if (distSq <= APARTMENT_DOOR_PVS_INTERIOR_PEEK_NEAR_DIST_M ** 2) return true;
+
+  const dirLen = Math.hypot(opts.viewDirX, opts.viewDirZ);
+  if (dirLen < 1e-4) return true;
+  const forward = (dx * opts.viewDirX + dz * opts.viewDirZ) / dirLen;
+  return forward >= APARTMENT_DOOR_PVS_INTERIOR_PEEK_MIN_FORWARD_M;
+}
+
 export function buildOpenDoorUnitKeysByLevel(
   doors: readonly BuildingCorridorPvsDoorEntry[],
+  opts?: BuildOpenDoorUnitKeysByLevelOpts,
 ): Map<number, Set<string>> {
   const out = new Map<number, Set<string>>();
   for (let i = 0; i < doors.length; i++) {
     const d = doors[i]!;
     if (!d.isResidentialUnitDoor) continue;
     if (!apartmentDoorAdmitsCorridorInteriorPeek(d.open01)) continue;
+    if (!apartmentDoorPassesCorridorCameraPvs(d, opts)) continue;
     let set = out.get(d.level);
     if (!set) {
       set = new Set<string>();

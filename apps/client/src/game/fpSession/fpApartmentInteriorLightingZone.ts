@@ -1,4 +1,5 @@
 import { APARTMENT_INTERIOR_VISUAL_PROFILE } from "@the-mammoth/engine";
+import { apartmentExtractionBandUsesHallwayLighting } from "@the-mammoth/schemas";
 
 /**
  * Shared interior lighting envelope for FP session — apartment units, corridors, lobbies,
@@ -25,8 +26,13 @@ export function fpResolveApartmentInteriorLightingZone(input: {
 export function fpResolveApartmentInteriorDarkTarget01(input: {
   insideApartmentInteriorLightingZone: boolean;
   insideResidentialUnit: boolean;
+  /** Building `levelIndex` at feet (or containing unit level when in-hull). */
+  storyLevelIndex: number;
 }): number {
   if (!input.insideApartmentInteriorLightingZone) return 0;
+  if (apartmentExtractionBandUsesHallwayLighting(input.storyLevelIndex)) {
+    return APARTMENT_INTERIOR_VISUAL_PROFILE.circulation.interiorDarkTarget;
+  }
   if (input.insideResidentialUnit) return 1;
   return APARTMENT_INTERIOR_VISUAL_PROFILE.circulation.interiorDarkTarget;
 }
@@ -34,12 +40,14 @@ export function fpResolveApartmentInteriorDarkTarget01(input: {
 export function fpResolveApartmentInteriorBounceScale(input: {
   insideApartmentInteriorLightingZone: boolean;
   insideResidentialUnit: boolean;
+  storyLevelIndex: number;
 }): number {
+  if (!input.insideApartmentInteriorLightingZone) return 1;
   if (
-    !input.insideApartmentInteriorLightingZone ||
-    input.insideResidentialUnit
+    apartmentExtractionBandUsesHallwayLighting(input.storyLevelIndex) ||
+    !input.insideResidentialUnit
   ) {
-    return 1;
+    return APARTMENT_INTERIOR_VISUAL_PROFILE.circulation.bounceScale;
   }
-  return APARTMENT_INTERIOR_VISUAL_PROFILE.circulation.bounceScale;
+  return 1;
 }

@@ -28,6 +28,10 @@ export function createFpSessionCorridorPvsContext(
 ): {
   resolveSnapshot: (input: {
     feetY: number;
+    cameraX: number;
+    cameraZ: number;
+    viewDirX: number;
+    viewDirZ: number;
     insideResidentialUnit: boolean;
     insideApartmentInteriorLightingZone: boolean;
     containingUnitKey: string | null;
@@ -41,7 +45,12 @@ export function createFpSessionCorridorPvsContext(
         floorSpacingM: ctx.floorSpacingM,
         maxLevel: ctx.maxLevel,
       });
-      const openDoorUnitKeysByLevel = buildOpenDoorUnitKeysByLevel(ctx.collectDoorEntries());
+      const openDoorUnitKeysByLevel = buildOpenDoorUnitKeysByLevel(ctx.collectDoorEntries(), {
+        cameraX: input.cameraX,
+        cameraZ: input.cameraZ,
+        viewDirX: input.viewDirX,
+        viewDirZ: input.viewDirZ,
+      });
       const visible = resolveCorridorPvsVisibleUnits({
         playerLevel,
         insideResidentialUnit: input.insideResidentialUnit,

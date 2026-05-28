@@ -1,8 +1,9 @@
 //! World pickups: drag-out from inventory/hotbar → `drop_item`, `E` / reducer → `pickup_dropped_item`.
 //! Static world loot uses the **same** `dropped_item` rows with [`DroppedItem.world_spawn_slot`], filled on
 //! `init`, refreshed on a timer with weighted RNG. Corridor anchors roll **ammo, rations, and chemical-stock**
-//! (custodial/service-cache proxy until janitor closets are anchored). Unclaimed apartment loot is gated by
-//! [`crate::feature_flags::ENABLE_UNCLAIMED_APARTMENT_WORLD_LOOT`] (off by default). When enabled, a **subset**
+//! (custodial/service-cache proxy until janitor closets are anchored). Corridor spine loot is gated by
+//! [`crate::feature_flags::ENABLE_CORRIDOR_HALLWAY_WORLD_LOOT`] (off by default). Unclaimed apartment loot is
+//! gated by [`crate::feature_flags::ENABLE_UNCLAIMED_APARTMENT_WORLD_LOOT`] (off by default). When enabled, a **subset**
 //! of units get weapon-biased loot (sorted by floor); many stay empty each refresh. Scrap metal is common but
 //! not guaranteed on every looted unit — fewer rows, clearer scavenging, less subscription/render load.
 //! Anchored apartment XZ omits bbox centroids and the bed footprint projection so pickups land in clear living/entry lanes.
@@ -128,8 +129,20 @@ const APARTMENT_LOOT_UNIT_PASS_PERCENT: u64 = 62;
 /// After a unit rolls main loot, chance it also gets a scrap pile (rest are firearms/melee/ammo only).
 const APARTMENT_SCRAP_SPAWN_PERCENT: u64 = 60;
 /// First slot index reserved for apartment scrap rows (after the max possible main-apartment block).
-const UNCLAIMED_APARTMENT_SCRAP_SLOT_BASE: usize =
-    WORLD_LOOT_ANCHORS.len() + MAX_APARTMENT_MAIN_LOOT_ROWS;
+#[inline]
+fn unclaimed_apartment_scrap_slot_base() -> usize {
+    apartment_world_loot_slot_base() + MAX_APARTMENT_MAIN_LOOT_ROWS
+}
+
+/// Slot index where unclaimed-apartment main loot starts (after corridor anchors when enabled).
+#[inline]
+fn apartment_world_loot_slot_base() -> usize {
+    if feature_flags::ENABLE_CORRIDOR_HALLWAY_WORLD_LOOT {
+        WORLD_LOOT_ANCHORS.len()
+    } else {
+        0
+    }
+}
 const APARTMENT_SCRAP_METAL_DEF_ID: &str = "scrap-metal";
 const APARTMENT_SCRAP_QTY_MIN: u32 = 1;
 const APARTMENT_SCRAP_QTY_MAX: u32 = 3;
@@ -641,16 +654,18 @@ fn delete_all_anchored_world_loot(ctx: &ReducerContext) {
 fn refresh_world_loot_spawns_inner(ctx: &ReducerContext) {
     delete_all_anchored_world_loot(ctx);
 
-    for (i, &(x, y, z)) in WORLD_LOOT_ANCHORS.iter().enumerate() {
-        let Ok(slot) = u16::try_from(i) else {
-            log::warn!("world loot: anchor index {i} does not fit u16, skipping");
-            continue;
-        };
-        insert_world_loot_at_anchor(ctx, slot, x, y, z, WORLD_LOOT_TIERS);
+    if feature_flags::ENABLE_CORRIDOR_HALLWAY_WORLD_LOOT {
+        for (i, &(x, y, z)) in WORLD_LOOT_ANCHORS.iter().enumerate() {
+            let Ok(slot) = u16::try_from(i) else {
+                log::warn!("world loot: anchor index {i} does not fit u16, skipping");
+                continue;
+            };
+            insert_world_loot_at_anchor(ctx, slot, x, y, z, WORLD_LOOT_TIERS);
+        }
     }
 
     if feature_flags::ENABLE_UNCLAIMED_APARTMENT_WORLD_LOOT {
-        let apartment_base = WORLD_LOOT_ANCHORS.len();
+        let apartment_base = apartment_world_loot_slot_base();
         let refresh_salt = ctx.timestamp.to_micros_since_unix_epoch() as u64;
         let mut unclaimed: Vec<_> = ctx
             .db
@@ -694,7 +709,7 @@ fn refresh_world_loot_spawns_inner(ctx: &ReducerContext) {
             {
                 continue;
             }
-            let scrap_idx = UNCLAIMED_APARTMENT_SCRAP_SLOT_BASE + scrap_rows;
+            let scrap_idx = unclaimed_apartment_scrap_slot_base() + scrap_rows;
             let Ok(scrap_slot) = u16::try_from(scrap_idx) else {
                 log::warn!(
                     "world loot: unclaimed apartment scrap slot index {scrap_idx} exceeds u16::MAX; stopping apartment scrap"

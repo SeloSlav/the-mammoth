@@ -40,6 +40,52 @@ describe("buildingCorridorPvs", () => {
     expect([...(map.get(2) ?? [])]).toEqual(["floor|2|unit_e_003"]);
   });
 
+  it("filters open door peeks to nearby or forward camera-visible entries", () => {
+    const map = buildOpenDoorUnitKeysByLevel(
+      [
+        {
+          unitKey: "floor|2|unit_e_near",
+          unitId: "unit_e_near",
+          level: 2,
+          open01: 1,
+          isResidentialUnitDoor: true,
+          hingeX: 0,
+          hingeZ: -2,
+          tangentX: 1,
+          tangentZ: 0,
+          panelWidthM: 1,
+        },
+        {
+          unitKey: "floor|2|unit_e_behind",
+          unitId: "unit_e_behind",
+          level: 2,
+          open01: 1,
+          isResidentialUnitDoor: true,
+          hingeX: 0,
+          hingeZ: 5,
+          tangentX: 1,
+          tangentZ: 0,
+          panelWidthM: 1,
+        },
+        {
+          unitKey: "floor|2|unit_e_far",
+          unitId: "unit_e_far",
+          level: 2,
+          open01: 1,
+          isResidentialUnitDoor: true,
+          hingeX: 0,
+          hingeZ: -20,
+          tangentX: 1,
+          tangentZ: 0,
+          panelWidthM: 1,
+        },
+      ],
+      { cameraX: 0, cameraZ: 0, viewDirX: 0, viewDirZ: -1 },
+    );
+
+    expect([...(map.get(2) ?? [])]).toEqual(["floor|2|unit_e_near"]);
+  });
+
   it("resolves corridor-visible units from open doors, retained, and containing keys", () => {
     const open = buildOpenDoorUnitKeysByLevel([
       {

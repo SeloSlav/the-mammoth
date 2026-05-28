@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD } from "@the-mammoth/world";
 
 export type FpResidentialUnitShellMesh = {
   mesh: THREE.Mesh;
@@ -17,6 +18,8 @@ export type FpSessionUnitInteriorMeshEntry = {
   isResidentialShellPlaster: boolean;
   /** Owning floor plate level when this tagged mesh lives under a plate segment. */
   plateLevelIndex: number | null;
+  /** Corridor floor/ceiling slabs on double-loaded plates (`floorPlaceholderMeshes`). */
+  corridorHallwayShell: boolean;
 };
 
 /** Plaster hollow shell pieces for a `unit_*` placed object (not exterior cladding or glass). */
@@ -49,6 +52,7 @@ function resolveUnitInteriorMeshEntry(
   let genericInteriorVisibleInResidentialUnit = false;
   let apartmentSwingDoor = false;
   let plateLevelIndex: number | null = null;
+  let corridorHallwayShell = false;
   for (let cur: THREE.Object3D | null = mesh; cur; cur = cur.parent) {
     if (plateLevelIndex === null && typeof cur.userData.mammothPlateLevelIndex === "number") {
       plateLevelIndex = cur.userData.mammothPlateLevelIndex;
@@ -71,6 +75,9 @@ function resolveUnitInteriorMeshEntry(
     if (cur.userData.mammothGenericInteriorVisibleInResidentialUnit === true) {
       genericInteriorVisibleInResidentialUnit = true;
     }
+    if (cur.userData[MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD] === true) {
+      corridorHallwayShell = true;
+    }
     if (
       cur === buildingRoot ||
       (residentialUnitId !== null &&
@@ -90,6 +97,7 @@ function resolveUnitInteriorMeshEntry(
     apartmentSwingDoor,
     isResidentialShellPlaster: isResidentialUnitShellPlasterMesh(mesh),
     plateLevelIndex,
+    corridorHallwayShell,
   };
 }
 

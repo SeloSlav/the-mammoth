@@ -7,6 +7,10 @@
 /// **Never ship production with this enabled.**
 pub const APARTMENT_CLAIM_FAST_FOR_TESTING: bool = true;
 
+/// When `true`, `refresh_world_loot_spawns` places ammo/consumables/chemical-stock on corridor spine anchors.
+/// Off while hallway corridors are still in flux.
+pub const ENABLE_CORRIDOR_HALLWAY_WORLD_LOOT: bool = false;
+
 /// When `true`, `refresh_world_loot_spawns` places weapon/ammo/scrap in a subset of unclaimed apartments.
-/// Corridor spine anchors are unaffected. Off while apartment interiors are still in flux.
+/// Off while apartment interiors are still in flux.
 pub const ENABLE_UNCLAIMED_APARTMENT_WORLD_LOOT: bool = false;

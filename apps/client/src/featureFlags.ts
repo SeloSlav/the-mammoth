@@ -14,7 +14,8 @@
  * Stairwell ceiling fixture meshes: `ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS` (off).
  *
  * **Server parity:** `apps/server/src/feature_flags.rs` — keep cross-boundary flags (e.g. claim timing) in sync.
- * Unclaimed-apartment world loot (`ENABLE_UNCLAIMED_APARTMENT_WORLD_LOOT`) is server-only.
+ * Corridor-hallway and unclaimed-apartment world loot
+ * (`ENABLE_CORRIDOR_HALLWAY_WORLD_LOOT`, `ENABLE_UNCLAIMED_APARTMENT_WORLD_LOOT`) are server-only.
  */
 
 /** When `true`, apartment claim HUD/timing assumes ~1 s completion (mirror server). Never ship enabled. */
