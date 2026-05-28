@@ -52,6 +52,7 @@ export class PlayerPresentationManager {
   private latestDesiredLocalEquip: HeldItemId;
   /** True while {@link drainLocalWeaponGlbs} owns the preload chain — never await inside `update()`. */
   private localWeaponGlbDrainRunning = false;
+  private readonly localWeaponVisualAppliedListeners = new Set<() => void>();
   private constructor(
     scene: THREE.Scene,
     modelRegistry: IModelLoadRegistry,
@@ -151,7 +152,21 @@ export class PlayerPresentationManager {
       this.local.setWeaponDefinition(visualDef);
       this.lastLoadedMirrorWeaponVisualEquip = visualDef ? targetEquip : "unarmed";
       this.lastAppliedLocalWeaponVisualEquip = targetEquip;
+      this.notifyLocalWeaponVisualApplied();
     }
+  }
+
+  /** Dev authoring: hotbar swap finished loading the FP weapon mesh + layout. */
+  subscribeLocalWeaponVisualApplied(cb: () => void): () => void {
+    this.localWeaponVisualAppliedListeners.add(cb);
+    return () => {
+      this.localWeaponVisualAppliedListeners.delete(cb);
+    };
+  }
+
+  private notifyLocalWeaponVisualApplied(): void {
+    if (this.localWeaponVisualAppliedListeners.size === 0) return;
+    for (const cb of this.localWeaponVisualAppliedListeners) cb();
   }
 
   dispose(): void {
