@@ -20,6 +20,10 @@ import {
   isMammothToonPassEnabled,
   type MammothToonRenderPipeline,
 } from "@the-mammoth/engine";
+import {
+  drainAsyncPbrMaterialRevealBudget,
+  hasPendingAsyncPbrMaterialReveal,
+} from "@the-mammoth/world";
 import { registerEditorSceneRenderWake } from "./editorSceneRenderDemand.js";
 
 export function startEditorSceneRenderLoop(deps: {
@@ -263,6 +267,8 @@ export function startEditorSceneRenderLoop(deps: {
     renderCam.getWorldDirection(renderCamForward);
     publishMammothCompassHeadingFromForwardXZ(renderCamForward.x, renderCamForward.z);
 
+    drainAsyncPbrMaterialRevealBudget(8);
+
     toonRenderPipeline.syncToonPassEnabled(isMammothToonPassEnabled());
     toonRenderPipeline.render();
 
@@ -273,6 +279,7 @@ export function startEditorSceneRenderLoop(deps: {
       fpSessionActive ||
       tcDragging ||
       orbitMotionActive ||
+      hasPendingAsyncPbrMaterialReveal() ||
       (st.mode === "my_apartment_layout" && (getEditorFishTankBridge()?.hasActiveSchools() ?? false));
 
     if (keepAnimating) {

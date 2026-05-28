@@ -9,7 +9,9 @@ import {
   clampWallOpeningTangentOffsetM,
   syncOwnedApartmentWallOpeningProxies,
   buildApartmentPlanarMirrorVisual,
+  hasPendingAsyncPbrMaterialReveal,
 } from "@the-mammoth/world";
+import { demandEditorSceneRender } from "../editorScene/editorSceneRenderDemand.js";
 import {
   OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
   OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
@@ -336,6 +338,9 @@ export function syncEditorMyApartmentWallsOnMount(
     }
   }
   mount.mountedWallIds = nextIds;
+  if (hasPendingAsyncPbrMaterialReveal()) {
+    demandEditorSceneRender();
+  }
 }
 
 export function syncEditorMyApartmentMirrorsOnMount(

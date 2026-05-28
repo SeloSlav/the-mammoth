@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   drainAsyncPbrMaterialRevealBudget,
+  hasPendingAsyncPbrMaterialReveal,
   resetAsyncPbrMaterialRevealQueueForTests,
   scheduleAsyncPbrMaterialReveal,
 } from "./pbrAsyncMaterialReveal.js";
@@ -16,5 +17,15 @@ describe("pbrAsyncMaterialReveal", () => {
     expect(ran).toEqual([1, 2]);
     drainAsyncPbrMaterialRevealBudget(2);
     expect(ran).toEqual([1, 2, 3]);
+    expect(hasPendingAsyncPbrMaterialReveal()).toBe(false);
+  });
+
+  it("hasPendingAsyncPbrMaterialReveal reflects the queue", () => {
+    resetAsyncPbrMaterialRevealQueueForTests();
+    expect(hasPendingAsyncPbrMaterialReveal()).toBe(false);
+    scheduleAsyncPbrMaterialReveal(() => {});
+    expect(hasPendingAsyncPbrMaterialReveal()).toBe(true);
+    drainAsyncPbrMaterialRevealBudget(1);
+    expect(hasPendingAsyncPbrMaterialReveal()).toBe(false);
   });
 });

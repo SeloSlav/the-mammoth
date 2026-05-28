@@ -1,6 +1,6 @@
 /**
  * Rate-limits applying async-loaded PBR maps to materials (avoids WebGPU compile bursts).
- * Drained once per FP RAF frame from the client session loop.
+ * Drained each frame from the FP client loop and the apartment editor render loop.
  */
 
 const pending: Array<() => void> = [];
@@ -10,6 +10,10 @@ export const DEFAULT_ASYNC_PBR_REVEALS_PER_FRAME = 2;
 /** Queue a callback that assigns a resolved map and sets `material.needsUpdate`. */
 export function scheduleAsyncPbrMaterialReveal(apply: () => void): void {
   pending.push(apply);
+}
+
+export function hasPendingAsyncPbrMaterialReveal(): boolean {
+  return pending.length > 0;
 }
 
 /** Run up to `maxPerFrame` queued material updates (default 2/frame). */

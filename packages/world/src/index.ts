@@ -375,6 +375,7 @@ export { authorImportedPbrTexturesState, ensurePbrKtx2Support } from "./pbrTextu
 export {
   DEFAULT_ASYNC_PBR_REVEALS_PER_FRAME,
   drainAsyncPbrMaterialRevealBudget,
+  hasPendingAsyncPbrMaterialReveal,
   scheduleAsyncPbrMaterialReveal,
   setAsyncPbrMaterialRevealDrainCompleteHook,
 } from "./pbrAsyncMaterialReveal.js";
