@@ -14,6 +14,12 @@ export const CAR_CEIL_BELOW_SHAFT_TOP = 0.14;
 /** Must match server `elevator::CALL_R_XZ` within a few cm (landing pad vs hail reducer). */
 export const CALL_RADIUS_XZ = 1.78;
 export const CALL_Y_HALF_WINDOW = 2.2;
+/** Feet XZ radius around the visual landing hail panel origin — lateral pad beside the corridor door. */
+export const LANDING_HAIL_PANEL_PAD_RADIUS_XZ_M = 0.58;
+/** Vertical slack (m) around hail panel center Y for pad + aim targeting. */
+export const LANDING_HAIL_PANEL_PAD_Y_HALF_M = 1.35;
+/** Min camera-forward dot toward hail panel center (crosshair cone). */
+export const LANDING_HAIL_CROSSHAIR_AIM_MIN_DOT = 0.38;
 /**
  * Landing "call" is hidden (and server `elevator_hail` no-ops) when cab feet are this close to
  * that landing's support Y — avoids "call Ground" while the car is already docked there.

@@ -612,13 +612,22 @@ export class FpElevatorShaftVisual {
     );
     (icon.userData as FpElevLandingHailPickUserData)[FP_ELEV_LANDING_HAIL_PICK_UD] =
       hailPickUserData;
+    /** Forgiving crosshair target — cylinder/icon are easy to miss at arm's length. */
+    const pickSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(0.32, 12, 12),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 }),
+    );
+    pickSphere.name = `elev_landing_hail_pick_sphere_${level}`;
+    (pickSphere.userData as FpElevLandingHailPickUserData)[FP_ELEV_LANDING_HAIL_PICK_UD] =
+      hailPickUserData;
     const y = 1.34;
     const faceOut = level === 1 ? LANDING_HAIL_FACE_OUT_GROUND_M : LANDING_HAIL_FACE_OUT_M;
     const doorSideOffset = DOOR_W * 0.5 + 0.32;
     group.add(button);
     group.add(icon);
-    this.hailBtnBodies.set(level, button);
+    group.add(pickSphere);
     if (face === "e") {
+      pickSphere.position.set(iconOff, 0, 0);
       group.position.set(hx + faceOut, y, -doorSideOffset);
       button.rotation.z = Math.PI * 0.5;
       button.position.set(btnDepth, 0, 0);
@@ -630,18 +639,22 @@ export class FpElevatorShaftVisual {
       button.position.set(-btnDepth, 0, 0);
       icon.position.set(-iconOff, 0, 0);
       icon.rotation.y = -Math.PI * 0.5;
+      pickSphere.position.set(-iconOff, 0, 0);
     } else if (face === "n") {
       group.position.set(doorSideOffset, y, hz + faceOut);
       button.rotation.x = Math.PI * 0.5;
       button.position.set(0, 0, btnDepth);
       icon.position.set(0, 0, iconOff);
+      pickSphere.position.set(0, 0, iconOff);
     } else {
       group.position.set(-doorSideOffset, y, -hz - faceOut);
       button.rotation.x = Math.PI * 0.5;
       button.position.set(0, 0, -btnDepth);
       icon.position.set(0, 0, -iconOff);
       icon.rotation.y = Math.PI;
+      pickSphere.position.set(0, 0, -iconOff);
     }
+    this.hailBtnBodies.set(level, button);
     return group;
   }
 
