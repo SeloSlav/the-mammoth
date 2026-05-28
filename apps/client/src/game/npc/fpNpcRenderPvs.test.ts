@@ -50,15 +50,27 @@ describe("fpNpcPassesRenderPvsGate", () => {
     expect(fpNpcOnPlayerStorey(playerY, playerY, storeyOpts)).toBe(true);
   });
 
-  it("shows same-storey NPCs in units without corridor door PVS", () => {
+  it("shows NPCs in corridor and deep inside a unit on the same slab (no XZ PVS)", () => {
     const slabY = 0.25 + 3.2 * (16 - 1);
-    expect(
-      fpNpcPassesRenderPvsGate({
-        snapshot: snap(4, slabY + 0.02, -8),
-        playerFeetY: slabY,
-        storeyOpts,
-      }),
-    ).toBe(true);
+    const playerFeetY = slabY;
+    const corridor = fpNpcPassesRenderPvsGate({
+      snapshot: snap(0, slabY, -40),
+      playerFeetY,
+      storeyOpts,
+    });
+    const insideEastUnit = fpNpcPassesRenderPvsGate({
+      snapshot: snap(8.5, slabY + 0.02, -12),
+      playerFeetY,
+      storeyOpts,
+    });
+    const insideWestUnit = fpNpcPassesRenderPvsGate({
+      snapshot: snap(-8.5, slabY, 12),
+      playerFeetY,
+      storeyOpts,
+    });
+    expect(corridor).toBe(true);
+    expect(insideEastUnit).toBe(true);
+    expect(insideWestUnit).toBe(true);
   });
 
   it("megablock deck 16 (levelIndex 17) matches NPC on authored walk feet Y", () => {

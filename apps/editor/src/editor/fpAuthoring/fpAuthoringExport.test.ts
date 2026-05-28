@@ -48,4 +48,21 @@ describe("mergeWeaponFpViewmodelForSave", () => {
     expect(rr.eulerRad).toEqual({ x: 0, y: 0.1, z: 0 });
     expect(rr.scaleM).toEqual({ x: 1, y: 1, z: 1 });
   });
+
+  it("merges partial aimRigRoot with previous aimRigRoot", () => {
+    const prev = {
+      aimRigRoot: {
+        positionM: { x: 0.1, y: -0.2, z: -0.4 },
+        eulerRad: { x: 0, y: 0.03, z: -1.6 },
+      },
+    };
+    const patch = { aimRigRoot: { positionM: { x: 0.12, y: -0.22, z: -0.45 } } };
+    const out = mergeWeaponFpViewmodelForSave(prev, patch as Record<string, unknown>) as Record<
+      string,
+      unknown
+    >;
+    const ar = out.aimRigRoot as Record<string, unknown>;
+    expect(ar.positionM).toEqual({ x: 0.12, y: -0.22, z: -0.45 });
+    expect(ar.eulerRad).toEqual({ x: 0, y: 0.03, z: -1.6 });
+  });
 });

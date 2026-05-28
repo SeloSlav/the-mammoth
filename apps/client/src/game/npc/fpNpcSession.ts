@@ -139,7 +139,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
   const rowInScope = (row: WorldNpc): boolean =>
     opts.sessionKeyPrefix === undefined || row.sessionKey.startsWith(opts.sessionKeyPrefix);
 
-  /** Same slab as combat sim: vertical band from feet Y (not `levelIndex` vs elevator deck labels). */
+  /** Same slab as combat sim — feet Y band only (hall, units, elevator landing on that storey). */
   const passesPresentationGate = (_row: WorldNpc, snap: ReplicatedNpcSnapshot): boolean => {
     const feetY = opts.getPlayerFeetY?.();
     const storeyOpts = opts.storeyOpts;

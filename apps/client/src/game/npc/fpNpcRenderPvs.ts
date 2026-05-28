@@ -32,8 +32,9 @@ export function fpNpcOnPlayerStorey(
 }
 
 /**
- * CPU-side NPC presentation gate — same-storey only.
- * Corridor door PVS applies to unit shells/decor, not combat NPCs (they must read on the slab you're on).
+ * CPU-side NPC presentation gate — **same vertical slab only**.
+ * No corridor vs unit XZ rules: if you are on deck 16, every baba on that slab renders and gets
+ * combat audio whether you stand in the hall or inside an empty apartment (combat-sim parity).
  */
 export function fpNpcPassesRenderPvsGate(input: FpNpcRenderPvsGateInput): boolean {
   const { snapshot, playerFeetY, storeyOpts } = input;
