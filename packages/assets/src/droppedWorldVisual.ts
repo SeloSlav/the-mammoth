@@ -34,6 +34,7 @@ const BY_DEF_ID: Readonly<Record<string, number>> = {
 
   // Materials / craft
   "scrap-metal": 0.38,
+  "fuse-wire-pack": 0.34,
   "chemical-stock": 0.12,
   cigarettes: 0.18,
   "balcony-grow-substrate": 0.38,

@@ -55,4 +55,14 @@ describe("buildProceduralDropMeshLayers", () => {
     }, 0);
     expect(tris).toBeLessThan(200);
   });
+
+  it("returns procedural fuse-wire-pack (no shipped GLB yet)", () => {
+    const layers = buildProceduralDropMeshLayers("fuse-wire-pack");
+    expect(layers).not.toBeNull();
+    expect(layers!.length).toBeGreaterThan(0);
+    expect(maxLayerBoundsDim(layers!)).toBeCloseTo(
+      getMammothDroppedWorldTargetMaxDimM("fuse-wire-pack"),
+      2,
+    );
+  });
 });
