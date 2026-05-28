@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { ReplicatedNpcSnapshot } from "@the-mammoth/game";
 import {
+  DEFAULT_BUILDING_FLOOR_SPACING_M,
+  elevatorSupportFeetWorldY,
+  estimateStoreyFromFeetY,
+} from "@the-mammoth/world";
+import {
   fpNpcOnPlayerStorey,
   fpNpcPassesRenderPvsGate,
 } from "./fpNpcRenderPvs.js";
+
+const TYPICAL_SHAFT_PLATE_LOCAL_Y = 1.6589473684210527;
+const TYPICAL_SHAFT_SY = 3.1578947368421053;
 
 const snap = (x: number, y: number, z: number): ReplicatedNpcSnapshot => ({
   npcId: 1n,
@@ -49,6 +57,31 @@ describe("fpNpcPassesRenderPvsGate", () => {
         snapshot: snap(4, slabY + 0.02, -8),
         playerFeetY: slabY,
         storeyOpts,
+      }),
+    ).toBe(true);
+  });
+
+  it("megablock deck 16 (levelIndex 17) matches NPC on authored walk feet Y", () => {
+    const levelIndex = 17;
+    const feetY = elevatorSupportFeetWorldY({
+      buildingWorldOriginY: 0,
+      levelIndex,
+      floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
+      shaftPlateLocalY: TYPICAL_SHAFT_PLATE_LOCAL_Y,
+      shaftSy: TYPICAL_SHAFT_SY,
+    });
+    const opts = {
+      buildingWorldOriginY: 0,
+      floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
+      maxLevel: 20,
+    };
+    expect(estimateStoreyFromFeetY(feetY, opts)).toBe(16);
+    expect(fpNpcOnPlayerStorey(feetY, feetY, opts)).toBe(true);
+    expect(
+      fpNpcPassesRenderPvsGate({
+        snapshot: snap(0, feetY, 0),
+        playerFeetY: feetY,
+        storeyOpts: opts,
       }),
     ).toBe(true);
   });

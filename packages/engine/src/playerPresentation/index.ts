@@ -7,6 +7,7 @@ export {
   LocalFirstPersonPresenter,
   type LocalFirstPersonPresenterOptions,
   type FpAuthoringPick,
+  type FpAuthoringPoseMode,
 } from "./local/LocalFirstPersonPresenter.js";
 export {
   LocalMirrorPlayerPresenter,

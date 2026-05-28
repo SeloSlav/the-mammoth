@@ -179,7 +179,6 @@ import { getMammothItemDef } from "../inventory/mammothItemCatalog";
 import { LocalGameAudio } from "./audio/localGameAudio.js";
 import { createFpSessionCorridorPvsContext } from "./fpSession/fpSessionCorridorPvs.js";
 import { createFpNpcSession } from "./npc/fpNpcSession.js";
-import { createFpNpcRenderPvsGate } from "./npc/fpNpcRenderPvs.js";
 import { isFpMegablockNpcsEnabled } from "./fpSession/fpMegablockNpcsEnabled.js";
 import { createFpNpcCollisionSource } from "./fpPhysics/fpNpcCollision.js";
 import { setFpCombatSimMode } from "./combatSim/fpCombatSimMode.js";
@@ -1357,16 +1356,13 @@ export async function mountFpSession(
 
   const fpMegablockNpcsEnabled = isCombatSim || isFpMegablockNpcsEnabled(conn);
 
-  const npcRenderPvsGate = !fpMegablockNpcsEnabled
-      ? null
-      : createFpNpcRenderPvsGate(() => ({
-          playerFeetY: pos.y,
-          storeyOpts: {
-            buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
-            floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
-            maxLevel: maxBuildingLevel,
-          },
-        }));
+  const npcStoreyOpts = {
+    buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
+    floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
+    maxLevel: maxBuildingLevel,
+  };
+  const getPlayerFeetYForNpcGate = () =>
+    resolveAuthoritativeInteractionPose(pos, serverPose).y;
 
   const getInteractionPos = () => {
     const p = resolveAuthoritativeInteractionPose(pos, serverPose);
@@ -1596,13 +1592,8 @@ export async function mountFpSession(
       },
       npcCollision: fpNpcCollision ?? undefined,
       sessionKeyPrefix: isCombatSim ? "combat_sim:" : "megablock:",
-      getRenderPvsGate: () => npcRenderPvsGate,
-      getPlayerFeetY: () => pos.y,
-      storeyOpts: {
-        buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
-        floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
-        maxLevel: maxBuildingLevel,
-      },
+      getPlayerFeetY: getPlayerFeetYForNpcGate,
+      storeyOpts: npcStoreyOpts,
     });
   }
 

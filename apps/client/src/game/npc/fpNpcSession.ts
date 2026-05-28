@@ -28,8 +28,6 @@ import {
   type FpBabushkaSporeBurstFx,
 } from "./fpBabushkaSporeBurstFx.js";
 import type { FpNpcCollisionSource } from "../fpPhysics/fpNpcCollision.js";
-import { parseMegablockFloorSessionKey } from "@the-mammoth/schemas";
-import { estimateStoreyFromFeetY } from "@the-mammoth/world";
 import {
   fpNpcOnPlayerStorey,
   type FpNpcStoreyOpts,
@@ -141,18 +139,12 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
   const rowInScope = (row: WorldNpc): boolean =>
     opts.sessionKeyPrefix === undefined || row.sessionKey.startsWith(opts.sessionKeyPrefix);
 
-  const passesPresentationGate = (row: WorldNpc, snap: ReplicatedNpcSnapshot): boolean => {
+  /** Same slab as combat sim: vertical band from feet Y (not `levelIndex` vs elevator deck labels). */
+  const passesPresentationGate = (_row: WorldNpc, snap: ReplicatedNpcSnapshot): boolean => {
     const feetY = opts.getPlayerFeetY?.();
     const storeyOpts = opts.storeyOpts;
     if (feetY !== undefined && storeyOpts) {
-      const floorLevel = parseMegablockFloorSessionKey(row.sessionKey);
-      if (floorLevel !== null) {
-        return estimateStoreyFromFeetY(feetY, storeyOpts) === floorLevel;
-      }
-      if (!fpNpcOnPlayerStorey(snap.worldPosition.y, feetY, storeyOpts)) {
-        return false;
-      }
-      return true;
+      return fpNpcOnPlayerStorey(snap.worldPosition.y, feetY, storeyOpts);
     }
     const gate = opts.getRenderPvsGate?.();
     if (!gate) return true;

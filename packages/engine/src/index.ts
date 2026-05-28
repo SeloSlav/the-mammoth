@@ -143,6 +143,7 @@ export {
   type PlayerPresentationManagerOptions,
   type LocalFirstPersonPresenterOptions,
   type FpAuthoringPick,
+  type FpAuthoringPoseMode,
   type PrimitiveHumanoidParts,
   type MeleeCombatVisualEvent,
   type MeleeCombatVisualSink,

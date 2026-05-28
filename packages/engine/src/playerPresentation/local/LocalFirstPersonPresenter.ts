@@ -136,6 +136,9 @@ function isDescendantOfGrip(ancestor: THREE.Object3D, o: THREE.Object3D): boolea
 
 export type FpAuthoringPick = { id: string; label: string; object: THREE.Object3D };
 
+/** Dev layout: hip/hand rest vs full ADS rig pose (`fpViewmodel.aimRigRoot`). */
+export type FpAuthoringPoseMode = "rest" | "aim";
+
 /**
  * First-person-only presentation (never reuse remote body meshes).
  * GLB right hand + GLB weapon; swing keyframes drive {@link rightHandRig}.
@@ -182,6 +185,7 @@ export class LocalFirstPersonPresenter {
   private handScene?: THREE.Object3D;
   private weaponGripAnchor?: THREE.Group;
   private authoringFrozen = false;
+  private authoringPoseMode: FpAuthoringPoseMode = "rest";
   /** When false and no weapon GLB is equipped, stock hand meshes are hidden (empty hotbar / non-weapon slot). */
   private fpGameplayStockHandVisible = false;
   /**
@@ -424,6 +428,12 @@ export class LocalFirstPersonPresenter {
     this.rightHandRig.scale.copy(this.rigRestScale);
   }
 
+  private applyRigAimToRightHandRig(): void {
+    this.rightHandRig.position.copy(this.rigAimPos);
+    this.rightHandRig.rotation.copy(this.rigAimEuler);
+    this.rightHandRig.scale.copy(this.rigRestScale);
+  }
+
   /**
    * Places {@link weaponGripAnchor} under `rightHandRig` at the same world pose as `hand × grip`,
    * so the grip may be sibling to the hand (weapon not parented under the hand Scene).
@@ -518,11 +528,24 @@ export class LocalFirstPersonPresenter {
    */
   setAuthoringFrozen(frozen: boolean): void {
     this.authoringFrozen = frozen;
+    if (!frozen) this.authoringPoseMode = "rest";
   }
 
-  /** Dev layout target: stock hand mesh; weapon follows via live grip sync while authoring. */
+  setAuthoringPoseMode(mode: FpAuthoringPoseMode): void {
+    this.authoringPoseMode = mode;
+    if (mode === "aim") this.refreshRigAimFromDefinition();
+  }
+
+  getAuthoringPoseMode(): FpAuthoringPoseMode {
+    return this.authoringPoseMode;
+  }
+
+  /** Dev layout target: hand at hip rest, or rig root at full ADS pose. */
   getAuthoringPickList(): FpAuthoringPick[] {
     if (!this.handScene) return [];
+    if (this.authoringPoseMode === "aim") {
+      return [{ id: "aimRigRoot", label: "Aim rig (ADS)", object: this.rightHandRig }];
+    }
     return [{ id: "hand", label: "Hand & weapon", object: this.handScene }];
   }
 
@@ -743,7 +766,8 @@ export class LocalFirstPersonPresenter {
     this.maybeTriggerFirearmShot(state);
     this.fpRoot.rotation.set(0, 0, 0);
     if (this.authoringFrozen) {
-      this.applyRigRestToRightHandRig();
+      if (this.authoringPoseMode === "aim") this.applyRigAimToRightHandRig();
+      else this.applyRigRestToRightHandRig();
       this.firearmFlashRoot.visible = false;
       const swingTrack = this.resolveFpMeleeSwingTrack();
       const ph = this.swingAuthoringPreviewPhase;

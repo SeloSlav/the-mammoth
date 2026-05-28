@@ -1,8 +1,10 @@
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import {
+  type FpAuthoringPoseMode,
   type PlayerPresentationManager,
   buildWeaponFirstPersonPresentationMergeFromPickList,
+  fpFirearmShotVisualConfigForHeldItem,
 } from "@the-mammoth/engine";
 import { patchFpTransformControlsPointerForCaptureCompat } from "../fpApartment/fpTransformControlsPointerPatch.js";
 import {
@@ -37,6 +39,11 @@ function isTypingTarget(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
   const tag = el.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+}
+
+function localWeaponSupportsAimAuthoring(presentation: PlayerPresentationManager): boolean {
+  const def = presentation.getLocalWeaponDefinition();
+  return def != null && fpFirearmShotVisualConfigForHeldItem(def.id) != null;
 }
 
 /**
@@ -87,16 +94,18 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
   title.style.marginBottom = "4px";
 
   const hint = document.createElement("div");
-  hint.textContent =
-    "Backtick (`) toggles this panel. Uses the real gameplay camera; viewmodel stays at rest while open.";
   hint.style.opacity = "0.82";
   hint.style.fontSize = "11px";
   hint.style.marginBottom = "10px";
 
   const targetLabel = document.createElement("div");
-  targetLabel.textContent = "Hand & weapon";
   targetLabel.style.marginBottom = "8px";
   targetLabel.style.opacity = "0.9";
+
+  const poseRow = document.createElement("div");
+  poseRow.style.display = "flex";
+  poseRow.style.gap = "6px";
+  poseRow.style.marginBottom = "8px";
 
   const modeRow = document.createElement("div");
   modeRow.style.display = "flex";
@@ -198,9 +207,70 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
   ta.style.color = "#c8d0e0";
   ta.style.padding = "6px";
 
-  shell.append(title, hint, targetLabel, modeRow, diskRow, status, copyBtn, ta);
+  const poseBtnStyles = {
+    active: "1px solid rgba(120,180,255,0.55)",
+    inactive: "1px solid rgba(255,255,255,0.18)",
+    activeBg: "rgba(60,100,180,0.45)",
+    inactiveBg: "#2a2d3e",
+  };
+
+  let restPoseBtn: HTMLButtonElement | null = null;
+  let aimPoseBtn: HTMLButtonElement | null = null;
+
+  const syncPoseUi = () => {
+    const pose = presentation.getFpAuthoringPoseMode();
+    const aimAvailable = localWeaponSupportsAimAuthoring(presentation);
+    poseRow.style.display = aimAvailable ? "flex" : "none";
+
+    if (pose === "aim") {
+      targetLabel.textContent = "Aim rig (ADS)";
+      hint.textContent =
+        "Backtick (`) toggles this panel. Viewmodel shows the full aim-down-sights rig pose — move/rotate to set fpViewmodel.aimRigRoot.";
+    } else {
+      targetLabel.textContent = "Hand & weapon";
+      hint.textContent =
+        "Backtick (`) toggles this panel. Uses the real gameplay camera; viewmodel stays at hip rest while open.";
+    }
+
+    if (restPoseBtn) {
+      const active = pose === "rest";
+      restPoseBtn.style.border = active ? poseBtnStyles.active : poseBtnStyles.inactive;
+      restPoseBtn.style.background = active ? poseBtnStyles.activeBg : poseBtnStyles.inactiveBg;
+    }
+    if (aimPoseBtn) {
+      const active = pose === "aim";
+      aimPoseBtn.style.border = active ? poseBtnStyles.active : poseBtnStyles.inactive;
+      aimPoseBtn.style.background = active ? poseBtnStyles.activeBg : poseBtnStyles.inactiveBg;
+    }
+  };
+
+  const setAuthoringPose = (mode: FpAuthoringPoseMode) => {
+    presentation.setFpAuthoringPoseMode(mode);
+    syncPoseUi();
+    attachAuthoringTarget();
+  };
+
+  const mkPoseBtn = (label: string, mode: FpAuthoringPoseMode) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.style.flex = "1";
+    b.style.cursor = "pointer";
+    b.style.padding = "5px 0";
+    b.style.borderRadius = "4px";
+    b.style.color = "#eee";
+    b.addEventListener("click", () => setAuthoringPose(mode));
+    poseRow.appendChild(b);
+    return b;
+  };
+
+  restPoseBtn = mkPoseBtn("Hip rest", "rest");
+  aimPoseBtn = mkPoseBtn("Aim (ADS)", "aim");
+
+  shell.append(title, hint, poseRow, targetLabel, modeRow, diskRow, status, copyBtn, ta);
   shell.style.display = panelVisible ? "block" : "none";
   document.body.appendChild(shell);
+  syncPoseUi();
 
   const attachAuthoringTarget = () => {
     const picks = presentation.getFpAuthoringPickList();
@@ -289,6 +359,7 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
     presentation.setFpAuthoringFrozen(panelVisible);
     if (panelVisible) {
       void document.exitPointerLock();
+      syncPoseUi();
       attachAuthoringTarget();
     } else {
       transformControls.detach();

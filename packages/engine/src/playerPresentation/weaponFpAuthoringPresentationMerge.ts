@@ -48,6 +48,7 @@ export function buildWeaponFirstPersonPresentationMergeFromPickList(
   const byId = new Map(picks.map((p) => [p.id, p.object]));
 
   const rig = byId.get("rigRoot");
+  const aimRig = byId.get("aimRigRoot");
   const grip = persistRefs?.gripAnchor ?? byId.get("gripAnchor");
   const hand = byId.get("hand");
   const wRoot =
@@ -72,6 +73,13 @@ export function buildWeaponFirstPersonPresentationMergeFromPickList(
       positionM: vec3(rig.position),
       eulerRad: { x: r4(re.x), y: r4(re.y), z: r4(re.z) },
       scaleM: vec3(rig.scale),
+    };
+  }
+  if (aimRig) {
+    const ae = aimRig.rotation;
+    fpViewmodel.aimRigRoot = {
+      positionM: vec3(aimRig.position),
+      eulerRad: { x: r4(ae.x), y: r4(ae.y), z: r4(ae.z) },
     };
   }
   if (grip) fpViewmodel.gripAnchorPositionM = gripAnchorPositionMForExport(grip, hand);
@@ -120,6 +128,13 @@ export function mergeWeaponFpViewmodelForSave(
         out.rigRoot = { ...(br as Record<string, unknown>), ...(pv as Record<string, unknown>) };
       } else {
         out.rigRoot = pv;
+      }
+    } else if (key === "aimRigRoot") {
+      const ba = base.aimRigRoot;
+      if (ba && typeof ba === "object" && pv && typeof pv === "object") {
+        out.aimRigRoot = { ...(ba as Record<string, unknown>), ...(pv as Record<string, unknown>) };
+      } else {
+        out.aimRigRoot = pv;
       }
     } else {
       out[key] = pv;

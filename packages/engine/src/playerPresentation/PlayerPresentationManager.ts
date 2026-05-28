@@ -11,6 +11,7 @@ import {
 import {
   LocalFirstPersonPresenter,
   type FpAuthoringPick,
+  type FpAuthoringPoseMode,
 } from "./local/LocalFirstPersonPresenter.js";
 import {
   LocalMirrorPlayerPresenter,
@@ -169,6 +170,15 @@ export class PlayerPresentationManager {
   /** Dev / tools: freeze FP viewmodel motion so gizmos stay stable under the gameplay camera. */
   setFpAuthoringFrozen(frozen: boolean): void {
     this.local.setAuthoringFrozen(frozen);
+  }
+
+  /** Dev / tools: hip rest vs full ADS rig pose while the in-game authoring panel is open. */
+  setFpAuthoringPoseMode(mode: FpAuthoringPoseMode): void {
+    this.local.setAuthoringPoseMode(mode);
+  }
+
+  getFpAuthoringPoseMode(): FpAuthoringPoseMode {
+    return this.local.getAuthoringPoseMode();
   }
 
   getFpAuthoringPickList(): FpAuthoringPick[] {
