@@ -28,6 +28,12 @@ import {
   type FpBabushkaSporeBurstFx,
 } from "./fpBabushkaSporeBurstFx.js";
 import type { FpNpcCollisionSource } from "../fpPhysics/fpNpcCollision.js";
+import { parseMegablockFloorSessionKey } from "@the-mammoth/schemas";
+import { estimateStoreyFromFeetY } from "@the-mammoth/world";
+import {
+  fpNpcOnPlayerStorey,
+  type FpNpcStoreyOpts,
+} from "./fpNpcRenderPvs.js";
 
 /** Matches `apps/server/src/npc.rs` `NPC_STATE_IDLE`. */
 const NPC_STATE_IDLE = 0;
@@ -91,6 +97,9 @@ export type CreateFpNpcSessionOpts = {
   /** When set, only replicate rows whose `sessionKey` starts with this prefix. */
   sessionKeyPrefix?: string;
   getRenderPvsGate?: () => ((snap: ReplicatedNpcSnapshot) => boolean) | null;
+  /** Player feet Y for megablock floor encounter storey match (`megablock:floor:{level}`). */
+  getPlayerFeetY?: () => number;
+  storeyOpts?: FpNpcStoreyOpts;
   /** Shared authoritative NPC capsule blockers for FP locomotion. */
   npcCollision?: FpNpcCollisionSource;
 };
@@ -120,7 +129,6 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
   const sporeTrailNextAtMs = new Map<string, number>();
   let lastEpitaphClipIndex = -1;
   let audioLoadStarted = false;
-  let snapshotsDirty = true;
   const epitaphTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   const clearEpitaphTimer = (npcKey: string): void => {
@@ -133,6 +141,24 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
   const rowInScope = (row: WorldNpc): boolean =>
     opts.sessionKeyPrefix === undefined || row.sessionKey.startsWith(opts.sessionKeyPrefix);
 
+  const passesPresentationGate = (row: WorldNpc, snap: ReplicatedNpcSnapshot): boolean => {
+    const feetY = opts.getPlayerFeetY?.();
+    const storeyOpts = opts.storeyOpts;
+    if (feetY !== undefined && storeyOpts) {
+      const floorLevel = parseMegablockFloorSessionKey(row.sessionKey);
+      if (floorLevel !== null) {
+        return estimateStoreyFromFeetY(feetY, storeyOpts) === floorLevel;
+      }
+      if (!fpNpcOnPlayerStorey(snap.worldPosition.y, feetY, storeyOpts)) {
+        return false;
+      }
+      return true;
+    }
+    const gate = opts.getRenderPvsGate?.();
+    if (!gate) return true;
+    return gate(snap);
+  };
+
   const rebuildSnapshots = (nowMs: number): ReplicatedNpcSnapshot[] => {
     const out: ReplicatedNpcSnapshot[] = [];
     for (const row of rows.values()) {
@@ -142,9 +168,12 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
     return out;
   };
 
-  const onRow = (row: WorldNpc) => {
+  const onRow = (row: WorldNpc, nowMs: number) => {
     if (!rowInScope(row)) return;
     const key = row.npcId.toString();
+    const snap = snapshotFromRow(row, nowMs);
+    const audible =
+      snap !== null && passesPresentationGate(row, snap);
     const prev = audioTrack.get(key);
     const nextTrack: NpcAudioTrack = {
       state: row.state,
@@ -153,7 +182,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
       health: row.health,
     };
     const ctx = opts.getAudioContext();
-    if (prev) {
+    if (prev && audible) {
       const tookDamage = row.hitPresentationSeq > prev.hitSeq;
       if (prev.state === 0 && row.state === 1 && !tookDamage) {
         if (ctx) combatAudio.play(ctx, "aggro");
@@ -198,16 +227,19 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
     }
     audioTrack.set(key, nextTrack);
     rows.set(key, row);
-    snapshotsDirty = true;
-    opts.npcCollision?.syncNpcRow({
-      npcId: row.npcId,
-      archetype: row.archetype,
-      x: row.x,
-      y: row.y,
-      z: row.z,
-      state: row.state,
-      health: row.health,
-    });
+    if (audible) {
+      opts.npcCollision?.syncNpcRow({
+        npcId: row.npcId,
+        archetype: row.archetype,
+        x: row.x,
+        y: row.y,
+        z: row.z,
+        state: row.state,
+        health: row.health,
+      });
+    } else {
+      opts.npcCollision?.removeNpc(row.npcId);
+    }
   };
 
   const onDelete = (row: WorldNpc) => {
@@ -218,19 +250,19 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
     audioTrack.delete(key);
     idleAudioTrack.delete(key);
     sporeTrailNextAtMs.delete(key);
-    snapshotsDirty = true;
     opts.npcCollision?.removeNpc(row.npcId);
   };
 
-  const onInsertCb = (_ctx: unknown, row: WorldNpc) => onRow(row);
-  const onUpdateCb = (_ctx: unknown, _old: WorldNpc, row: WorldNpc) => onRow(row);
+  const onInsertCb = (_ctx: unknown, row: WorldNpc) => onRow(row, performance.now());
+  const onUpdateCb = (_ctx: unknown, _old: WorldNpc, row: WorldNpc) =>
+    onRow(row, performance.now());
   const onDeleteCb = (_ctx: unknown, row: WorldNpc) => onDelete(row);
 
   opts.conn.db.world_npc.onInsert(onInsertCb);
   opts.conn.db.world_npc.onUpdate(onUpdateCb);
   opts.conn.db.world_npc.onDelete(onDeleteCb);
   for (const row of opts.conn.db.world_npc.iter()) {
-    onRow(row);
+    onRow(row, performance.now());
   }
 
   const onFleshImpact = (_ctx: unknown, row: WorldSoundEvent) => {
@@ -258,6 +290,12 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
       for (const row of rows.values()) {
         if (archetypeFromRow(row.archetype) !== "babushka") continue;
         const key = row.npcId.toString();
+        const snap = snapshotFromRow(row, nowMs);
+        if (!snap || !passesPresentationGate(row, snap)) {
+          sporeTrailNextAtMs.delete(key);
+          idleAudioTrack.delete(key);
+          continue;
+        }
         const speedSq = row.velX * row.velX + row.velZ * row.velZ;
         if (row.health > 0 && speedSq >= BABUSHKA_SPORE_TRAIL_MIN_SPEED_SQ) {
           const nextTrailAt = sporeTrailNextAtMs.get(key) ?? 0;
@@ -293,12 +331,31 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
         );
         idleTrack.nextAtMs = babushkaIdleNextAtMs(nowMs, row.npcId);
       }
-      const snapshots = rebuildSnapshots(nowMs);
-      if (snapshotsDirty) {
-        pool.ingestAuthoritative(snapshots);
-        snapshotsDirty = false;
+      for (const row of rows.values()) {
+        const snap = snapshotFromRow(row, nowMs);
+        if (!snap) {
+          opts.npcCollision?.removeNpc(row.npcId);
+          continue;
+        }
+        if (passesPresentationGate(row, snap)) {
+          opts.npcCollision?.syncNpcRow({
+            npcId: row.npcId,
+            archetype: row.archetype,
+            x: row.x,
+            y: row.y,
+            z: row.z,
+            state: row.state,
+            health: row.health,
+          });
+        } else {
+          opts.npcCollision?.removeNpc(row.npcId);
+        }
       }
-      pool.setRenderPvsGate(opts.getRenderPvsGate?.() ?? null);
+      const snapshots = rebuildSnapshots(nowMs).filter((snap) => {
+        const row = rows.get(snap.npcId.toString());
+        return row !== undefined && passesPresentationGate(row, snap);
+      });
+      pool.ingestAuthoritative(snapshots);
       pool.tickVisual(snapshots, dt);
     },
     dispose() {

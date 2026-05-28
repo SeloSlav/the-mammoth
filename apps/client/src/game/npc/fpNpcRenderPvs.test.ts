@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ReplicatedNpcSnapshot } from "@the-mammoth/game";
-import { fpNpcPassesRenderPvsGate } from "./fpNpcRenderPvs.js";
+import {
+  fpNpcOnPlayerStorey,
+  fpNpcPassesRenderPvsGate,
+} from "./fpNpcRenderPvs.js";
 
 const snap = (x: number, y: number, z: number): ReplicatedNpcSnapshot => ({
   npcId: 1n,
@@ -22,62 +25,31 @@ describe("fpNpcPassesRenderPvsGate", () => {
   const storeyOpts = {
     buildingWorldOriginY: 0,
     floorSpacingM: 3.2,
-    maxLevel: 19,
+    maxLevel: 20,
   };
 
-  it("culls NPCs outside the active floor plate band", () => {
+  it("culls NPCs on a different storey than the player", () => {
+    const playerY = 0.25 + 3.2 * (16 - 1);
+    const npcOtherStoreyY = 0.25 + 3.2 * (18 - 1);
+    expect(fpNpcOnPlayerStorey(npcOtherStoreyY, playerY, storeyOpts)).toBe(false);
     expect(
       fpNpcPassesRenderPvsGate({
-        snapshot: snap(0, 50, 0),
-        floorPlateBand: { lo: 2, hi: 4 },
+        snapshot: snap(0, npcOtherStoreyY, 0),
+        playerFeetY: playerY,
         storeyOpts,
-        insideResidentialUnit: false,
-        insideApartmentInteriorLightingZone: true,
-        corridorPvsVisibleUnitKeys: new Set(),
-        unitKeyContainingPoint: () => null,
       }),
     ).toBe(false);
+    expect(fpNpcOnPlayerStorey(playerY, playerY, storeyOpts)).toBe(true);
   });
 
-  it("hides NPCs in closed units while walking the corridor", () => {
+  it("shows same-storey NPCs in units without corridor door PVS", () => {
+    const slabY = 0.25 + 3.2 * (16 - 1);
     expect(
       fpNpcPassesRenderPvsGate({
-        snapshot: snap(1, 6.5, 1),
-        floorPlateBand: { lo: 2, hi: 2 },
+        snapshot: snap(4, slabY + 0.02, -8),
+        playerFeetY: slabY,
         storeyOpts,
-        insideResidentialUnit: false,
-        insideApartmentInteriorLightingZone: true,
-        corridorPvsVisibleUnitKeys: new Set(["floor|2|unit_e_003"]),
-        unitKeyContainingPoint: () => "floor|2|unit_e_004",
       }),
-    ).toBe(false);
-  });
-
-  it("shows corridor NPCs and NPCs in PVS-visible units", () => {
-    const base = {
-      floorPlateBand: { lo: 2, hi: 2 },
-      storeyOpts,
-      insideResidentialUnit: false,
-      insideApartmentInteriorLightingZone: true,
-      corridorPvsVisibleUnitKeys: new Set(["floor|2|unit_e_003"]),
-      unitKeyContainingPoint: (x: number) =>
-        x < 0.5 ? "floor|2|unit_e_003" : null,
-    };
-    expect(fpNpcPassesRenderPvsGate({ snapshot: snap(0, 6.5, 0), ...base })).toBe(true);
-    expect(fpNpcPassesRenderPvsGate({ snapshot: snap(2, 6.5, 0), ...base })).toBe(true);
-  });
-
-  it("rejects every NPC when floor plate band is inverted (combat-sim stub regression)", () => {
-    expect(
-      fpNpcPassesRenderPvsGate({
-        snapshot: snap(0, 0, 0),
-        floorPlateBand: { lo: 1, hi: 0 },
-        storeyOpts: { buildingWorldOriginY: 0, floorSpacingM: 3.2, maxLevel: 0 },
-        insideResidentialUnit: false,
-        insideApartmentInteriorLightingZone: false,
-        corridorPvsVisibleUnitKeys: new Set(),
-        unitKeyContainingPoint: () => null,
-      }),
-    ).toBe(false);
+    ).toBe(true);
   });
 });

@@ -1360,17 +1360,12 @@ export async function mountFpSession(
   const npcRenderPvsGate = !fpMegablockNpcsEnabled
       ? null
       : createFpNpcRenderPvsGate(() => ({
-          floorPlateBand: getActiveFloorPlateBand(),
+          playerFeetY: pos.y,
           storeyOpts: {
             buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
             floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
             maxLevel: maxBuildingLevel,
           },
-          insideResidentialUnit: isInsideResidentialUnit(),
-          insideApartmentInteriorLightingZone: isInsideApartmentInteriorLightingZone(),
-          corridorPvsVisibleUnitKeys: getCorridorPvsVisibleUnitKeys(),
-          unitKeyContainingPoint: (x, y, z) =>
-            megablockSpatial?.unitAtFeet(x, y, z)?.unitKey ?? null,
         }));
 
   const getInteractionPos = () => {
@@ -1602,6 +1597,12 @@ export async function mountFpSession(
       npcCollision: fpNpcCollision ?? undefined,
       sessionKeyPrefix: isCombatSim ? "combat_sim:" : "megablock:",
       getRenderPvsGate: () => npcRenderPvsGate,
+      getPlayerFeetY: () => pos.y,
+      storeyOpts: {
+        buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
+        floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
+        maxLevel: maxBuildingLevel,
+      },
     });
   }
 
