@@ -51,7 +51,7 @@ function resizeInstancedMesh(
   mesh.visible = needed > 0;
   mesh.castShadow = false;
   mesh.receiveShadow = false;
-  mesh.frustumCulled = true;
+  mesh.frustumCulled = false;
   parent.add(mesh);
   return { mesh, capacity };
 }

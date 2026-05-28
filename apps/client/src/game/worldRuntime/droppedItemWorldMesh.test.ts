@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { getMammothDroppedWorldTargetMaxDimM } from "@the-mammoth/assets";
 import {
   buildDropMeshLayersFromObject,
+  buildPickupProxyVisualRoot,
   buildProceduralDropMeshLayers,
   droppedWorldInstancingMaterialFrom,
 } from "./droppedItemWorldMesh.js";
@@ -40,6 +41,21 @@ describe("buildDropMeshLayersFromObject", () => {
     root.add(new THREE.Mesh(new THREE.BoxGeometry(1.906, 0.38, 0.415), mat));
     const layers = buildDropMeshLayersFromObject(root, "screwdriver");
     expect(maxLayerBoundsDim(layers)).toBeCloseTo(getMammothDroppedWorldTargetMaxDimM("screwdriver"), 2);
+  });
+});
+
+describe("buildPickupProxyVisualRoot", () => {
+  it("builds a visible fuse-wire-pack crowbar stub with catalog fit", () => {
+    const root = buildPickupProxyVisualRoot("fuse-wire-pack");
+    root.updateWorldMatrix(true, true);
+    const bb = new THREE.Box3().setFromObject(root);
+    const sz = new THREE.Vector3();
+    bb.getSize(sz);
+    expect(Math.max(sz.x, sz.y, sz.z)).toBeCloseTo(
+      getMammothDroppedWorldTargetMaxDimM("fuse-wire-pack"),
+      2,
+    );
+    expect(bb.min.y).toBeCloseTo(0, 2);
   });
 });
 

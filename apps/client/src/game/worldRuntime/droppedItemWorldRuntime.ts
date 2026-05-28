@@ -14,7 +14,9 @@ import { tables } from "../../module_bindings";
 import type { DroppedItem } from "../../module_bindings/types";
 import { fitDroppedWorldItemModelToCatalog } from "./droppedItemWorldFit.js";
 import {
+  attachPickupProxyLayers,
   buildDropMeshLayersFromGltf,
+  buildPickupProxyVisualRoot,
   buildProceduralDropMeshLayers,
   type DropMeshLayer,
 } from "./droppedItemWorldMesh.js";
@@ -326,8 +328,12 @@ export function mountDroppedItemsWorld(
   const root = new THREE.Group();
   root.name = "dropped_items";
   scene.add(root);
+  const pickupProxyRoot = new THREE.Group();
+  pickupProxyRoot.name = "dropped_items_pickup_proxy";
+  root.add(pickupProxyRoot);
 
   const rowCache = new Map<string, CachedDropRow>();
+  const pickupProxies = new Map<string, THREE.Group>();
   const defTemplateState = new Map<string, DefTemplateState>();
   const defTemplatePromise = new Map<string, Promise<DefTemplateState>>();
   const defInstancedPools = new Map<string, DefInstancedPool>();
@@ -442,10 +448,18 @@ export function mountDroppedItemsWorld(
         );
         return st;
       })
-      .catch(() => {
+      .catch((err) => {
+        console.warn(`[droppedItems] GLB failed for ${defId}`, err);
         const st: DefTemplateState = { status: "glb_unavailable" };
         defTemplateState.set(defId, st);
         defTemplatePromise.delete(defId);
+        syncVisibleAtFeetImpl(
+          lastRenderFeet.x,
+          lastRenderFeet.y,
+          lastRenderFeet.z,
+          lastRenderFeet.unitKey,
+          true,
+        );
         return st;
       });
 
@@ -627,6 +641,24 @@ export function mountDroppedItemsWorld(
     );
   };
 
+  const dropWithinPickupVolume = (
+    row: DroppedItem,
+    feetX: number,
+    feetY: number,
+    feetZ: number,
+  ): boolean =>
+    droppedPickupWithinServerVolume(
+      feetX,
+      feetY,
+      feetZ,
+      row.x,
+      row.y,
+      row.z,
+      MAMMOTH_PICKUP_RADIUS_M,
+      MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
+      resolvedBandOpts,
+    );
+
   const fullRebuildInstances = (
     feetX: number,
     feetY: number,
@@ -639,6 +671,7 @@ export function mountDroppedItemsWorld(
 
     for (const [key, cached] of rowCache) {
       if (!rowShouldRender(cached, feetX, feetY, feetZ, containingUnitKey)) continue;
+      if (dropWithinPickupVolume(cached.row, feetX, feetY, feetZ)) continue;
       const defId = cached.row.defId;
       void resolveDefTemplate(defId);
       const state = defTemplateState.get(defId);
@@ -726,6 +759,8 @@ export function mountDroppedItemsWorld(
     forceFullRebuild: boolean,
   ): void {
     lastRenderFeet = { x: feetX, y: feetY, z: feetZ, unitKey: containingUnitKey };
+    ingestRowCacheFromDbNearFeet(feetX, feetY, feetZ);
+    rebuildPickupProxies(feetX, feetY, feetZ);
     if (
       forceFullRebuild ||
       templateReloadPending ||
@@ -748,6 +783,57 @@ export function mountDroppedItemsWorld(
     };
     rowCache.set(droppedIdKey(row.id), cached);
     return cached;
+  };
+
+  const ingestRowCacheFromDbNearFeet = (feetX: number, feetY: number, feetZ: number): void => {
+    for (const r of conn.db.dropped_item) {
+      const row = r as DroppedItem;
+      if (!dropWithinPickupVolume(row, feetX, feetY, feetZ)) continue;
+      cacheRow(row);
+      void resolveDefTemplate(row.defId);
+    }
+  };
+
+  const rebuildPickupProxies = (feetX: number, feetY: number, feetZ: number): void => {
+    const active = new Set<string>();
+    for (const [key, cached] of rowCache) {
+      if (!dropWithinPickupVolume(cached.row, feetX, feetY, feetZ)) continue;
+      active.add(key);
+      const row = cached.row;
+      const state = defTemplateState.get(row.defId);
+      const templateKey =
+        state?.status === "ready" ? `ready:${state.layers.length}` : state?.status ?? "pending";
+      let proxy = pickupProxies.get(key);
+      if (!proxy) {
+        proxy = new THREE.Group();
+        proxy.name = `pickup_proxy:${row.defId}`;
+        pickupProxies.set(key, proxy);
+        pickupProxyRoot.add(proxy);
+      }
+      if (proxy.userData.mammothPickupProxyTemplate !== templateKey) {
+        proxy.userData.mammothPickupProxyTemplate = templateKey;
+        if (state?.status === "ready" && state.layers.length > 0) {
+          attachPickupProxyLayers(proxy, state.layers);
+        } else {
+          proxy.clear();
+          proxy.add(buildPickupProxyVisualRoot(row.defId));
+        }
+      }
+      proxy.position.set(row.x, row.y, row.z);
+      proxy.rotation.y = row.yaw;
+      proxy.visible = true;
+    }
+    for (const [key, proxy] of pickupProxies) {
+      if (active.has(key)) continue;
+      proxy.removeFromParent();
+      proxy.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const mat = mesh.material;
+        if (!Array.isArray(mat) && mat) mat.dispose();
+      });
+      pickupProxies.delete(key);
+    }
   };
 
   const fullResyncFromDb = (): void => {
@@ -907,6 +993,10 @@ export function mountDroppedItemsWorld(
     defTemplateState.clear();
     defTemplatePromise.clear();
     fallbackLocalByDefId.clear();
+    for (const proxy of pickupProxies.values()) {
+      proxy.removeFromParent();
+    }
+    pickupProxies.clear();
   };
 
   return { subscribeAoi, syncDroppedItemVisualVisibility, tryPickupNearest, dispose };
