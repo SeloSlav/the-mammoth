@@ -50,3 +50,14 @@ export function stepFpCombatAimFov(
   camera.fov = nextFov;
   camera.updateProjectionMatrix();
 }
+
+/** Instantly set gameplay FOV to hip or ADS (dev authoring preview, panel toggles). */
+export function snapFpCombatAimFov(
+  camera: THREE.PerspectiveCamera,
+  aimHeld: boolean,
+): void {
+  const targetFov = aimHeld ? FP_COMBAT_AIM_FOV_DEG : FP_COMBAT_HIP_FOV_DEG;
+  if (Math.abs(camera.fov - targetFov) < 1e-4) return;
+  camera.fov = targetFov;
+  camera.updateProjectionMatrix();
+}

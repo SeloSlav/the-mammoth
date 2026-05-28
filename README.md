@@ -1,165 +1,173 @@
 # The Mammoth
 
-Game monorepo (Three.js engine, React UI, SpaceTimeDB). **Docs:** [docs/README.md](docs/README.md) · [docs/PROJECT.md](docs/PROJECT.md). **Run the game client:** `pnpm client:dev` (Vite + Three.js + React HUD shell). **Editor:** `pnpm editor:dev`. **SpaceTimeDB:** `pnpm server:build` and `pnpm client:generate` (CLI required). Starter `web` / `docs` Turborepo apps remain for reference.
+![Main menu — profile gate over the Mamutica tower exterior](docs/screenshots/main-menu-profile.png)
+
+Browser-first **persistent multiplayer survival** prototype set in a huge Slavic apartment tower (Mamutica) and its neighborhood. TypeScript monorepo: **Three.js** game runtime, **React** for HUD/menus only, **SpaceTimeDB** for live multiplayer state, authored world data on disk under `content/`.
+
+**Honest scope:** this is a **weak first pass** — lots of stubs, perf cliffs, incomplete loops, and rough edges. It is still a real codebase worth exploring: you can walk the building, claim apartments, fight in a sandbox arena, author floors in an editor, and extend systems without starting from zero.
 
 ---
 
-# Turborepo starter
+## Quick start
 
-This Turborepo starter is maintained by the Turborepo core team.
+**Prerequisites:** Node **18+**, [pnpm](https://pnpm.io/) **9**, [SpacetimeDB CLI](https://spacetimedb.com/) (for multiplayer / persistence).
 
-## Using this example
-
-Run the following command:
-
-```sh
-npx create-turbo@latest
+```bash
+git clone <repo-url>
+cd the-mammoth
+pnpm install
 ```
 
-## What's inside?
+**1. Start the database** (separate terminal — stays running):
 
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```bash
+spacetime start
 ```
 
-Without global `turbo`, use your package manager:
+**2. Publish the server module** (once per clone, again after Rust schema/reducer changes):
 
-```sh
-cd my-turborepo
-npx turbo build
-pnpm dlx turbo build
-pnpm exec turbo build
+```bash
+spacetime publish mammoth-local --project-path apps/server
+pnpm client:generate   # TypeScript bindings for tables/reducers
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+**3. Run the game client:**
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo build --filter=docs
+```bash
+pnpm dev:client
+# → http://localhost:5173
 ```
 
-Without global `turbo`:
+Optional: `pnpm dev` also brings up the **world editor** and a local **auth** server. Client-only is enough for most playtests.
 
-```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+**FPS sandbox (no megablock):** `http://localhost:5173/?combatSim=1` — empty arena, same guns/viewmodels/reload/melee reducers as live FP, babushka spawns in a ring.
+
+**Live building NPCs:** with Spacetime connected, babushkas spawn on **elevator deck 16** (`levelIndex` **17**, extraction band) — six melee grannies, `session_key` like `megablock:floor:17`. They **do not pathfind** (no corridor graph, no doorway routing); server AI is chase + separation + clamp to the floor footprint. **Melee only** — no ranged NPCs; tuning is forgiving. Optional dev flag: `?fpnpc=1` or `localStorage.mammothFpWorldNpcs=1` (presenters also mount whenever the DB is connected).
+
+**Second player locally:** same URL in normal + private/incognito windows works for presence and shared tables, but gameplay is tuned for **solo** (see below).
+
+Copy env hints from `apps/client/.env.example` if you change DB name or Spacetime URI (`VITE_SPACETIME_DATABASE` must match `spacetime publish <name>`).
+
+---
+
+## What you get today
+
+| Area | Notes |
+|------|--------|
+| **Megablock FP** | First-person walk through authored floors, elevators, stairs, corridors, apartment shells; interior visibility/culling, loot, stash, doors. |
+| **FPS combat** | Viewmodel system, firearms with reload, melee weapons, damage feedback; `?combatSim=1` isolates this. |
+| **NPCs** | Babushka melee on **floor 16** in Mamutica + combat-sim arena; no nav mesh / doors; easy to kill. Not shippable at building scale ([docs](docs/architecture/fp-world-npc-readiness.md)). |
+| **Multiplayer plumbing** | SpaceTimeDB tables/reducers throughout; **play loop is solo-first** — client-trusted movement, guest-by-default, several co-op paths gated off. |
+| **World editor** | `pnpm editor:dev` — same engine stack as the client; place/edit content, import models, save to `content/`. |
+| **Content pipeline** | Floor/building JSON, GLB assets, codegen for walk AABBs/collision, apartment door stock, mesh optimization scripts. |
+| **Rendering** | WebGPU-oriented Three.js path, TSL materials, floor-plate streaming, merged static geo, instancing — see `packages/engine` and `docs/architecture/`. |
+
+**Design intent (not all implemented):** day jobs, floor orders, extraction runs, apartment life — [docs/core-game-loop.md](docs/core-game-loop.md). First scripted slice: [docs/vertical-slice-day1-storage-run.md](docs/vertical-slice-day1-storage-run.md).
+
+---
+
+## Screenshots
+
+**Apartment interiors / live Mamutica**
+
+<p>
+  <img src="docs/screenshots/mamutica-apartment-living-room.png" alt="Mamutica apartment living room" width="32%" />
+  <img src="docs/screenshots/mamutica-apartment-grow-room.png" alt="Mamutica apartment grow room" width="32%" />
+  <img src="docs/screenshots/mamutica-apartment-table.png" alt="Mamutica apartment table and props" width="32%" />
+</p>
+
+**Combat sim / weapons / NPCs**
+
+<p>
+  <img src="docs/screenshots/combat-sim-babushkas.png" alt="Combat sim babushka melee enemies" width="32%" />
+  <img src="docs/screenshots/combat-sim-pistol.png" alt="Combat sim pistol viewmodel" width="32%" />
+  <img src="docs/screenshots/viewmodel-authoring.png" alt="FP viewmodel authoring overlay" width="32%" />
+</p>
+
+**World editor**
+
+<p>
+  <img src="docs/screenshots/editor-apartment-authoring.png" alt="World editor apartment authoring view" width="66%" />
+</p>
+
+---
+
+## Client ↔ server sync (solo-first)
+
+The client always talks to **SpaceTimeDB** (`apps/server` Rust module). Many systems are **wired for multiplayer/co-op** (shared tables, reducers, subscriptions) but the **default experience is one guest player** with client-heavy authority.
+
+**Typical flow (movement):** each ~20 Hz the client runs FP locomotion locally, then calls `submitPlayerLocomotionSnapshot` with position/velocity/aim — server writes **`player_pose`** (trusted solo snapshot, not full server physics). The client still **reconciles** when replicated `player_pose` drifts ([`fpSessionLocalPrediction.ts`](apps/client/src/game/fpSession/fpSessionLocalPrediction.ts)).
+
+**Other reducers you will see in code:**
+
+| Client call | Server / table | What it does |
+|-------------|----------------|--------------|
+| `submitPlayerLocomotionSnapshot` | `player_pose`, `player_input` | Feet, yaw, vitals gate |
+| `pickupDroppedItem` | `dropped_item` | Loot on same storey / unit rules |
+| `submitFirearmReload` / hitscan paths | combat tables | Guns share combat-sim + live FP |
+| `elevatorHail`, `elevatorSelectFloor` | elevator state | Cab / landing sync |
+| `enterCombatSim` / `leaveCombatSim` | `world_npc` arena rows | `?combatSim=1` spawns |
+| `apartment` claim / door toggles | `apartment_unit`, doors | Claims on by default for guests |
+
+**Mostly off or dev-gated today:**
+
+- **Account auth** — `VITE_ENABLE_ACCOUNT_AUTH` unset → automatic **guest** WebSocket; OIDC in `apps/auth` is optional.
+- **Registered-only apartment claims** — server flag `MAMMOTH_REQUIRE_REGISTERED_APARTMENT_CLAIMS` defaults **off** so guests can claim wardrobes too.
+- **Strict server movement** — no dedicated server-side character controller for Mamutica; prediction + snapshot trust instead.
+- **NPC scale** — `SELECT * FROM world_npc` globally; fine for a handful of babushkas, not dozens of players × floors.
+- **Co-op semantics** — no squad/loot rules, shared objectives, or dedicated second-player polish; two tabs prove replication, not a shipped co-op mode.
+
+Combat sim (`?combatSim=1`) uses the **same** `mountFpSession` RAF, weapons, and reducers; it swaps the world for an arena and stubs apartment/stash/grow subsystems ([`fpSessionInertSubsystems.ts`](apps/client/src/game/fpSession/fpSessionInertSubsystems.ts)).
+
+---
+
+## Repository map
+
+```
+apps/client     — Vite + Three.js game + React HUD
+apps/editor     — World authoring tool
+apps/server     — SpaceTimeDB Rust module
+apps/auth       — OpenAuth (optional sign-in)
+packages/engine — Rendering, viewmodels, materials, post-processing
+packages/world  — Building/floor docs, collision, procedural mesh helpers
+packages/game   — Shared gameplay rules/types
+packages/schemas— Zod document schemas
+content/        — Authored floors, building defs, apartment data, references
+static/         — Models, textures, audio served to client
+docs/           — Architecture and game design (start: docs/PROJECT.md)
 ```
 
-### Develop
+Starter `apps/web` / `apps/docs` from the Turborepo template are reference-only.
 
-To develop all apps and packages, run the following command:
+---
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+## Common commands
 
-```sh
-cd my-turborepo
-turbo dev
-```
+| Command | Purpose |
+|---------|---------|
+| `pnpm dev:client` | Game client (port **5173**) |
+| `pnpm editor:dev` | World editor |
+| `pnpm server:build` | Build SpacetimeDB WASM module |
+| `pnpm client:generate` | Regenerate client bindings after server changes |
+| `pnpm content:gen-walk-aabbs` | Regenerate server walk surfaces after floor JSON edits |
+| `pnpm test` | Unit tests across packages |
+| `pnpm check-types` | Typecheck monorepo |
 
-Without global `turbo`, use your package manager:
+After editing `content/building/` or floor docs, run walk-AABB codegen before expecting correct server grounding ([docs/content-building.md](docs/content-building.md)).
 
-```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
-```
+---
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+## Documentation
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+- **[docs/README.md](docs/README.md)** — index  
+- **[docs/PROJECT.md](docs/PROJECT.md)** — vision, stack, milestones  
+- **[apps/client/README.md](apps/client/README.md)** — client dev, second port, multiplayer  
+- **[apps/server/README.md](apps/server/README.md)** — Spacetime publish, auth, apartment flags  
 
-```sh
-turbo dev --filter=web
-```
+---
 
-Without global `turbo`:
+## If you want to go further
 
-```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
+The repo is meant to be **forked and pushed**: add floors in the editor, wire new reducers, tighten FP perf, give NPCs real nav/door awareness, or harden real co-op (server movement, scoped subscriptions, population caps). Expect incomplete APIs in hot paths — read the code, run `pnpm test`, use `?combatSim=1` for guns-only, or ride the elevator to **deck 16** to punch babushkas in the real building.
 
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+**Stack:** pnpm + Turbo · TypeScript · Three.js ~0.183 · React 19 · Vite · SpacetimeDB 2.x · Rust server module.

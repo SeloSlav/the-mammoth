@@ -533,7 +533,12 @@ export class LocalFirstPersonPresenter {
 
   setAuthoringPoseMode(mode: FpAuthoringPoseMode): void {
     this.authoringPoseMode = mode;
-    if (mode === "aim") this.refreshRigAimFromDefinition();
+    if (mode === "aim") {
+      this.refreshRigAimFromDefinition();
+      this.applyRigAimToRightHandRig();
+    } else if (this.authoringFrozen) {
+      this.applyRigRestToRightHandRig();
+    }
   }
 
   getAuthoringPoseMode(): FpAuthoringPoseMode {
@@ -579,6 +584,17 @@ export class LocalFirstPersonPresenter {
     clampFpRigRootPositionInPlace(this.rigRestPos);
     this.rigRestEuler.copy(this.rightHandRig.rotation);
     this.rigRestScale.copy(this.rightHandRig.scale);
+  }
+
+  /**
+   * Copy `rightHandRig` into `rigAim*` after ADS gizmo edits. While authoring-frozen in aim mode,
+   * {@link update} leaves `rightHandRig` alone (unlike hip rest, which re-applies `rigRest*` each frame).
+   */
+  syncAuthoringRigAimFromAttachedRig(): void {
+    if (!this.viewmodelReady) return;
+    this.rigAimPos.copy(this.rightHandRig.position);
+    clampFpRigRootPositionInPlace(this.rigAimPos);
+    this.rigAimEuler.copy(this.rightHandRig.rotation);
   }
 
   getAuthoringOrbitTargetWorld(out: THREE.Vector3): boolean {
@@ -766,8 +782,9 @@ export class LocalFirstPersonPresenter {
     this.maybeTriggerFirearmShot(state);
     this.fpRoot.rotation.set(0, 0, 0);
     if (this.authoringFrozen) {
-      if (this.authoringPoseMode === "aim") this.applyRigAimToRightHandRig();
-      else this.applyRigRestToRightHandRig();
+      // Hip rest: re-apply stored rig each frame (gizmo targets hand child, not rightHandRig).
+      // ADS: gizmo is on rightHandRig — do not overwrite TransformControls edits.
+      if (this.authoringPoseMode === "rest") this.applyRigRestToRightHandRig();
       this.firearmFlashRoot.visible = false;
       const swingTrack = this.resolveFpMeleeSwingTrack();
       const ph = this.swingAuthoringPreviewPhase;

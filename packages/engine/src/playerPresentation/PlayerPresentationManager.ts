@@ -205,6 +205,11 @@ export class PlayerPresentationManager {
     this.local.syncFpWeaponMountBaselineFromRoot();
   }
 
+  /** After ADS gizmo edits, persist pose into `rigAim*` (used when re-entering aim or saving). */
+  syncLocalFpAuthoringRigAimFromAttachedRig(): void {
+    this.local.syncAuthoringRigAimFromAttachedRig();
+  }
+
   /** Dev: weapon currently shown on the local FP viewmodel (null when unarmed). */
   getLocalWeaponDefinition(): WeaponDefinition | null {
     return this.local.getWeaponDefinition();

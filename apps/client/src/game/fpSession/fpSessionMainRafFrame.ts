@@ -125,9 +125,11 @@ import { getLocalFirearmChamberView, localPlayerCanFireChamberedRound } from "..
 import { snapshotFpFirearmReloadPresentation } from "./fpFirearmReloadPresentation.js";
 import type { FpSessionElevDebugTickCtx } from "./fpSessionDevDebugApis.js";
 import { publishFpSessionCompassHeadingFromForwardXZ } from "./fpSessionCompassHeading.js";
+import { isFpAuthoringAdsFovPreview } from "./fpSessionAuthoringAdsFov.js";
 import {
   isFpSessionCombatAiming,
   publishFpSessionCombatAiming,
+  snapFpCombatAimFov,
   stepFpCombatAimFov,
 } from "./fpSessionCombatAim.js";
 import { onFpSessionPostRenderFrame } from "./fpSessionFpsDisplay.js";
@@ -703,7 +705,11 @@ export function createFpSessionMainRafFrame(
       !!combatWeaponDefId &&
       firearmReload == null;
     publishFpSessionCombatAiming(combatAimActive);
-    stepFpCombatAimFov(deps.camera, combatAimActive, dt);
+    if (isFpAuthoringAdsFovPreview()) {
+      snapFpCombatAimFov(deps.camera, true);
+    } else {
+      stepFpCombatAimFov(deps.camera, combatAimActive, dt);
+    }
 
     if (
       deps.loco.grounded &&

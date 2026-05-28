@@ -5,6 +5,7 @@ import {
   FP_COMBAT_HIP_FOV_DEG,
   publishFpSessionCombatAiming,
   resetFpSessionCombatAiming,
+  snapFpCombatAimFov,
   stepFpCombatAimFov,
   subscribeFpSessionCombatAiming,
 } from "./fpSessionCombatAim.js";
@@ -22,6 +23,20 @@ describe("stepFpCombatAimFov", () => {
     stepFpCombatAimFov(camera, false, 0.25);
     expect(camera.fov).toBeGreaterThan(FP_COMBAT_AIM_FOV_DEG);
     expect(camera.fov).toBeLessThan(FP_COMBAT_HIP_FOV_DEG);
+  });
+});
+
+describe("snapFpCombatAimFov", () => {
+  it("sets ADS FOV immediately", () => {
+    const camera = new THREE.PerspectiveCamera(FP_COMBAT_HIP_FOV_DEG, 16 / 9, 0.05, 900);
+    snapFpCombatAimFov(camera, true);
+    expect(camera.fov).toBe(FP_COMBAT_AIM_FOV_DEG);
+  });
+
+  it("sets hip FOV immediately", () => {
+    const camera = new THREE.PerspectiveCamera(FP_COMBAT_AIM_FOV_DEG, 16 / 9, 0.05, 900);
+    snapFpCombatAimFov(camera, false);
+    expect(camera.fov).toBe(FP_COMBAT_HIP_FOV_DEG);
   });
 });
 

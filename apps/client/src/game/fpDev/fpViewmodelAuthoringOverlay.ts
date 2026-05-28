@@ -8,6 +8,11 @@ import {
 } from "@the-mammoth/engine";
 import { patchFpTransformControlsPointerForCaptureCompat } from "../fpApartment/fpTransformControlsPointerPatch.js";
 import {
+  resetFpAuthoringAdsFovPreview,
+  setFpAuthoringAdsFovPreview,
+} from "../fpSession/fpSessionAuthoringAdsFov.js";
+import { snapFpCombatAimFov } from "../fpSession/fpSessionCombatAim.js";
+import {
   revertLocalWeaponPresentationFromDisk,
   saveLocalWeaponPresentationFromAuthoring,
 } from "./weaponPresentationDevDiskSave.js";
@@ -217,6 +222,16 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
   let restPoseBtn: HTMLButtonElement | null = null;
   let aimPoseBtn: HTMLButtonElement | null = null;
 
+  /** Match in-game RMB ADS zoom while authoring the aim rig (main RAF keeps FOV pinned). */
+  const syncAuthoringAdsFovPreview = () => {
+    const adsPreview =
+      panelVisible &&
+      localWeaponSupportsAimAuthoring(presentation) &&
+      presentation.getFpAuthoringPoseMode() === "aim";
+    setFpAuthoringAdsFovPreview(adsPreview);
+    snapFpCombatAimFov(camera, adsPreview);
+  };
+
   const syncPoseUi = () => {
     const pose = presentation.getFpAuthoringPoseMode();
     const aimAvailable = localWeaponSupportsAimAuthoring(presentation);
@@ -225,7 +240,7 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
     if (pose === "aim") {
       targetLabel.textContent = "Aim rig (ADS)";
       hint.textContent =
-        "Backtick (`) toggles this panel. Viewmodel shows the full aim-down-sights rig pose — move/rotate to set fpViewmodel.aimRigRoot.";
+        "Backtick (`) toggles this panel. ADS rig pose + combat zoom FOV — move/rotate to set fpViewmodel.aimRigRoot.";
     } else {
       targetLabel.textContent = "Hand & weapon";
       hint.textContent =
@@ -247,6 +262,7 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
   const setAuthoringPose = (mode: FpAuthoringPoseMode) => {
     presentation.setFpAuthoringPoseMode(mode);
     syncPoseUi();
+    syncAuthoringAdsFovPreview();
     attachAuthoringTarget();
   };
 
@@ -271,6 +287,7 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
   shell.style.display = panelVisible ? "block" : "none";
   document.body.appendChild(shell);
   syncPoseUi();
+  syncAuthoringAdsFovPreview();
 
   const attachAuthoringTarget = () => {
     const picks = presentation.getFpAuthoringPickList();
@@ -341,7 +358,13 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
     }
   });
 
-  transformControls.addEventListener("change", refreshExport);
+  const onTransformChange = () => {
+    if (presentation.getFpAuthoringPoseMode() === "aim") {
+      presentation.syncLocalFpAuthoringRigAimFromAttachedRig();
+    }
+    refreshExport();
+  };
+  transformControls.addEventListener("change", onTransformChange);
 
   const onDraggingChanged = (ev: unknown) => {
     const on = Boolean((ev as { value?: boolean }).value);
@@ -360,9 +383,11 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
     if (panelVisible) {
       void document.exitPointerLock();
       syncPoseUi();
+      syncAuthoringAdsFovPreview();
       attachAuthoringTarget();
     } else {
       transformControls.detach();
+      syncAuthoringAdsFovPreview();
       presentation.syncLocalFpWeaponMountBaselineFromRoot();
     }
   };
@@ -371,12 +396,14 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
   return () => {
     window.removeEventListener("keydown", onWinKeydown);
     transformControls.removeEventListener("dragging-changed", onDraggingChanged);
-    transformControls.removeEventListener("change", refreshExport);
+    transformControls.removeEventListener("change", onTransformChange);
     scene.remove(transformHelper);
     transformControls.dispose();
     shell.remove();
     activeRef.active = false;
     presentation.setFpAuthoringFrozen(false);
+    resetFpAuthoringAdsFovPreview();
+    snapFpCombatAimFov(camera, false);
     presentation.syncLocalFpWeaponMountBaselineFromRoot();
   };
 }
