@@ -1122,6 +1122,8 @@ export async function mountFpSession(
     cachedGuestFeet?.y ?? 1.35,
     cachedGuestFeet?.z ?? 0,
   );
+  /** Latest authoritative self pose from `player_pose` — hoisted for NPC gate + interaction before subscribe. */
+  const serverPose = { x: 0, y: 1.35, z: 0, grounded: true, velX: 0, velY: 0, velZ: 0 };
   const poseAoiAnchor = { x: pos.x, y: pos.y, z: pos.z };
   const _floorVisCamWorld = new THREE.Vector3();
   const _floorVisCamDir = new THREE.Vector3();
@@ -1764,8 +1766,6 @@ export async function mountFpSession(
     }
   };
 
-  /** Latest authoritative self pose from `player_pose`. */
-  const serverPose = { x: 0, y: 1.35, z: 0, grounded: true, velX: 0, velY: 0, velZ: 0 };
   let spawnSynced = false;
   /**
    * `player_pose` replication lags local prediction; never snap feet by distance (that reads as
