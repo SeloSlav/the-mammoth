@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   collectFpSessionTopFloorResidentialUnitShellMeshes,
   collectFpSessionUnitInteriorMeshEntries,
+  fpMeshIsHoistwayShaftShell,
   isResidentialUnitShellPlasterMesh,
 } from "./fpSessionUnitInteriorShellMeshes.js";
 
@@ -37,6 +38,15 @@ describe("collectFpSessionTopFloorResidentialUnitShellMeshes", () => {
     expect(result).toHaveLength(1);
     expect(result[0]?.mesh).toBe(topUnitMesh);
     expect(result[0]?.unitId).toBe("unit_e_003");
+  });
+});
+
+describe("fpMeshIsHoistwayShaftShell", () => {
+  it("matches preserved hoistway interior mesh names", () => {
+    expect(fpMeshIsHoistwayShaftShell("shaft_floor")).toBe(true);
+    expect(fpMeshIsHoistwayShaftShell("shaft_wall_n")).toBe(true);
+    expect(fpMeshIsHoistwayShaftShell("shaft_hoistway_lintel_ring")).toBe(true);
+    expect(fpMeshIsHoistwayShaftShell("shell_wall_n_solid")).toBe(false);
   });
 });
 
@@ -165,6 +175,21 @@ describe("collectFpSessionUnitInteriorMeshEntries", () => {
     expect(result[0]?.residentialUnitId).toBe(null);
     expect(result[0]?.apartmentUnitKey).toBe(null);
     expect(result[0]?.plateLevelIndex).toBe(20);
+  });
+
+  it("tags preserved hoistway shaft shells for FP culling", () => {
+    const buildingRoot = new THREE.Group();
+    const floor = new THREE.Group();
+    floor.userData.mammothPlateLevelIndex = 12;
+    const shaftWall = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+    shaftWall.name = "shaft_wall_e";
+    shaftWall.userData.mammothUnitInterior = true;
+    floor.add(shaftWall);
+    buildingRoot.add(floor);
+
+    const [entry] = collectFpSessionUnitInteriorMeshEntries(buildingRoot);
+    expect(entry?.hoistwayShaftShell).toBe(true);
+    expect(entry?.plateLevelIndex).toBe(12);
   });
 
   it("marks stair-column merged interiors as underStairColumnRoot", () => {

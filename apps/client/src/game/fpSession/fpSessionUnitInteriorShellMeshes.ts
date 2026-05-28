@@ -1,5 +1,23 @@
 import * as THREE from "three";
 import { MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD } from "@the-mammoth/world";
+import { MAMMOTH_FP_ELEVATOR_SHAFT_VISUAL_UD } from "../fpElevator/fpElevatorConstants.js";
+
+/** Inner hoistway slabs — never rasterise (dark void + perf). */
+export function fpMeshIsHoistwayShaftShell(meshName: string): boolean {
+  return (
+    meshName === "shaft_floor" ||
+    meshName === "shaft_ceiling" ||
+    meshName.startsWith("shaft_wall_") ||
+    meshName.startsWith("shaft_hoistway_lintel_")
+  );
+}
+
+export function fpObjectUnderFpElevatorShaftVisual(obj: THREE.Object3D): boolean {
+  for (let cur: THREE.Object3D | null = obj; cur; cur = cur.parent) {
+    if (cur.userData[MAMMOTH_FP_ELEVATOR_SHAFT_VISUAL_UD] === true) return true;
+  }
+  return false;
+}
 
 export type FpResidentialUnitShellMesh = {
   mesh: THREE.Mesh;
@@ -22,6 +40,8 @@ export type FpSessionUnitInteriorMeshEntry = {
   corridorHallwayShell: boolean;
   /** Merged stair-shaft interior — visibility follows {@link mammothStairColumnRoot} segments, not hallway filler rules. */
   underStairColumnRoot: boolean;
+  /** Preserved `shaft_*` hoistway shells on floor plates — always culled in FP (landing doors are separate). */
+  hoistwayShaftShell: boolean;
 };
 
 /** Plaster hollow shell pieces for a `unit_*` placed object (not exterior cladding or glass). */
@@ -56,6 +76,7 @@ function resolveUnitInteriorMeshEntry(
   let plateLevelIndex: number | null = null;
   let corridorHallwayShell = false;
   let underStairColumnRoot = false;
+  const hoistwayShaftShell = fpMeshIsHoistwayShaftShell(mesh.name);
   for (let cur: THREE.Object3D | null = mesh; cur; cur = cur.parent) {
     if (cur.userData.mammothStairColumnRoot === true) {
       underStairColumnRoot = true;
@@ -105,6 +126,7 @@ function resolveUnitInteriorMeshEntry(
     plateLevelIndex,
     corridorHallwayShell,
     underStairColumnRoot,
+    hoistwayShaftShell,
   };
 }
 

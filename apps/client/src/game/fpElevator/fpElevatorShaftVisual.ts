@@ -27,6 +27,7 @@ import {
   FP_ELEV_EXTERIOR_DOOR_PICK_UD,
   FP_ELEV_FLOOR_PICK_UD,
   FP_ELEV_LANDING_HAIL_PICK_UD,
+  MAMMOTH_FP_ELEVATOR_SHAFT_VISUAL_UD,
   type FpElevExteriorDoorPickUserData,
   type FpElevFloorPickUserData,
   type FpElevLandingHailPickUserData,
@@ -38,6 +39,10 @@ import {
   createExteriorLandingDoorPivot,
   EXTERIOR_DOOR_SWING_MAX_RAD,
 } from "./fpElevatorLandingDoorVisual.js";
+import {
+  isLevelInActiveFloorVisBand,
+  type FpActiveFloorPlateBand,
+} from "../fpSession/fpSessionActiveFloorVisBand.js";
 
 type DoorFace = ElevatorDoorFace;
 
@@ -185,6 +190,7 @@ export class FpElevatorShaftVisual {
   private landingDoorGlassInst: THREE.InstancedMesh | null = null;
   private readonly _landingDoorRy = new THREE.Matrix4();
   private readonly _landingDoorInstWorld = new THREE.Matrix4();
+  private readonly _landingDoorHiddenMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
   private readonly extRedMat: THREE.MeshStandardMaterial;
   private readonly extGlassMat: THREE.MeshPhysicalMaterial;
   private readonly hailBtnMatTemplate: THREE.MeshStandardMaterial;
@@ -227,6 +233,7 @@ export class FpElevatorShaftVisual {
 
     this.root = new THREE.Group();
     this.root.name = `fp_elevator:${layout.planKey}`;
+    this.root.userData[MAMMOTH_FP_ELEVATOR_SHAFT_VISUAL_UD] = true;
     this.extRedMat = new THREE.MeshStandardMaterial({
       color: 0xc42b2b,
       roughness: 0.52,
@@ -680,6 +687,17 @@ export class FpElevatorShaftVisual {
     this.landingDoorPickRoot.visible = visible;
   }
 
+  /**
+   * Per-storey hail helpers follow the smoothed floor plate band (landing instanced doors use
+   * {@link updateLandingExteriorDoorSwings} matrix hide for the same band).
+   */
+  syncLandingPlateBand(band: FpActiveFloorPlateBand, landingsVisible: boolean): void {
+    for (const [level, wrap] of this.landingHailPickByLevel) {
+      wrap.visible =
+        landingsVisible && isLevelInActiveFloorVisBand(level, band);
+    }
+  }
+
   getLandingHailPickForLevel(level: number): THREE.Object3D | undefined {
     return this.landingHailPickByLevel.get(level);
   }
@@ -825,12 +843,23 @@ export class FpElevatorShaftVisual {
     this.doorR.children[0]!.position.set(t.x * slide, 0, t.z * slide);
   }
 
-  updateLandingExteriorDoorSwings(swingByLevel: ReadonlyMap<number, number>): void {
+  updateLandingExteriorDoorSwings(
+    swingByLevel: ReadonlyMap<number, number>,
+    band?: FpActiveFloorPlateBand,
+  ): void {
     const frameInst = this.landingDoorFrameInst;
     if (!frameInst) return;
     const n = this.landingDoorSwingBase.length;
     for (let i = 0; i < n; i++) {
       const level = i + 1;
+      const inBand = band === undefined || isLevelInActiveFloorVisBand(level, band);
+      if (!inBand) {
+        frameInst.setMatrixAt(i, this._landingDoorHiddenMatrix);
+        if (this.landingDoorGlassInst) {
+          this.landingDoorGlassInst.setMatrixAt(i, this._landingDoorHiddenMatrix);
+        }
+        continue;
+      }
       const u = swingByLevel.get(level) ?? 0;
       this._landingDoorRy.makeRotationY(
         this.landingDoorSwingSign * u * this.exteriorSwingMaxRad,

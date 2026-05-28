@@ -661,6 +661,32 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
       }),
     ).toBe(false);
   });
+
+  it("never shows preserved hoistway shaft interior slabs", () => {
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: {
+          apartmentUnitKey: null,
+          residentialUnitId: null,
+          residentialExteriorGlass: false,
+          genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
+          isResidentialShellPlaster: false,
+          hoistwayShaftShell: true,
+          plateLevelIndex: 10,
+        },
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        exteriorShellPlasterVisible: true,
+        insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: false,
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
+        activePlateBandLo: 10,
+        activePlateBandHi: 10,
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("fpResolveStairwellLitterVisible", () => {

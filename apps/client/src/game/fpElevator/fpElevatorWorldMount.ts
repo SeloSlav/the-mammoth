@@ -439,6 +439,7 @@ export function mountFpElevatorWorld(
       getCabEvalNowMs: () => cabEvalNowMs,
     });
 
+  let getFloorPlateBand: () => FpActiveFloorPlateBand = _noopFloorBand;
   const elevVisCab = createFpElevatorFloorVisAndCabContext({
     buildingWorldOriginX: ox,
     buildingWorldOriginY: oy,
@@ -456,6 +457,7 @@ export function mountFpElevatorWorld(
     elapsedSecSinceServerSample,
     getRideClockOffsetMs,
     cabFloorButtonDisplayLevel,
+    getSmoothedFloorPlateBand: () => getFloorPlateBand(),
   });
   const {
     isInsideCarHud,
@@ -496,7 +498,6 @@ export function mountFpElevatorWorld(
       pickFlash,
     });
   landingHailBlocksCorridorDoorRef.fn = isLandingHailTargetActive;
-  let getFloorPlateBand: () => FpActiveFloorPlateBand = _noopFloorBand;
 
   const getCabMotionAudioEmitters = (
     nowMs: number,
@@ -555,7 +556,7 @@ export function mountFpElevatorWorld(
           _swingByLevel.set(row.level, u);
         }
       }
-      vis.updateLandingExteriorDoorSwings(_swingByLevel);
+      vis.updateLandingExteriorDoorSwings(_swingByLevel, getFloorPlateBand());
       const flashActive =
         pickFlash.untilMs > nowMs && pickFlash.shaftKey === key;
       const floorPickLevel = Number.isFinite(rawCabY)

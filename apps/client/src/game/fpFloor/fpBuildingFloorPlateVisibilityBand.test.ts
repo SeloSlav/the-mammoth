@@ -94,7 +94,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
     ).toEqual({ lo: 1, hi: 10 });
   });
 
-  it("hoistway plate boost widens budget vs interior-only caps but stays below full stack", () => {
+  it("hoistway plate boost uses the stair-local budget (no full-stack pitch override)", () => {
     expect(
       fpBuildingFloorPlateVisibilityBand({
         maxLevel: 80,
@@ -104,7 +104,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         upperTargetStorey: 80,
         lowerTargetStorey: 1,
       }),
-    ).toEqual({ lo: 1, hi: 32 });
+    ).toEqual({ lo: 8, hi: 14 });
   });
 
   it("caps pitch lookahead above the player so stairwell upsights do not submit distant slabs", () => {
@@ -151,7 +151,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
     ).toEqual({ lo: 10, hi: 15 });
   });
 
-  it("keeps the wider downward budget for hoistway views", () => {
+  it("hoistway boost uses stair-local caps even when pitching down the shaft", () => {
     expect(
       fpBuildingFloorPlateVisibilityBand({
         maxLevel: 80,
@@ -160,7 +160,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         elevatorHoistwayPlateBoost: true,
         lowerTargetStorey: 1,
       }),
-    ).toEqual({ lo: 6, hi: 20 });
+    ).toEqual({ lo: 18, hi: 20 });
   });
 
   it("normalizes maxLevel when below 1", () => {

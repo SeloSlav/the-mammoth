@@ -1252,6 +1252,7 @@ export async function mountFpSession(
     isInsideResidentialUnit,
     isInsideApartmentInteriorLightingZone,
     isInsideStairwellShaft,
+    isInsideElevatorHoistwayColumn,
     getContainingResidentialUnitKey,
     isApartmentDecorInteriorVisible,
     isExteriorFacadeDecorVisible,
@@ -1408,6 +1409,9 @@ export async function mountFpSession(
   const isInsideStairwellShaftForFrame = isCombatSim
     ? () => false
     : isInsideStairwellShaft;
+  const isInsideElevatorHoistwayColumnForFrame = isCombatSim
+    ? () => false
+    : isInsideElevatorHoistwayColumn;
   const isApartmentDecorInteriorVisibleForFrame = isCombatSim
     ? () => false
     : isApartmentDecorInteriorVisible;
@@ -2495,6 +2499,7 @@ export async function mountFpSession(
     isInsideResidentialUnit: isInsideResidentialUnitForFrame,
     isInsideApartmentInteriorLightingZone: isInsideApartmentInteriorLightingZoneForFrame,
     isInsideStairwellShaft: isInsideStairwellShaftForFrame,
+    isInsideElevatorHoistwayColumn: isInsideElevatorHoistwayColumnForFrame,
     getContainingResidentialUnitKey,
     getCorridorPvsVisibleUnitKeys: getCorridorPvsVisibleUnitKeysForFrame,
     getActiveApartmentDecorUnitKey: getActiveApartmentDecorUnitKeyForFrame,

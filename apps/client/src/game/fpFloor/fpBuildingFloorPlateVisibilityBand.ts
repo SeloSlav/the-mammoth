@@ -150,11 +150,13 @@ const STAIR_SHAFT_LOCAL_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER = 4;
 const STAIR_SHAFT_LOCAL_PLATE_BAND_MAX_STOREYS_BELOW_PLAYER = 2;
 
 /**
- * Open elevator hoistway with doors visible: wider than {@link STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER}
- * so landing slabs above/below remain coherent, but far smaller than `maxLevel` for tall stacks.
+ * Inside the hoistway column: same tight local budget as {@link fpStairShaftLocalVisibilityBand}.
+ * Interior shaft slabs are not rendered; red landing doors + hail are band-scoped separately.
  */
-export const HOISTWAY_PLATE_MAX_STOREYS_ABOVE_PLAYER = 22;
-export const HOISTWAY_PLATE_MAX_STOREYS_BELOW_PLAYER = 14;
+export const HOISTWAY_PLATE_MAX_STOREYS_ABOVE_PLAYER =
+  STAIR_SHAFT_LOCAL_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER;
+export const HOISTWAY_PLATE_MAX_STOREYS_BELOW_PLAYER =
+  STAIR_SHAFT_LOCAL_PLATE_BAND_MAX_STOREYS_BELOW_PLAYER;
 
 export function fpStairColumnPlateVisibilityBand(input: {
   globalLo: number;

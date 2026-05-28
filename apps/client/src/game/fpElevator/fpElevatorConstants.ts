@@ -164,6 +164,9 @@ export type FpElevExteriorDoorPickUserData = {
   [FP_ELEV_EXTERIOR_DOOR_PICK_UD]: { shaftKey: string; level: number };
 };
 
+/** Marks {@link FpElevatorShaftVisual.root} — skip generic `mammothUnitInterior` visibility toggles. */
+export const MAMMOTH_FP_ELEVATOR_SHAFT_VISUAL_UD = "mammothFpElevatorShaftVisual" as const;
+
 /** Raycast / userData tag for landing hail buttons outside the cab. */
 export const FP_ELEV_LANDING_HAIL_PICK_UD = "fpElevLandingHailPick" as const;
 

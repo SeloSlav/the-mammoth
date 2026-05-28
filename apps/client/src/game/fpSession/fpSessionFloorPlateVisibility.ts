@@ -13,6 +13,7 @@ import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.j
 import type { FpElevatorFloorVisibilityBand } from "../fpElevator/fpElevatorWorldTypes.js";
 import type { FpResidentialUnitShellMesh } from "./fpSessionUnitInteriorShellMeshes.js";
 import type { FpSessionUnitInteriorMeshEntry } from "./fpSessionUnitInteriorShellMeshes.js";
+import { fpObjectUnderFpElevatorShaftVisual } from "./fpSessionUnitInteriorShellMeshes.js";
 import { expandObjectFrustumBoundsOnce } from "./fpMeshFrustumBounds.js";
 import { fpResolveApartmentInteriorLightingZone } from "./fpApartmentInteriorLightingZone.js";
 import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
@@ -241,6 +242,7 @@ export function fpResolveUnitInteriorMeshVisible(input: {
     plateLevelIndex?: number | null;
     corridorHallwayShell?: boolean;
     underStairColumnRoot?: boolean;
+    hoistwayShaftShell?: boolean;
   };
   unitInteriorVisible: boolean;
   apartmentDecorInteriorVisible: boolean;
@@ -263,6 +265,9 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   activePlateBandHi?: number;
 }): boolean {
   const { entry } = input;
+  if (entry.hoistwayShaftShell === true) {
+    return false;
+  }
   const inPlateBand = fpUnitInteriorMeshInActivePlateBand({
     plateLevelIndex: entry.plateLevelIndex ?? null,
     activePlateBandLo: input.activePlateBandLo ?? 1,
@@ -435,6 +440,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   isInsideApartmentInteriorLightingZone: () => boolean;
   /** Feet inside a stair shaft AABB (for interior render layers + ceiling practicals). */
   isInsideStairwellShaft: () => boolean;
+  /** Feet/eye in hoistway column (not cab) — stairwell-grade exterior light dimming. */
+  isInsideElevatorHoistwayColumn: () => boolean;
   getContainingResidentialUnitKey: () => string | null;
   /** Last unit feet occupied — retained in corridor lighting zone for seamless practical-light remount. */
   getLastVisitedResidentialUnitKey: () => string | null;
@@ -499,6 +506,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastRetainedResidentialUnitId: string | null = null;
   let _lastInsideResidentialUnit = false;
   let _lastInsideStairwellShaft = false;
+  let _lastHoistwayPlateBoost = false;
   let _lastInsideApartmentInteriorLightingZone = false;
   let _lastStoryLevelIndexForLighting = 1;
   let _lastExteriorShellPlasterVisible = false;
@@ -585,6 +593,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       floorVisCamDir.z,
     );
     const hoistwayPlateBoost = elevVisBand.hoistwayPlateBoost;
+    _lastHoistwayPlateBoost = hoistwayPlateBoost;
     let band = { lo: elevVisBand.lo, hi: elevVisBand.hi };
     /**
      * Inset-based "exterior" widens to the full stack so façades do not pop when the camera sits
@@ -866,6 +875,9 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       const retainedResidentialUnitKey = getRetainedResidentialUnitKey();
       for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
         const entry = unitInteriorMeshEntries[i]!;
+        if (fpObjectUnderFpElevatorShaftVisual(entry.mesh)) {
+          continue;
+        }
         entry.mesh.visible =
           isFpDebugRenderIsolationEnabled("unitInteriorShells") &&
           fpResolveUnitInteriorMeshVisible({
@@ -1012,6 +1024,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     isInsideResidentialUnit: () => _lastInsideResidentialUnit,
     isInsideApartmentInteriorLightingZone: () => _lastInsideApartmentInteriorLightingZone,
     isInsideStairwellShaft: () => _lastInsideStairwellShaft,
+    isInsideElevatorHoistwayColumn: () => _lastHoistwayPlateBoost,
     getContainingResidentialUnitKey: () => _lastContainingResidentialUnitKey,
     getLastVisitedResidentialUnitKey: () => _lastVisitedResidentialUnitKey,
     isApartmentDecorInteriorVisible: () => _lastApartmentDecorInteriorVisible,

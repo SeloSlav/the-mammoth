@@ -285,6 +285,7 @@ export type FpSessionMainRafFrameDeps = {
   isInsideResidentialUnit: () => boolean;
   isInsideApartmentInteriorLightingZone: () => boolean;
   isInsideStairwellShaft: () => boolean;
+  isInsideElevatorHoistwayColumn: () => boolean;
   getContainingResidentialUnitKey: () => string | null;
   getCorridorPvsVisibleUnitKeys: () => ReadonlySet<string>;
   getActiveApartmentDecorUnitKey: (containingResidentialUnitKey: string | null) => string | null;
@@ -1218,11 +1219,14 @@ export function createFpSessionMainRafFrame(
 
     // --- Render section timing (see pushFpPerfFrame render split) ---
     const _t_renderStart = performance.now();
-    const darkTarget = fpSampleStairwellInteriorDarkTarget(
-      deps._floorVisCamWorld.x,
-      deps._floorVisCamWorld.y,
-      deps._floorVisCamWorld.z,
-      deps.stairShaftInteriorLightBounds,
+    const darkTarget = Math.max(
+      fpSampleStairwellInteriorDarkTarget(
+        deps._floorVisCamWorld.x,
+        deps._floorVisCamWorld.y,
+        deps._floorVisCamWorld.z,
+        deps.stairShaftInteriorLightBounds,
+      ),
+      deps.isInsideElevatorHoistwayColumn() ? 1 : 0,
     );
     mainRaf.stairwellInteriorDarkSmoothed = fpExpSmoothToward(
       mainRaf.stairwellInteriorDarkSmoothed,

@@ -21,6 +21,7 @@ import type {
   FpElevatorFloorVisibilityBand,
   FpElevatorRideDebugSnapshot,
 } from "../fpElevatorWorldTypes.js";
+import type { FpActiveFloorPlateBand } from "../../fpSession/fpSessionActiveFloorVisBand.js";
 
 export type FpElevatorFloorVisCabClock = {
   estimatedOffsetMs(): number;
@@ -56,6 +57,8 @@ export type CreateFpElevatorFloorVisCabContextOpts = {
     layout: ElevatorShaftLayout,
     cabFeetWorldY: number,
   ) => number;
+  /** Smoothed band from {@link createFpSessionFloorPlateVisibility} — landing hail + door instances. */
+  getSmoothedFloorPlateBand?: () => FpActiveFloorPlateBand;
 };
 
 export type FpElevatorFloorVisCabContext = ReturnType<
@@ -242,24 +245,13 @@ export function createFpElevatorFloorVisAndCabContext(
         break;
       }
     }
-    let upperTarget = upperLookAheadStorey;
-    let lowerTarget = lowerLookAheadStorey;
-    if (elevatorHoistwayPlateBoost) {
-      upperTarget =
-        upperTarget === undefined
-          ? maxLevel
-          : Math.max(upperTarget, maxLevel);
-      /** Avoid `Math.min(undefined, 1)` → NaN when pitch lookahead is suppressed (no lower bound). */
-      lowerTarget =
-        lowerTarget === undefined ? 1 : Math.min(lowerTarget, 1);
-    }
     const { lo, hi } = fpBuildingFloorPlateVisibilityBand({
       maxLevel,
       playerStorey,
       revealFullStack: false,
       elevatorHoistwayPlateBoost,
-      upperTargetStorey: upperTarget,
-      lowerTargetStorey: lowerTarget,
+      upperTargetStorey: upperLookAheadStorey,
+      lowerTargetStorey: lowerLookAheadStorey,
     });
     return { lo, hi, hoistwayPlateBoost: elevatorHoistwayPlateBoost };
   };
@@ -423,10 +415,14 @@ export function createFpElevatorFloorVisAndCabContext(
         viewDirX,
         viewDirZ,
       );
+    const band = opts.getSmoothedFloorPlateBand?.();
     for (const vis of visuals.values()) {
       // Apartment walls fully occlude corridor landing doors; keep them live only for exterior/cab views.
       vis.landingRoot.visible = !insideResidentialUnit;
       vis.setLandingsVisible(landingsVisible);
+      if (band) {
+        vis.syncLandingPlateBand(band, landingsVisible);
+      }
     }
   };
 
