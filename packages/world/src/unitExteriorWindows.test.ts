@@ -19,6 +19,7 @@ import {
   buildUnitExteriorWindowSealBlockersForBuilding,
   buildUnitExteriorWindowSillLedgeAABBsForBuilding,
 } from "./unitExteriorWindowBlockers.js";
+import { RESIDENTIAL_UNIT_BALCONY_OVERHANG_M } from "./residentialUnitBalcony.js";
 import {
   balconyBayFacadeCladOuterLocalX,
   residentialBalconyBayFrame,
@@ -102,12 +103,13 @@ describe("planUnitExteriorWindowsForFace", () => {
     expect(hole.x0).toBeCloseTo(tMin, 2);
   });
 
-  it("anchors east-wing corner windows on the extended balcony N/S wall span", () => {
+  it("centers east-wing balcony N/S windows on the balcony bay only", () => {
     const sx = 9;
     const wt = UNIT_SHELL_WALL_THICKNESS_M;
     const hx = sx * 0.5;
     const vlenX = sx - 2 * wt;
-    const wallSpanX = { min: -hx, max: hx + 2.5 };
+    const bay = RESIDENTIAL_UNIT_BALCONY_OVERHANG_M;
+    const wallSpanX = { min: -hx, max: hx + bay };
     const s = planUnitExteriorWindowsForFace({
       face: "s",
       vlenX,
@@ -122,9 +124,13 @@ describe("planUnitExteriorWindowsForFace", () => {
     });
     expect(s.count).toBe(1);
     const hole = s.holesNs[0]!;
-    const interiorMax = vlenX * 0.5 - 0.35;
-    expect(hole.x1).toBeGreaterThan(interiorMax + 1.5);
-    expect(hole.x1).toBeCloseTo(wallSpanX.max - 0.35, 2);
+    const balconyLo = hx + 0.35;
+    const balconyHi = wallSpanX.max - 0.35;
+    const xMid = (balconyLo + balconyHi) * 0.5;
+    expect((hole.x0 + hole.x1) * 0.5).toBeCloseTo(xMid, 2);
+    expect(hole.x0).toBeGreaterThan(balconyLo - 1e-4);
+    expect(hole.x1).toBeLessThan(balconyHi + 1e-4);
+    expect(hole.x0).toBeGreaterThan(-hx + 0.35);
   });
 
   it("shortens openings from the bottom while keeping the head height", () => {

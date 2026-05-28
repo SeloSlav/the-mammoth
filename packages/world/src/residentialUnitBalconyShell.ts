@@ -248,6 +248,8 @@ export function addResidentialBalconyBayShell(
     floorDocId: string;
     facadeSalt: number;
     unitExteriorFaces?: readonly CardinalFace[];
+    /** Editor reference shell — plaster + glass only, no brick/concrete façade slabs. */
+    skipExteriorCladding?: boolean;
   },
 ): void {
   const frame = residentialBalconyBayFrame(unitId, interiorSx, sz);
@@ -301,32 +303,34 @@ export function addResidentialBalconyBayShell(
     tagBalconyMesh(facadeMesh, unitId);
   }
 
-  addBalconyBayBrickSideExteriorCladding(
-    unitGroup,
-    frame,
-    hz,
-    wt,
-    yLo,
-    yHi,
-    opts.unitExteriorFaces ?? [],
-  );
+  if (!opts.skipExteriorCladding) {
+    addBalconyBayBrickSideExteriorCladding(
+      unitGroup,
+      frame,
+      hz,
+      wt,
+      yLo,
+      yHi,
+      opts.unitExteriorFaces ?? [],
+    );
 
-  const cladT = BALCONY_BAY_FACADE_CLAD_THICKNESS_M;
-  const xClad = balconyBayFacadeCladOuterLocalX(frame);
-  addWallConstantXWithHoles(
-    unitGroup,
-    exteriorWallM,
-    xClad,
-    cladT,
-    -hz + wt,
-    hz - wt,
-    yLo,
-    yHi,
-    holesEw,
-    frame.exteriorFace === "e"
-      ? "shell_exterior_cladding_e"
-      : "shell_exterior_cladding_w",
-  );
+    const cladT = BALCONY_BAY_FACADE_CLAD_THICKNESS_M;
+    const xClad = balconyBayFacadeCladOuterLocalX(frame);
+    addWallConstantXWithHoles(
+      unitGroup,
+      exteriorWallM,
+      xClad,
+      cladT,
+      -hz + wt,
+      hz - wt,
+      yLo,
+      yHi,
+      holesEw,
+      frame.exteriorFace === "e"
+        ? "shell_exterior_cladding_e"
+        : "shell_exterior_cladding_w",
+    );
+  }
 
   if (holesEw.length > 0 && unitExteriorGlassMeshesEnabledForStoryLevel(opts.storyLevelIndex)) {
     const glassGroup = new THREE.Group();

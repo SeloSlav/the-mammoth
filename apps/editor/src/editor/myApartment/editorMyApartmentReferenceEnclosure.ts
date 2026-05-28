@@ -64,12 +64,12 @@ export function buildOwnedApartmentDerivedReferenceRoom(opts: {
   const sz = opts.placedScaleZ;
   const balconyExtras = residentialBalconyHollowShellExtras(opts.unitId, interiorSx);
 
-  /** Walls + corridor door cutouts + exterior cladding/glass — no floor/ceiling slabs. */
+  /** Plaster shell + window glass only — no exterior brick/concrete cladding in the editor. */
   appendOwnedApartmentEditorShellWalls(
     enclosure,
     opts.shellPlan,
     floorPlaceholderMeshMaterials.unitWall,
-    floorPlaceholderMeshMaterials.unitExteriorWall,
+    undefined,
     { openFaces: balconyExtras?.openInteriorFaces },
   );
 
@@ -78,6 +78,7 @@ export function buildOwnedApartmentDerivedReferenceRoom(opts: {
       storyLevelIndex: opts.storyLevelIndex,
       floorDocId: opts.floorDocId,
       facadeSalt: DEFAULT_EXTERIOR_FACADE_SALT,
+      skipExteriorCladding: true,
     });
   }
 

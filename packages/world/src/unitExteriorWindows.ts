@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { CardinalFace, WallHoleXY, WallHoleYZ } from "./wallWithDoorCutout.js";
 import type { FloorDoc, PlacedObject } from "@the-mammoth/schemas";
 import { unitHasAdjacentUnitAlongBarCap } from "./exteriorFaceExposure.js";
+import { RESIDENTIAL_UNIT_BALCONY_OVERHANG_M } from "./residentialUnitBalcony.js";
 
 /**
  * E/W long façades get the multi-segment window band. N/S caps only on true bar ends — not the
@@ -51,6 +52,23 @@ const CORRIDOR_CAP_SILL_ABOVE_YLO_M = 0.42;
 const CORRIDOR_CAP_HEAD_CLEARANCE_M = 0.08;
 /** Bump to reshuffle all unit facade window layouts (see `BuildFloorMeshesOptions.facadeSalt`). */
 export const DEFAULT_EXTERIOR_FACADE_SALT = 1;
+
+/**
+ * N/S wall tangent range (edge-inset) for the balcony bay only — matches
+ * {@link residentialBalconyHollowShellExtras} `wallSpanX` + overhang on +X or −X.
+ */
+function balconyNsWallTangentSpanInRoomLocal(wallSpanX: {
+  min: number;
+  max: number;
+}): { xLo: number; xHi: number } {
+  const bay = RESIDENTIAL_UNIT_BALCONY_OVERHANG_M;
+  const { min, max } = wallSpanX;
+  if (Math.abs(max) > Math.abs(min)) {
+    const interiorEdge = -min;
+    return { xLo: interiorEdge + EDGE_INSET_M, xHi: max - EDGE_INSET_M };
+  }
+  return { xLo: min + EDGE_INSET_M, xHi: min + bay - EDGE_INSET_M };
+}
 
 /** Room-local X tangent on N/S faces: east wing → +X corner, west wing → −X corner. */
 export function exteriorCornerTangentOnNsFace(placedObjectId: string): "min" | "max" {
@@ -311,15 +329,28 @@ function planSingleCornerWindowOnNsFace(opts: {
   const y0 = ref.y0;
   const y1 = ref.y1;
 
-  const xLo = (opts.wallSpanX?.min ?? -opts.vlenX * 0.5) + EDGE_INSET_M;
-  const xHi = (opts.wallSpanX?.max ?? opts.vlenX * 0.5) - EDGE_INSET_M;
+  const tangentSpan = opts.wallSpanX
+    ? balconyNsWallTangentSpanInRoomLocal(opts.wallSpanX)
+    : {
+        xLo: -opts.vlenX * 0.5 + EDGE_INSET_M,
+        xHi: opts.vlenX * 0.5 - EDGE_INSET_M,
+      };
+  const { xLo, xHi } = tangentSpan;
   if (width < MIN_SEGMENT_WIDTH_M || xHi - xLo < width + 1e-4 || y1 <= y0 + 0.4) {
     return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
   }
 
-  const corner = exteriorCornerTangentOnNsFace(opts.placedObjectId);
-  const x0 = corner === "max" ? xHi - width : xLo;
-  const x1 = corner === "max" ? xHi : xLo + width;
+  let x0: number;
+  let x1: number;
+  if (opts.wallSpanX) {
+    const xMid = (xLo + xHi) * 0.5;
+    x0 = xMid - width * 0.5;
+    x1 = xMid + width * 0.5;
+  } else {
+    const corner = exteriorCornerTangentOnNsFace(opts.placedObjectId);
+    x0 = corner === "max" ? xHi - width : xLo;
+    x1 = corner === "max" ? xHi : xLo + width;
+  }
 
   return {
     count: 1,
