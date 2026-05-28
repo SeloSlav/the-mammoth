@@ -25,3 +25,4 @@ export * from "./apartmentWindowShutters.js";
 export * from "./playerInventory.js";
 export * from "./gameTime.js";
 export * from "./playerMissions.js";
+export * from "./megablockFloorNpcEncounter.js";

@@ -70,8 +70,11 @@ macro_rules! starter_fridge {
     };
 }
 
-/// Survival loadout: screwdriver tool — door lock is crafted only.
-const SURVIVAL_SPAWN_LOADOUT: &[StarterRow] = &[starter_hotbar!(0, "screwdriver", 1)];
+/// First-loop survival loadout — pistol + loose 9mm (door lock / screwdriver crafted later).
+const SURVIVAL_SPAWN_LOADOUT: &[StarterRow] = &[
+    starter_hotbar!(0, "pistol", 1),
+    starter_hotbar!(1, "ammo-9mm", 24),
+];
 
 /// One-time balcony grow-op pack in the footlocker.
 /// Substrate is scarce on purpose — fish-tank feed and harvest seed returns sustain the loop.
@@ -246,6 +249,8 @@ pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {
         return;
     }
     insert_survival_loadout(ctx, owner);
+    crate::loadout::reset_player_active_hotbar_slot_to_first(ctx, owner);
+    crate::firearm::sync_firearm_chamber_for_active_hotbar(ctx, owner);
 }
 
 /// On respawn: strip hotbar + backpack and re-grant survival items only.
@@ -256,6 +261,8 @@ pub(crate) fn reset_player_loadout_for_respawn(ctx: &ReducerContext, owner: Iden
     delete_all_player_inventory_and_hotbar_items(ctx, owner);
     crate::firearm::reset_player_firearm_chamber(ctx, owner);
     insert_survival_loadout(ctx, owner);
+    crate::loadout::reset_player_active_hotbar_slot_to_first(ctx, owner);
+    crate::firearm::sync_firearm_chamber_for_active_hotbar(ctx, owner);
 }
 
 #[cfg(test)]

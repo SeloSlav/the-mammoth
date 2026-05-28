@@ -6,6 +6,7 @@ use spacetimedb::{Identity, ReducerContext, Table};
 use crate::apartments;
 use crate::crafting::{self, emit_hud_notice};
 use crate::dropped_item;
+use crate::megablock_floor_npc;
 use crate::game_time::SleepRolloverKind;
 use crate::inventory::{inventory_item, try_grant_stack_to_player};
 use crate::inventory_models::{ItemLocation, StashLocationData};
@@ -77,6 +78,7 @@ fn first_extraction_active(row: &PlayerMissionProgress) -> bool {
 pub(crate) fn ensure_player_mission_progress(ctx: &ReducerContext, owner: Identity) {
     if mission_row(ctx, owner).is_some() {
         refresh_first_extraction_loot(ctx, owner);
+        megablock_floor_npc::sync_all_megablock_floor_encounters(ctx);
         return;
     }
 
@@ -95,6 +97,7 @@ pub(crate) fn ensure_player_mission_progress(ctx: &ReducerContext, owner: Identi
         owner,
         "Work order: retrieve the fuse wire pack from deck 16 (16-E-4). Stash it in your footlocker before the day ends — or pass out at home while carrying it.".to_string(),
     );
+    megablock_floor_npc::sync_all_megablock_floor_encounters(ctx);
 }
 
 fn spawn_first_extraction_loot(ctx: &ReducerContext) {
@@ -303,6 +306,7 @@ fn complete_first_extraction(
     row.active_mission_id.clear();
     update_mission_row(ctx, row);
     clear_first_extraction_world_loot(ctx);
+    megablock_floor_npc::sync_all_megablock_floor_encounters(ctx);
 }
 
 fn fail_first_extraction(ctx: &ReducerContext, owner: Identity, notice: &str) {
@@ -328,6 +332,7 @@ fn fail_first_extraction(ctx: &ReducerContext, owner: Identity, notice: &str) {
         owner,
         "Work order reissued — fuse wire pack, deck 16 (16-E-4).".to_string(),
     );
+    megablock_floor_npc::sync_all_megablock_floor_encounters(ctx);
 }
 
 pub(crate) fn on_mission_item_pickup(ctx: &ReducerContext, owner: Identity, def_id: &str) {

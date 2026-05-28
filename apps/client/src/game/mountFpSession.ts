@@ -180,7 +180,7 @@ import { LocalGameAudio } from "./audio/localGameAudio.js";
 import { createFpSessionCorridorPvsContext } from "./fpSession/fpSessionCorridorPvs.js";
 import { createFpNpcSession } from "./npc/fpNpcSession.js";
 import { createFpNpcRenderPvsGate } from "./npc/fpNpcRenderPvs.js";
-import { isFpWorldNpcsEnabled } from "./fpSession/fpSessionPerfDebug.js";
+import { isFpMegablockNpcsEnabled } from "./fpSession/fpMegablockNpcsEnabled.js";
 import { createFpNpcCollisionSource } from "./fpPhysics/fpNpcCollision.js";
 import { setFpCombatSimMode } from "./combatSim/fpCombatSimMode.js";
 import {
@@ -1355,8 +1355,9 @@ export async function mountFpSession(
     fpApartmentDoors.setFloorPlateBandGetter(() => getActiveFloorPlateBand());
   }
 
-  const npcRenderPvsGate =
-    isCombatSim || !isFpWorldNpcsEnabled()
+  const fpMegablockNpcsEnabled = isCombatSim || isFpMegablockNpcsEnabled(conn);
+
+  const npcRenderPvsGate = !fpMegablockNpcsEnabled
       ? null
       : createFpNpcRenderPvsGate(() => ({
           floorPlateBand: getActiveFloorPlateBand(),
@@ -1587,7 +1588,7 @@ export async function mountFpSession(
   const localAudio = new LocalGameAudio();
   let fpNpcSession: Awaited<ReturnType<typeof createFpNpcSession>> | null = null;
 
-  if (isCombatSim || isFpWorldNpcsEnabled()) {
+  if (fpMegablockNpcsEnabled) {
     fpNpcSession = await createFpNpcSession({
       worldParent: scene,
       fxScene: scene,

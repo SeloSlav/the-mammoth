@@ -13,6 +13,7 @@ use crate::generated_collision_solids::{
     COLLISION_SOLID_AABB_SHARDS, COLLISION_SOLID_FOOTPRINT_MAX_X, COLLISION_SOLID_FOOTPRINT_MAX_Z,
     COLLISION_SOLID_FOOTPRINT_MIN_X, COLLISION_SOLID_FOOTPRINT_MIN_Z,
 };
+use crate::megablock_floor_npc;
 use crate::npc::{body_dims_for_archetype, WorldNpc};
 use crate::stair_runtime_overlay;
 
@@ -122,6 +123,12 @@ fn gather_elevator_blockers(
 fn unit_keys_for_npc(ctx: &ReducerContext, npc: &WorldNpc) -> Vec<String> {
     if npc.session_key.starts_with("combat_sim:") {
         return Vec::new();
+    }
+    if let Some(level) =
+        megablock_floor_npc::parse_megablock_floor_session_key(npc.session_key.as_str())
+    {
+        let floor_doc = megablock_floor_npc::encounter_floor_doc_for_level(level);
+        return megablock_floor_npc::unit_keys_on_floor(ctx, floor_doc, level);
     }
     let mut keys = vec![npc.session_key.clone()];
     for unit in ctx.db.apartment_unit().iter() {

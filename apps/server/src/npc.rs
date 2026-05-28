@@ -492,8 +492,17 @@ pub fn step_all_world_npcs(ctx: &ReducerContext, dt_sec: f32) {
     babushka_resolve_peer_overlaps(&mut npcs);
     babushka_resolve_player_overlaps(&mut npcs, &player_snapshot);
     for npc in npcs.iter_mut() {
-        if npc.state != NPC_STATE_DEAD && npc.session_key.starts_with("combat_sim:") {
+        if npc.state == NPC_STATE_DEAD {
+            continue;
+        }
+        if npc.session_key.starts_with("combat_sim:") {
             crate::npc_combat_sim::clamp_babushka_to_combat_arena(ctx, npc);
+        } else if crate::megablock_floor_npc::parse_megablock_floor_session_key(
+            npc.session_key.as_str(),
+        )
+        .is_some()
+        {
+            crate::megablock_floor_npc::clamp_babushka_to_megablock_floor(ctx, npc);
         }
     }
     for npc in npcs {
@@ -607,6 +616,7 @@ fn babushka_apply_planar_motion(
     npc.vel_x = vel_x;
     npc.vel_z = vel_z;
     crate::npc_combat_sim::snap_babushka_combat_sim_feet_y(ctx, npc);
+    crate::megablock_floor_npc::snap_babushka_megablock_floor_feet_y(ctx, npc);
     let speed_sq = vx * vx + vz * vz;
     npc.locomotion = if speed_sq > 0.04 {
         if locomotion_run {
@@ -660,10 +670,17 @@ fn babushka_player_separation_steering(npc: &WorldNpc, players: &[PlayerBodySnap
     if npc.state == NPC_STATE_DEAD || npc.health <= 0.0 {
         return (0.0, 0.0);
     }
+    let megablock_floor_level =
+        crate::megablock_floor_npc::parse_megablock_floor_session_key(npc.session_key.as_str());
     let mut sep_x = 0.0;
     let mut sep_z = 0.0;
     let radius = BABUSHKA_PLAYER_SEPARATION_RADIUS_M;
     for player in players {
+        if let Some(level) = megablock_floor_level {
+            if !crate::megablock_floor_npc::feet_on_megablock_storey_level(player.y, level) {
+                continue;
+            }
+        }
         if !vertical_overlap(npc.y, BABUSHKA_BODY_HEIGHT_M, player.y, player.body_height) {
             continue;
         }
@@ -701,8 +718,21 @@ fn babushka_resolve_player_overlaps(npcs: &mut [WorldNpc], players: &[PlayerBody
             if npc.state == NPC_STATE_DEAD || npc.health <= 0.0 {
                 continue;
             }
+            let megablock_floor_level = crate::megablock_floor_npc::parse_megablock_floor_session_key(
+                npc.session_key.as_str(),
+            );
             for player in players {
-                if !vertical_overlap(npc.y, BABUSHKA_BODY_HEIGHT_M, player.y, player.body_height) {
+                if let Some(level) = megablock_floor_level {
+                    if !crate::megablock_floor_npc::feet_on_megablock_storey_level(player.y, level)
+                    {
+                        continue;
+                    }
+                } else if !vertical_overlap(
+                    npc.y,
+                    BABUSHKA_BODY_HEIGHT_M,
+                    player.y,
+                    player.body_height,
+                ) {
                     continue;
                 }
                 let dx = npc.x - player.x;
@@ -889,19 +919,36 @@ fn babushka_melee_vertical_overlap_with_player(
 }
 
 fn ai_target_for_npc(ctx: &ReducerContext, npc: &WorldNpc) -> Option<(f32, f32, f32, Identity)> {
+    let megablock_floor_level =
+        crate::megablock_floor_npc::parse_megablock_floor_session_key(npc.session_key.as_str());
     if let Some(id) = npc.chase_identity {
         if !crate::player_vitals::is_player_dead(ctx, id) {
             if let Some(pose) = ctx.db.player_pose().identity().find(&id) {
-                return Some((pose.x, pose.z, pose.y, id));
+                if player_detectable_for_npc(npc, megablock_floor_level, &pose) {
+                    return Some((pose.x, pose.z, pose.y, id));
+                }
             }
         }
         if npc.session_key.starts_with("combat_sim:") {
             return None;
         }
     }
-    let id = nearest_living_player_identity(ctx, npc.x, npc.y, npc.z)?;
+    let id = nearest_living_player_identity(ctx, npc.x, npc.y, npc.z, megablock_floor_level)?;
     let pose = ctx.db.player_pose().identity().find(&id)?;
     Some((pose.x, pose.z, pose.y, id))
+}
+
+#[inline]
+fn player_detectable_for_npc(
+    npc: &WorldNpc,
+    megablock_floor_level: Option<u32>,
+    pose: &crate::pose::PlayerPose,
+) -> bool {
+    if let Some(level) = megablock_floor_level {
+        return crate::megablock_floor_npc::feet_on_megablock_storey_level(pose.y, level);
+    }
+    let _ = npc;
+    true
 }
 
 fn nearest_living_player_identity(
@@ -909,11 +956,17 @@ fn nearest_living_player_identity(
     nx: f32,
     ny: f32,
     nz: f32,
+    megablock_floor_level: Option<u32>,
 ) -> Option<Identity> {
     let mut best: Option<(Identity, f32)> = None;
     for pose in ctx.db.player_pose().iter() {
         if crate::player_vitals::is_player_dead(ctx, pose.identity) {
             continue;
+        }
+        if let Some(level) = megablock_floor_level {
+            if !crate::megablock_floor_npc::feet_on_megablock_storey_level(pose.y, level) {
+                continue;
+            }
         }
         let dx = pose.x - nx;
         let dy = pose.y - ny;

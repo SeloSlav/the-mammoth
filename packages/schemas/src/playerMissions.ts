@@ -34,6 +34,22 @@ export function firstExtractionUnitKey(
   return `${floorDocId}|${FIRST_EXTRACTION_LEVEL_INDEX}|${FIRST_EXTRACTION_UNIT_ID}`;
 }
 
+/** True while the first fuse-wire work order is live (not turned in / failed out). */
+export function isFirstExtractionMissionInProgress(
+  row: {
+    activeMissionId: string;
+    status: number;
+    firstExtractionComplete: boolean;
+  } | null,
+): boolean {
+  if (!row || row.firstExtractionComplete) return false;
+  if (row.activeMissionId !== FIRST_EXTRACTION_MISSION_ID) return false;
+  return (
+    row.status >= MISSION_STATUS.OFFERED &&
+    row.status <= MISSION_STATUS.COLLECTED
+  );
+}
+
 /** Server `PlayerMissionProgress.status` — do not renumber without migration. */
 export const MISSION_STATUS = {
   /** Offered on connect; transitions to active immediately for the first mission. */

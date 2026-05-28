@@ -37,6 +37,7 @@ mod items_catalog;
 mod kinematic_support;
 mod loadout;
 mod melee_turn;
+mod megablock_floor_npc;
 mod movement;
 mod npc;
 mod npc_blockers;

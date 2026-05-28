@@ -97,6 +97,27 @@ fn combat_sim_padded_shell_xz(unit: &ApartmentUnit) -> (f32, f32, f32, f32) {
     )
 }
 
+/// Random babushka pose inside authored apartment bounds (megablock floor encounters).
+pub fn random_babushka_pose_in_apartment_bounds(
+    unit: &ApartmentUnit,
+    salt: u64,
+) -> (f32, f32, f32, f32) {
+    let inset = 0.75;
+    let min_x = unit.bound_min_x + inset;
+    let max_x = unit.bound_max_x - inset;
+    let min_z = unit.bound_min_z + inset;
+    let max_z = unit.bound_max_z - inset;
+    if max_x <= min_x || max_z <= min_z {
+        let cx = (unit.bound_min_x + unit.bound_max_x) * 0.5;
+        let cz = (unit.bound_min_z + unit.bound_max_z) * 0.5;
+        return (cx, unit.foot_y, cz, 0.0);
+    }
+    let x = min_x + hash_u64_to_unit(salt) * (max_x - min_x);
+    let z = min_z + hash_u64_to_unit(salt.wrapping_mul(31)) * (max_z - min_z);
+    let yaw = hash_u64_to_unit(salt.wrapping_mul(97)) * std::f32::consts::TAU;
+    (x, unit.foot_y, z, yaw)
+}
+
 /// Random babushka pose inside the combat arena (inset from bounds).
 pub fn random_babushka_pose_in_unit(unit: &ApartmentUnit, salt: u64) -> (f32, f32, f32, f32) {
     let inset = 0.75;
