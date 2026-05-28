@@ -8,12 +8,12 @@
 
 /** Replicated `swing_open_01` at/above this admits corridor PVS into a unit interior. */
 export const APARTMENT_DOOR_PVS_INTERIOR_PEEK_OPEN_01 = 0.15;
-/** Corridor door interiors are expensive; only nearby/open doorways participate in hallway PVS. */
+/**
+ * Horizontal radius (m) around the camera: every open residential doorway on the current storey
+ * inside this circle may submit unit plaster + decor. Omnidirectional so quick 180° turns do not
+ * flash bare shells across the hall.
+ */
 export const APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M = 9.5;
-/** Very close doorways remain visible even while the player looks sideways across the threshold. */
-export const APARTMENT_DOOR_PVS_INTERIOR_PEEK_NEAR_DIST_M = 2.75;
-/** Beyond the near radius, the doorway must be at least slightly ahead of the camera. */
-export const APARTMENT_DOOR_PVS_INTERIOR_PEEK_MIN_FORWARD_M = 0.35;
 
 export type BuildingCorridorPvsDoorEntry = {
   unitKey: string;
@@ -33,6 +33,7 @@ export type BuildingCorridorPvsDoorEntry = {
 export type BuildOpenDoorUnitKeysByLevelOpts = {
   cameraX?: number;
   cameraZ?: number;
+  /** Ignored — kept so callers can pass view direction without churn. */
   viewDirX?: number;
   viewDirZ?: number;
 };
@@ -45,11 +46,8 @@ function apartmentDoorPassesCorridorCameraPvs(
   door: BuildingCorridorPvsDoorEntry,
   opts?: BuildOpenDoorUnitKeysByLevelOpts,
 ): boolean {
+  if (opts?.cameraX === undefined || opts?.cameraZ === undefined) return true;
   if (
-    opts?.cameraX === undefined ||
-    opts.cameraZ === undefined ||
-    opts.viewDirX === undefined ||
-    opts.viewDirZ === undefined ||
     door.hingeX === undefined ||
     door.hingeZ === undefined ||
     door.tangentX === undefined ||
@@ -63,14 +61,7 @@ function apartmentDoorPassesCorridorCameraPvs(
   const cz = door.hingeZ + door.tangentZ * door.panelWidthM * 0.5;
   const dx = cx - opts.cameraX;
   const dz = cz - opts.cameraZ;
-  const distSq = dx * dx + dz * dz;
-  if (distSq > APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M ** 2) return false;
-  if (distSq <= APARTMENT_DOOR_PVS_INTERIOR_PEEK_NEAR_DIST_M ** 2) return true;
-
-  const dirLen = Math.hypot(opts.viewDirX, opts.viewDirZ);
-  if (dirLen < 1e-4) return true;
-  const forward = (dx * opts.viewDirX + dz * opts.viewDirZ) / dirLen;
-  return forward >= APARTMENT_DOOR_PVS_INTERIOR_PEEK_MIN_FORWARD_M;
+  return dx * dx + dz * dz <= APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M ** 2;
 }
 
 export function buildOpenDoorUnitKeysByLevel(
