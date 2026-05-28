@@ -34,6 +34,8 @@ pub(crate) const MISSION_STATUS_ACTIVE: u8 = 1;
 pub(crate) const MISSION_STATUS_COLLECTED: u8 = 2;
 pub(crate) const MISSION_STATUS_COMPLETE: u8 = 3;
 pub(crate) const MISSION_STATUS_FAILED: u8 = 4;
+/// Turn-in logged; scrip is granted on the next day rollover.
+pub(crate) const MISSION_STATUS_TURNED_IN: u8 = 5;
 
 #[spacetimedb::table(public, accessor = player_mission_progress)]
 pub struct PlayerMissionProgress {
@@ -252,18 +254,44 @@ fn grant_scrip_turn_in_reward(ctx: &ReducerContext, owner: Identity) -> u32 {
     granted
 }
 
-fn settle_first_extraction_turn_in(ctx: &ReducerContext, owner: Identity) {
+fn grant_first_extraction_turn_in_reward(ctx: &ReducerContext, owner: Identity) -> u32 {
     delete_player_items_with_def_id(ctx, owner, FIRST_EXTRACTION_ITEM_DEF_ID);
     let scrip = grant_scrip_turn_in_reward(ctx, owner);
     if scrip == 0 {
-        return;
+        return 0;
     }
     emit_hud_notice(
         ctx,
         owner,
-        format!(
-            "Turn-in logged — {scrip} scrip credited. Rada will send someone when shift turns."
-        ),
+        format!("Shift turned — {scrip} scrip credited for the fuse wire turn-in."),
+    );
+    scrip
+}
+
+fn log_first_extraction_turn_in(ctx: &ReducerContext, owner: Identity, deposited: bool) {
+    let Some(mut row) = mission_row(ctx, owner) else {
+        return;
+    };
+    if row.first_extraction_complete
+        || row.status == MISSION_STATUS_COMPLETE
+        || row.status == MISSION_STATUS_TURNED_IN
+    {
+        return;
+    }
+    if !first_extraction_active(&row) && row.status != MISSION_STATUS_COLLECTED {
+        return;
+    }
+    delete_player_items_with_def_id(ctx, owner, FIRST_EXTRACTION_ITEM_DEF_ID);
+    row.item_collected = true;
+    row.item_deposited = deposited;
+    row.status = MISSION_STATUS_TURNED_IN;
+    update_mission_row(ctx, row);
+    clear_first_extraction_world_loot(ctx);
+    megablock_floor_npc::sync_all_megablock_floor_encounters(ctx);
+    emit_hud_notice(
+        ctx,
+        owner,
+        "Turn-in logged — Rada will send someone when shift turns.".to_string(),
     );
 }
 
@@ -284,29 +312,24 @@ fn mark_first_extraction_collected(ctx: &ReducerContext, owner: Identity) {
     );
 }
 
-fn complete_first_extraction(
-    ctx: &ReducerContext,
-    owner: Identity,
-    deposited: bool,
-) {
+fn complete_first_extraction_turn_in_reward(ctx: &ReducerContext, owner: Identity) -> bool {
     let Some(mut row) = mission_row(ctx, owner) else {
-        return;
+        return false;
     };
     if row.first_extraction_complete || row.status == MISSION_STATUS_COMPLETE {
-        return;
+        return false;
     }
-    if !first_extraction_active(&row) && row.status != MISSION_STATUS_COLLECTED {
-        return;
+    if row.status != MISSION_STATUS_TURNED_IN {
+        return false;
     }
-    settle_first_extraction_turn_in(ctx, owner);
-    row.item_collected = true;
-    row.item_deposited = deposited;
+    let _ = grant_first_extraction_turn_in_reward(ctx, owner);
     row.status = MISSION_STATUS_COMPLETE;
     row.first_extraction_complete = true;
     row.active_mission_id.clear();
     update_mission_row(ctx, row);
     clear_first_extraction_world_loot(ctx);
     megablock_floor_npc::sync_all_megablock_floor_encounters(ctx);
+    true
 }
 
 fn fail_first_extraction(ctx: &ReducerContext, owner: Identity, notice: &str) {
@@ -316,7 +339,10 @@ fn fail_first_extraction(ctx: &ReducerContext, owner: Identity, notice: &str) {
     if row.first_extraction_complete || row.status == MISSION_STATUS_COMPLETE {
         return;
     };
-    if !first_extraction_active(&row) && row.status != MISSION_STATUS_COLLECTED {
+    if !first_extraction_active(&row)
+        && row.status != MISSION_STATUS_COLLECTED
+        && row.status != MISSION_STATUS_TURNED_IN
+    {
         return;
     }
     row.status = MISSION_STATUS_ACTIVE;
@@ -360,18 +386,18 @@ pub(crate) fn on_mission_stash_push(
     if player_footlocker_quantity(ctx, owner, FIRST_EXTRACTION_ITEM_DEF_ID) == 0 {
         return;
     }
-    complete_first_extraction(ctx, owner, true);
+    log_first_extraction_turn_in(ctx, owner, true);
 }
 
 pub(crate) fn sync_mission_progress_from_inventory(ctx: &ReducerContext, owner: Identity) {
     let Some(row) = mission_row(ctx, owner) else {
         return;
     };
-    if row.first_extraction_complete {
+    if row.first_extraction_complete || row.status == MISSION_STATUS_TURNED_IN {
         return;
     }
     if player_footlocker_quantity(ctx, owner, FIRST_EXTRACTION_ITEM_DEF_ID) > 0 {
-        complete_first_extraction(ctx, owner, true);
+        log_first_extraction_turn_in(ctx, owner, true);
         return;
     }
     if first_extraction_active(&row)
@@ -393,12 +419,15 @@ pub(crate) fn evaluate_mission_before_day_rollover(
     if row.first_extraction_complete || row.status == MISSION_STATUS_COMPLETE {
         return;
     };
+    if row.status == MISSION_STATUS_TURNED_IN {
+        return;
+    }
     if !first_extraction_active(&row) && row.status != MISSION_STATUS_COLLECTED {
         return;
     }
 
     if player_footlocker_quantity(ctx, owner, FIRST_EXTRACTION_ITEM_DEF_ID) > 0 {
-        complete_first_extraction(ctx, owner, true);
+        log_first_extraction_turn_in(ctx, owner, true);
         return;
     }
 
@@ -406,7 +435,7 @@ pub(crate) fn evaluate_mission_before_day_rollover(
     let inside_home = apartments::player_feet_inside_owned_apartment(ctx, owner);
 
     if kind == SleepRolloverKind::Collapse && inside_home && carrying {
-        complete_first_extraction(ctx, owner, false);
+        log_first_extraction_turn_in(ctx, owner, false);
         return;
     }
 
@@ -424,6 +453,11 @@ pub(crate) fn evaluate_mission_before_day_rollover(
         owner,
         "Day ended — fuse wire pack still out on deck 16.",
     );
+}
+
+/// Grant scrip for a turn-in logged on the previous day (e.g. pass-out at home same night).
+pub(crate) fn settle_mission_after_day_rollover(ctx: &ReducerContext, owner: Identity) {
+    let _ = complete_first_extraction_turn_in_reward(ctx, owner);
 }
 
 #[cfg(test)]

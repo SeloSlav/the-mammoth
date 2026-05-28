@@ -5,6 +5,7 @@ import {
   FIRST_EXTRACTION_MISSION_ID,
   firstExtractionUnitKey,
   MISSION_STATUS,
+  missionStatusLabel,
 } from "./playerMissions.js";
 
 describe("playerMissions", () => {
@@ -27,5 +28,20 @@ describe("playerMissions", () => {
     );
     expect(panel?.steps.find((s) => s.id === "collect")?.done).toBe(true);
     expect(panel?.steps.find((s) => s.id === "deposit")?.done).toBe(false);
+  });
+
+  it("marks stash step done while waiting for shift turn-in reward", () => {
+    const panel = buildFirstExtractionMissionPanel(
+      {
+        activeMissionId: FIRST_EXTRACTION_MISSION_ID,
+        status: MISSION_STATUS.TURNED_IN,
+        itemCollected: true,
+        itemDeposited: true,
+      },
+      "Fuse wire pack",
+    );
+    expect(panel?.status).toBe(MISSION_STATUS.TURNED_IN);
+    expect(panel?.steps.find((s) => s.id === "deposit")?.done).toBe(true);
+    expect(missionStatusLabel(MISSION_STATUS.TURNED_IN)).toBe("Turned in");
   });
 });

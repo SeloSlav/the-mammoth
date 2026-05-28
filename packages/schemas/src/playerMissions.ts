@@ -60,6 +60,8 @@ export const MISSION_STATUS = {
   /** Deposited in footlocker or passed out at home while carrying it. */
   COMPLETE: 3,
   FAILED: 4,
+  /** Turn-in logged; scrip arrives on the next day rollover. */
+  TURNED_IN: 5,
 } as const;
 
 export type MissionStatus = (typeof MISSION_STATUS)[keyof typeof MISSION_STATUS];
@@ -96,6 +98,8 @@ export function missionStatusLabel(status: MissionStatus): string {
       return "Complete";
     case MISSION_STATUS.FAILED:
       return "Failed";
+    case MISSION_STATUS.TURNED_IN:
+      return "Turned in";
     default:
       return "Unknown";
   }
@@ -116,16 +120,23 @@ export function buildFirstExtractionMissionPanel(
     status !== MISSION_STATUS.OFFERED &&
     status !== MISSION_STATUS.ACTIVE &&
     status !== MISSION_STATUS.COLLECTED &&
+    status !== MISSION_STATUS.TURNED_IN &&
     status !== MISSION_STATUS.COMPLETE &&
     status !== MISSION_STATUS.FAILED
   ) {
     return null;
   }
 
-  const collected = row.itemCollected || status >= MISSION_STATUS.COLLECTED;
-  const deposited = row.itemDeposited || status === MISSION_STATUS.COMPLETE;
+  const collected =
+    row.itemCollected ||
+    status >= MISSION_STATUS.COLLECTED ||
+    status === MISSION_STATUS.TURNED_IN;
+  const deposited =
+    row.itemDeposited ||
+    status === MISSION_STATUS.COMPLETE ||
+    status === MISSION_STATUS.TURNED_IN;
   const collapseComplete =
-    status === MISSION_STATUS.COMPLETE && collected && !row.itemDeposited;
+    status === MISSION_STATUS.TURNED_IN && collected && !row.itemDeposited;
 
   const steps: MissionObjectiveStep[] = [
     {

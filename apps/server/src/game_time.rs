@@ -352,6 +352,7 @@ pub(crate) fn complete_day_rollover(
     }
 
     emit_hud_notice(ctx, owner, morning_notice(quality, day, wake));
+    crate::player_mission::settle_mission_after_day_rollover(ctx, owner);
     Ok(nights)
 }
 
