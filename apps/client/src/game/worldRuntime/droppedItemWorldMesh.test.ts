@@ -44,25 +44,11 @@ describe("buildProceduralDropMeshLayers", () => {
     expect(buildProceduralDropMeshLayers("screwdriver")).toBeNull();
   });
 
-  it("returns low-poly scrap-metal with far fewer triangles than a typical GLB", () => {
-    const layers = buildProceduralDropMeshLayers("scrap-metal");
-    expect(layers).not.toBeNull();
-    expect(layers!.length).toBeGreaterThan(0);
-    const tris = layers!.reduce((sum, layer) => {
-      const index = layer.geometry.index;
-      const count = index ? index.count : layer.geometry.getAttribute("position").count;
-      return sum + count / 3;
-    }, 0);
-    expect(tris).toBeLessThan(200);
+  it("returns null for scrap-metal so world drops load the catalog GLB", () => {
+    expect(buildProceduralDropMeshLayers("scrap-metal")).toBeNull();
   });
 
-  it("returns procedural fuse-wire-pack (no shipped GLB yet)", () => {
-    const layers = buildProceduralDropMeshLayers("fuse-wire-pack");
-    expect(layers).not.toBeNull();
-    expect(layers!.length).toBeGreaterThan(0);
-    expect(maxLayerBoundsDim(layers!)).toBeCloseTo(
-      getMammothDroppedWorldTargetMaxDimM("fuse-wire-pack"),
-      2,
-    );
+  it("returns null for fuse-wire-pack so world drops load crowbar GLB placeholder", () => {
+    expect(buildProceduralDropMeshLayers("fuse-wire-pack")).toBeNull();
   });
 });

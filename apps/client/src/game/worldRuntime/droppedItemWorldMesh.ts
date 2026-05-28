@@ -27,9 +27,7 @@ function cloneGeometryForMerge(
 }
 
 /** Catalog ids that use lightweight procedural piles instead of full GLB triangle counts. */
-const PROCEDURAL_DROP_DEF_IDS = new Set([
-  "fuse-wire-pack",
-]);
+const PROCEDURAL_DROP_DEF_IDS = new Set<string>([]);
 
 function addProceduralBox(
   group: THREE.Group,
@@ -67,57 +65,6 @@ export function buildProceduralDropRoot(defId: string): THREE.Group | null {
     addProceduralBox(group, mat, s * 1.1, s * 0.42, s * 0.95, s * 0.35, s * 0.12, s * 0.18, 0.08, -0.35, 0.05);
     addProceduralBox(group, mat, s * 0.85, s * 0.36, s * 0.7, -s * 0.28, s * 0.08, -s * 0.12, -0.05, 0.22, -0.08);
     addProceduralBox(group, mat, s * 0.55, s * 0.28, s * 0.48, s * 0.08, s * 0.42, -s * 0.22, 0.15, 0.5, 0);
-    return group;
-  }
-
-  if (defId === "fuse-wire-pack") {
-    const cardboard = new THREE.MeshStandardMaterial({
-      color: 0xb8956e,
-      roughness: 0.86,
-      metalness: 0.04,
-    });
-    const copper = new THREE.MeshStandardMaterial({
-      color: 0xc4782a,
-      roughness: 0.42,
-      metalness: 0.78,
-    });
-    const fuseBody = new THREE.MeshStandardMaterial({
-      color: 0xd4dae2,
-      roughness: 0.55,
-      metalness: 0.12,
-    });
-    const fuseCap = new THREE.MeshStandardMaterial({
-      color: 0xc9a227,
-      roughness: 0.4,
-      metalness: 0.62,
-    });
-    const tie = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9, metalness: 0.05 });
-    const s = target * 0.2;
-    addProceduralBox(group, cardboard, s * 4.4, s * 0.32, s * 3.4, 0, s * 0.18, 0);
-    addProceduralBox(group, cardboard, s * 4.0, s * 0.85, s * 0.14, 0, s * 0.52, s * 1.55);
-    addProceduralBox(group, cardboard, s * 4.0, s * 0.85, s * 0.14, 0, s * 0.52, -s * 1.55);
-    addProceduralBox(group, cardboard, s * 0.14, s * 0.85, s * 3.0, s * 2.05, s * 0.52, 0);
-    addProceduralBox(group, cardboard, s * 0.14, s * 0.85, s * 3.0, -s * 2.05, s * 0.52, 0);
-    addProceduralBox(group, cardboard, s * 3.6, s * 0.22, s * 0.55, -s * 1.35, s * 0.78, s * 1.05, 0.35, 0.5, 0.1);
-    addProceduralBox(group, cardboard, s * 3.6, s * 0.22, s * 0.55, s * 1.35, s * 0.78, -s * 1.05, -0.35, 0.5, -0.1);
-    for (let i = 0; i < 5; i++) {
-      const ox = (i - 2) * s * 0.42;
-      const oz = (i % 2) * s * 0.18;
-      addProceduralBox(group, fuseBody, s * 0.2, s * 0.5, s * 0.2, ox, s * 0.52, oz, 0, (i * 0.7) % 1.2, 0);
-      addProceduralBox(group, fuseCap, s * 0.24, s * 0.1, s * 0.24, ox, s * 0.8, oz);
-      addProceduralBox(group, fuseCap, s * 0.24, s * 0.1, s * 0.24, ox, s * 0.24, oz);
-    }
-    addProceduralBox(group, fuseBody, s * 0.2, s * 0.48, s * 0.2, -s * 2.35, s * 0.22, s * 0.55, 0.1, 0, 0.25);
-    addProceduralBox(group, fuseCap, s * 0.24, s * 0.1, s * 0.24, -s * 2.35, s * 0.5, s * 0.55);
-    addProceduralBox(group, fuseCap, s * 0.24, s * 0.1, s * 0.24, -s * 2.35, s * 0.08, s * 0.55);
-    for (let ring = 0; ring < 6; ring++) {
-      const a = (ring / 6) * Math.PI * 1.35 - 0.4;
-      const rx = Math.cos(a) * s * 0.95;
-      const rz = Math.sin(a) * s * 0.55;
-      addProceduralBox(group, copper, s * 0.16, s * 2.4, s * 0.14, s * 2.05 + rx, s * 1.05, rz, 0, a + 0.5, 0.12);
-    }
-    addProceduralBox(group, tie, s * 0.12, s * 0.08, s * 2.2, s * 2.05, s * 2.05, 0);
-    addProceduralBox(group, tie, s * 0.12, s * 0.08, s * 2.2, s * 2.05, s * 0.35, 0);
     return group;
   }
 

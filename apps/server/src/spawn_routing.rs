@@ -57,7 +57,7 @@ fn rand_next(seed: &mut u64) -> u64 {
 }
 
 #[inline]
-fn xz_point_hits_elevator_shaft(x: f32, z: f32) -> bool {
+pub(crate) fn xz_point_hits_elevator_shaft(x: f32, z: f32) -> bool {
     let hx = SHAFT_SX * 0.5 + SHAFT_XZ_MARGIN;
     let hz = SHAFT_SZ * 0.5 + SHAFT_XZ_MARGIN;
     for spec in MAMUTH_ELEVATOR_SPECS {

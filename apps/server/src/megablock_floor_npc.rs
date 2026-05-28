@@ -4,7 +4,7 @@
 use spacetimedb::{ReducerContext, Table};
 
 use crate::apartments::{apartment_unit, ApartmentUnit, UNIT_STATE_UNCLAIMED};
-use crate::combat_sim::random_babushka_pose_in_apartment_bounds;
+use crate::megablock_floor_spawn::megablock_babushka_spawn_pose;
 use crate::elevator_layout;
 use crate::npc::{self, world_npc, WorldNpc};
 use crate::player_mission::{
@@ -227,11 +227,12 @@ fn ensure_floor_encounter(ctx: &ReducerContext, def: &MegablockFloorEncounterDef
     }
 
     for i in 0..def.babushka_count {
-        let unit = &units[i as usize % units.len()];
-        let salt = def
-            .spawn_salt
-            .wrapping_add((i as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15));
-        let (x, y, z, yaw) = random_babushka_pose_in_apartment_bounds(unit, salt);
+        let (x, y, z, yaw) = megablock_babushka_spawn_pose(
+            def.level_index,
+            &units,
+            i,
+            def.spawn_salt,
+        );
         let _npc_id = npc::spawn_babushka(ctx, session_key.clone(), x, y, z, yaw, None);
     }
     log::info!(

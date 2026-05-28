@@ -38,6 +38,7 @@ mod kinematic_support;
 mod loadout;
 mod melee_turn;
 mod megablock_floor_npc;
+mod megablock_floor_spawn;
 mod movement;
 mod npc;
 mod npc_blockers;

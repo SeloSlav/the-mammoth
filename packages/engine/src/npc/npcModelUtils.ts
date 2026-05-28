@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import { upgradeApartmentDecorMaterialToStandard } from "../rendering/apartmentDecorMaterialUpgrade.js";
+import { bindMammothApartmentPropReadableEnv } from "../rendering/bindMammothApartmentDecorIndirectEnv.js";
 
 const NPC_FALLBACK_SKIN_HEX = 0xb8927a;
 
@@ -115,20 +116,9 @@ export function cloneNpcScene(template: THREE.Object3D): THREE.Object3D {
   return root;
 }
 
-/** Bind session PMREM env so outdoor combat arena lighting matches remote players. */
+/** PMREM + matte indirect fill — same path as apartment decor (combat sim + megablock corridors). */
 export function bindNpcOutdoorReadableEnv(root: THREE.Object3D, envTexture: THREE.Texture | null): void {
-  if (!envTexture) return;
-  root.traverse((obj) => {
-    const mesh = obj as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    for (const raw of materials) {
-      if (!(raw instanceof THREE.MeshStandardMaterial)) continue;
-      raw.envMap = envTexture;
-      raw.envMapIntensity = 0.62;
-      raw.needsUpdate = true;
-    }
-  });
+  bindMammothApartmentPropReadableEnv(root, envTexture);
 }
 
 export function normalizeClipLabel(name: string): string {

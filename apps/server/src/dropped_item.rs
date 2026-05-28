@@ -449,7 +449,8 @@ fn clamp_inside_unit_xz(unit: &ApartmentUnit, x: f32, z: f32) -> (f32, f32) {
 
 /// Entry / living-strip anchor for anchored apartment pickups — avoids centroid (often overlaps the mattress)
 /// and every candidate is checked against a yaw-aware bed AABB inflated by [`APARTMENT_BED_KEEPOUT_PAD_M`].
-fn apartment_clear_pickup_anchor_xz(unit: &ApartmentUnit, seed: u64) -> (f32, f32) {
+/// Interior living-strip anchor — avoids balcony ledges and bed keepouts (mission loot + floor NPCs).
+pub(crate) fn apartment_clear_pickup_anchor_xz(unit: &ApartmentUnit, seed: u64) -> (f32, f32) {
     let toward_back_x = if unit.bed_x >= unit.wardrobe_x {
         1.0
     } else {

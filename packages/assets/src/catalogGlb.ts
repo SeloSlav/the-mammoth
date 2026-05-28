@@ -23,6 +23,8 @@ export const MAMMOTH_CATALOG_GLB_PRIMARY_URI: Readonly<Record<string, string>> =
   "chemical-stock": `${MAMMOTH_STATIC_MODEL_BASE}/items/chemical-stock.glb`,
   "door-lock": `${MAMMOTH_STATIC_MODEL_BASE}/items/door-lock.glb`,
   "fish-filter-sponge": `${MAMMOTH_STATIC_MODEL_BASE}/items/fish-filter-sponge.glb`,
+  /** Until `items/fuse-wire-pack.glb` ships — world/inventory preview uses crowbar mesh. */
+  "fuse-wire-pack": `${MAMMOTH_STATIC_MODEL_BASE}/weapons/crowbar.glb`,
   // Consumables: search order tries `weapons/` before `consumables/` — pin folder for correct primary + previews.
   apple: `${MAMMOTH_STATIC_MODEL_BASE}/consumables/apple.glb`,
   "water-bottle": `${MAMMOTH_STATIC_MODEL_BASE}/consumables/water-bottle.glb`,

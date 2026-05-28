@@ -57,7 +57,7 @@ export const PITCH_LIMIT = 1.53;
 /** Alt free-look: head yaw relative to body (radians, clamped per side; ~±135°, not full 180°). */
 export const FREE_LOOK_YAW_MAX = 2.35;
 /** Alt release: exponential decay rate (1/s) easing `headLookYaw` back to body forward — lower = slower return. */
-export const FREE_LOOK_RECENTER_RATE_PER_S = 2.75;
+export const FREE_LOOK_RECENTER_RATE_PER_S = 3.5;
 /** Stop recenter when |headLookYaw| falls below this (radians). */
 export const FREE_LOOK_RECENTER_SNAP_EPS = 1e-4;
 /** Extra camera bob on top of eye-height bob from `stepFpLocomotion` (meters, local space). */
