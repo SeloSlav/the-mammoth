@@ -11,6 +11,7 @@ import {
   type CorridorPvsVisibleUnits,
 } from "@the-mammoth/world";
 import { residentUnitKeyFromParts } from "../fpApartment/fpApartmentGameplay.js";
+import { DROPPED_ITEM_RENDER_MAX_HORIZONTAL_M } from "./fpSessionConstants.js";
 
 export type FpSessionCorridorPvsSnapshot = {
   openDoorUnitKeysByLevel: Map<number, Set<string>>;
@@ -61,6 +62,7 @@ export function createFpSessionCorridorPvsContext(
           storeyLevel: playerLevel,
           cameraX: input.cameraX,
           cameraZ: input.cameraZ,
+          maxDistM: DROPPED_ITEM_RENDER_MAX_HORIZONTAL_M,
         },
       );
       const visible = resolveCorridorPvsVisibleUnits({

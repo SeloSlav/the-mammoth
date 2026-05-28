@@ -15,6 +15,7 @@ import type { FpResidentialUnitShellMesh } from "./fpSessionUnitInteriorShellMes
 import type { FpSessionUnitInteriorMeshEntry } from "./fpSessionUnitInteriorShellMeshes.js";
 import { fpObjectUnderFpElevatorShaftVisual } from "./fpSessionUnitInteriorShellMeshes.js";
 import { expandObjectFrustumBoundsOnce } from "./fpMeshFrustumBounds.js";
+import { apartmentUnitLevelFromUnitKey } from "../fpApartment/fpApartmentGameplay.js";
 import { fpResolveApartmentInteriorLightingZone } from "./fpApartmentInteriorLightingZone.js";
 import { fpResolveInsideElevatorHoistwayVoid } from "./fpElevatorHoistwayVoidView.js";
 import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
@@ -214,6 +215,35 @@ export function fpUnitInteriorMeshInActivePlateBand(input: {
   );
 }
 
+/** Residential / decor meshes on the viewer's active storey slab (plate band anchor). */
+export function fpUnitInteriorMeshOnViewerStoreySlab(input: {
+  plateLevelIndex: number | null;
+  viewerStorey: number;
+  activePlateBandLo: number;
+  activePlateBandHi: number;
+}): boolean {
+  if (input.plateLevelIndex == null) return false;
+  if (
+    input.plateLevelIndex < input.activePlateBandLo ||
+    input.plateLevelIndex > input.activePlateBandHi
+  ) {
+    return false;
+  }
+  return input.plateLevelIndex === input.viewerStorey;
+}
+
+export function fpApartmentDecorGroupOnViewerStoreySlab(input: {
+  apartmentUnitKey: string;
+  viewerStorey: number;
+  activePlateBandLo: number;
+  activePlateBandHi: number;
+}): boolean {
+  const level = apartmentUnitLevelFromUnitKey(input.apartmentUnitKey);
+  if (level === null) return false;
+  if (level < input.activePlateBandLo || level > input.activePlateBandHi) return false;
+  return level === input.viewerStorey;
+}
+
 /** Same-storey corridor geo while inside a unit hull (doorway / window sightlines into the hall). */
 export function fpKeepSameStoreyCorridorShellVisibleInsideUnit(input: {
   containingStoryLevelIndex: number | null;
@@ -272,17 +302,28 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   anchorStorey?: number;
 }): boolean {
   const { entry } = input;
+  const activePlateBandLo = input.activePlateBandLo ?? 1;
+  const activePlateBandHi = input.activePlateBandHi ?? 999;
+  const viewerStorey = input.anchorStorey ?? 1;
   if (entry.hoistwayShaftShell === true) {
     return false;
   }
   const inPlateBand = fpUnitInteriorMeshInActivePlateBand({
     plateLevelIndex: entry.plateLevelIndex ?? null,
-    activePlateBandLo: input.activePlateBandLo ?? 1,
-    activePlateBandHi: input.activePlateBandHi ?? 999,
+    activePlateBandLo,
+    activePlateBandHi,
   });
   if (!inPlateBand) {
     return false;
   }
+  const onViewerStoreySlab = fpUnitInteriorMeshOnViewerStoreySlab({
+    plateLevelIndex: entry.plateLevelIndex ?? null,
+    viewerStorey,
+    activePlateBandLo,
+    activePlateBandHi,
+  });
+  const inHoistwayColumnPeek =
+    input.insideElevatorHoistwayColumn === true && !input.insideResidentialUnit;
   if (entry.underStairColumnRoot === true) {
     /**
      * Stair column segments toggle `.visible` on their storey groups; merged shaft interiors are
@@ -305,10 +346,32 @@ export function fpResolveUnitInteriorMeshVisible(input: {
       if (entry.apartmentUnitKey === input.containingResidentialUnitKey) {
         return true;
       }
+      const containingLevel = input.containingStoryLevelIndex ?? viewerStorey;
+      if (
+        fpApartmentDecorGroupOnViewerStoreySlab({
+          apartmentUnitKey: entry.apartmentUnitKey,
+          viewerStorey: containingLevel,
+          activePlateBandLo,
+          activePlateBandHi,
+        })
+      ) {
+        return true;
+      }
       const peekKeys = input.corridorPvsVisibleUnitKeys;
       return peekKeys !== undefined && peekKeys.has(entry.apartmentUnitKey);
     }
     if (input.insideApartmentInteriorLightingZone) {
+      if (
+        !inHoistwayColumnPeek &&
+        fpApartmentDecorGroupOnViewerStoreySlab({
+          apartmentUnitKey: entry.apartmentUnitKey,
+          viewerStorey,
+          activePlateBandLo,
+          activePlateBandHi,
+        })
+      ) {
+        return true;
+      }
       const pvsKeys = input.corridorPvsVisibleUnitKeys;
       if (pvsKeys && pvsKeys.has(entry.apartmentUnitKey)) return true;
       return (
@@ -329,6 +392,14 @@ export function fpResolveUnitInteriorMeshVisible(input: {
       if (entry.residentialUnitId === input.containingResidentialUnitId) {
         return true;
       }
+      const containingLevel = input.containingStoryLevelIndex ?? viewerStorey;
+      if (
+        onViewerStoreySlab &&
+        entry.plateLevelIndex === containingLevel &&
+        (entry.isResidentialShellPlaster || entry.residentialExteriorGlass)
+      ) {
+        return true;
+      }
       const peekIds = input.corridorPvsVisibleUnitIds;
       if (
         peekIds &&
@@ -342,10 +413,17 @@ export function fpResolveUnitInteriorMeshVisible(input: {
       return false;
     }
     /**
-     * Hallway walks share the in-unit shell budget — only corridor anon geo stays live; neighbor
-     * plaster/glass would otherwise pop hundreds of meshes on every doorway crossing.
+     * Corridor / in-unit: submit every residential shell on the active storey slab (plate-tagged).
+     * Hoistway column keeps the tight peek budget so open shafts do not flash the whole floor.
      */
     if (input.insideApartmentInteriorLightingZone) {
+      if (
+        !inHoistwayColumnPeek &&
+        onViewerStoreySlab &&
+        (entry.isResidentialShellPlaster || entry.residentialExteriorGlass)
+      ) {
+        return input.unitInteriorVisible;
+      }
       const pvsIds = input.corridorPvsVisibleUnitIds;
       if (
         pvsIds &&
@@ -908,7 +986,11 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       corridorPvsChanged ||
       _visBandSmoothLo !== _lastUnitVisPlateBandLo ||
       _visBandSmoothHi !== _lastUnitVisPlateBandHi;
-    if (unitInteriorVisibilityChanged || insideResidentialUnit) {
+    if (
+      unitInteriorVisibilityChanged ||
+      insideResidentialUnit ||
+      insideApartmentInteriorLightingZone
+    ) {
       _lastUnitVisPlateBandLo = _visBandSmoothLo;
       _lastUnitVisPlateBandHi = _visBandSmoothHi;
       _lastUnitInteriorVisible = unitInteriorVisible;

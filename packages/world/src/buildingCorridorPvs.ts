@@ -9,9 +9,8 @@
 /** Replicated `swing_open_01` at/above this admits corridor PVS into a unit interior. */
 export const APARTMENT_DOOR_PVS_INTERIOR_PEEK_OPEN_01 = 0.15;
 /**
- * Horizontal radius (m) around the camera: every open residential doorway on the current storey
- * inside this circle may submit unit plaster + decor. Omnidirectional so quick 180° turns do not
- * flash bare shells across the hall.
+ * Horizontal radius (m) around the camera for **open doorway** PVS (door hinge must admit peek).
+ * Same-storey slab rendering uses a wider client constant (`DROPPED_ITEM_RENDER_MAX_HORIZONTAL_M`).
  */
 export const APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M = 9.5;
 

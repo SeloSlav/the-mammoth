@@ -102,6 +102,14 @@ export function residentUnitKeyFromParts(floorDocId: string, level: number, temp
   return `${floorDocId}|${level}|${uid}`;
 }
 
+/** Parsed `level` segment from a replicated `ApartmentUnit.unitKey` (`floorDoc|level|unitId`). */
+export function apartmentUnitLevelFromUnitKey(unitKey: string): number | null {
+  const parts = unitKey.split("|");
+  if (parts.length < 3) return null;
+  const level = Number(parts[1]);
+  return Number.isFinite(level) && level >= 1 ? Math.trunc(level) : null;
+}
+
 export function residentUnitKeyFromDoor(d: ApartmentDoor): string {
   return residentUnitKeyFromParts(d.floorDocId, d.level, d.templateId);
 }
