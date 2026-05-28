@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { estimateStoreyFromFeetY, type BuildingStairShaftSpec } from "@the-mammoth/world";
-import { apartmentStoryLevelIsExtractionBand } from "@the-mammoth/schemas";
 import {
   fpBuildingExteriorViewShouldRevealFullStack,
   fpCameraInsideBuildingFootprintXZ,
@@ -8,6 +7,7 @@ import {
   fpCameraOrFeetNearBuildingFootprintXZ,
   fpStairShaftLocalVisibilityBand,
   fpStairColumnPlateVisibilityBand,
+  fpHoistwayColumnPlateBand,
 } from "../fpFloor/fpBuildingFloorPlateVisibilityBand.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 import type { FpElevatorFloorVisibilityBand } from "../fpElevator/fpElevatorWorldTypes.js";
@@ -16,6 +16,7 @@ import type { FpSessionUnitInteriorMeshEntry } from "./fpSessionUnitInteriorShel
 import { fpObjectUnderFpElevatorShaftVisual } from "./fpSessionUnitInteriorShellMeshes.js";
 import { expandObjectFrustumBoundsOnce } from "./fpMeshFrustumBounds.js";
 import { fpResolveApartmentInteriorLightingZone } from "./fpApartmentInteriorLightingZone.js";
+import { fpResolveInsideElevatorHoistwayVoid } from "./fpElevatorHoistwayVoidView.js";
 import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
 
 /**
@@ -144,7 +145,10 @@ export type FpSessionFloorPlateVisibilityOpts = {
   apartmentDecorInteriorMeshes: readonly THREE.Mesh[];
   fpElevators: Pick<
     MountFpElevatorWorldResult,
-    "getCabOccludedViewStorey" | "getFloorVisibilityBand" | "isInsideAnyCabHud"
+    | "getCabOccludedViewStorey"
+    | "getFloorVisibilityBand"
+    | "isInsideAnyCabHud"
+    | "isInsideAnyElevatorCabChamber"
   >;
   stairShaftInteriorLightBounds: readonly FpStairShaftVisibilityBounds[];
   stairShaftSpecs: readonly BuildingStairShaftSpec[];
@@ -194,10 +198,6 @@ export function fpApplyResidentialInteriorPlateBandOverride(input: {
 }
 
 /**
- * Abandoned extraction storeys share the corridor lighting rig inside units — keep same-storey
- * corridor shells/signage visible through open thresholds; residential floors still cull them.
- */
-/**
  * Floor plates use {@link fpBuildingFloorPlateVisibilityBand}; unit interior meshes must share that
  * band or every `mammothUnitInterior` child stays `.visible` while plates are off (see band comment
  * in `fpBuildingFloorPlateVisibilityBand.ts`).
@@ -214,7 +214,8 @@ export function fpUnitInteriorMeshInActivePlateBand(input: {
   );
 }
 
-export function fpKeepCorridorShellVisibleInsideExtractionBandUnit(input: {
+/** Same-storey corridor geo while inside a unit hull (doorway / window sightlines into the hall). */
+export function fpKeepSameStoreyCorridorShellVisibleInsideUnit(input: {
   containingStoryLevelIndex: number | null;
   entry: {
     corridorHallwayShell?: boolean;
@@ -223,11 +224,14 @@ export function fpKeepCorridorShellVisibleInsideExtractionBandUnit(input: {
 }): boolean {
   const { containingStoryLevelIndex, entry } = input;
   if (containingStoryLevelIndex === null) return false;
-  if (!apartmentStoryLevelIsExtractionBand(containingStoryLevelIndex)) return false;
   if (entry.corridorHallwayShell !== true) return false;
   if (entry.plateLevelIndex == null) return false;
   return entry.plateLevelIndex === containingStoryLevelIndex;
 }
+
+/** @deprecated Use {@link fpKeepSameStoreyCorridorShellVisibleInsideUnit}. */
+export const fpKeepCorridorShellVisibleInsideExtractionBandUnit =
+  fpKeepSameStoreyCorridorShellVisibleInsideUnit;
 
 export function fpResolveUnitInteriorMeshVisible(input: {
   entry: Pick<
@@ -263,6 +267,9 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   /** Smoothed plate band — same as `buildingRoot` child `mammothPlateLevelIndex` toggles. */
   activePlateBandLo?: number;
   activePlateBandHi?: number;
+  /** Feet/eye inside hoistway column — neighbor façades must not leak through the open shaft. */
+  insideElevatorHoistwayColumn?: boolean;
+  anchorStorey?: number;
 }): boolean {
   const { entry } = input;
   if (entry.hoistwayShaftShell === true) {
@@ -295,7 +302,11 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   if (entry.apartmentUnitKey !== null) {
     if (!input.apartmentDecorInteriorVisible) return false;
     if (input.insideResidentialUnit) {
-      return entry.apartmentUnitKey === input.containingResidentialUnitKey;
+      if (entry.apartmentUnitKey === input.containingResidentialUnitKey) {
+        return true;
+      }
+      const peekKeys = input.corridorPvsVisibleUnitKeys;
+      return peekKeys !== undefined && peekKeys.has(entry.apartmentUnitKey);
     }
     if (input.insideApartmentInteriorLightingZone) {
       const pvsKeys = input.corridorPvsVisibleUnitKeys;
@@ -308,8 +319,27 @@ export function fpResolveUnitInteriorMeshVisible(input: {
     return false;
   }
   if (entry.residentialUnitId !== null) {
+    if (entry.residentialExteriorGlass && input.insideElevatorHoistwayColumn === true) {
+      return (
+        entry.plateLevelIndex !== null &&
+        entry.plateLevelIndex === (input.anchorStorey ?? 1)
+      );
+    }
     if (input.insideResidentialUnit) {
-      return entry.residentialUnitId === input.containingResidentialUnitId;
+      if (entry.residentialUnitId === input.containingResidentialUnitId) {
+        return true;
+      }
+      const peekIds = input.corridorPvsVisibleUnitIds;
+      if (
+        peekIds &&
+        entry.residentialUnitId !== null &&
+        peekIds.has(entry.residentialUnitId)
+      ) {
+        return (
+          entry.isResidentialShellPlaster === true || entry.residentialExteriorGlass === true
+        );
+      }
+      return false;
     }
     /**
      * Hallway walks share the in-unit shell budget — only corridor anon geo stays live; neighbor
@@ -321,28 +351,22 @@ export function fpResolveUnitInteriorMeshVisible(input: {
         pvsIds &&
         entry.residentialUnitId !== null &&
         pvsIds.has(entry.residentialUnitId) &&
-        entry.isResidentialShellPlaster
+        (entry.isResidentialShellPlaster || entry.residentialExteriorGlass)
       ) {
         return true;
       }
       return (
         input.retainedResidentialUnitId != null &&
         entry.residentialUnitId === input.retainedResidentialUnitId &&
-        entry.isResidentialShellPlaster
+        (entry.isResidentialShellPlaster || entry.residentialExteriorGlass)
       );
     }
     /**
-     * Exterior glass: in the hallway only units in door PVS (open peek), not every pane on the slab.
-     * Outside the lighting envelope, keep glass for façade / perimeter views.
+     * Exterior glass outside the corridor lighting envelope — façade / perimeter views.
      */
     if (entry.residentialExteriorGlass) {
       if (input.insideApartmentInteriorLightingZone && !input.insideResidentialUnit) {
-        const pvsIds = input.corridorPvsVisibleUnitIds;
-        return (
-          entry.residentialUnitId !== null &&
-          pvsIds !== undefined &&
-          pvsIds.has(entry.residentialUnitId)
-        );
+        return false;
       }
       if (!input.insideApartmentInteriorLightingZone) {
         return true;
@@ -358,7 +382,7 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   }
   if (input.insideResidentialUnit) {
     if (
-      fpKeepCorridorShellVisibleInsideExtractionBandUnit({
+      fpKeepSameStoreyCorridorShellVisibleInsideUnit({
         containingStoryLevelIndex: input.containingStoryLevelIndex ?? null,
         entry,
       })
@@ -367,11 +391,8 @@ export function fpResolveUnitInteriorMeshVisible(input: {
     }
     /**
      * Once the player is inside a specific apartment, anonymous `mammothUnitInterior` meshes must not
-     * stay visible just because they are "generic residential interior". That broad allowance leaks
-     * neighboring unit/corridor shells into the active apartment render set. In-unit views only keep
-     * meshes with explicit ownership tags (`apartmentUnitKey` / `residentialUnitId`).
-     *
-     * Extraction-band units are the exception — corridor shells stay live on the same storey (see above).
+     * stay visible just because they are "generic residential interior". In-unit views keep meshes with
+     * explicit ownership tags (`apartmentUnitKey` / `residentialUnitId`) plus same-storey corridor shells.
      */
     return false;
   }
@@ -507,6 +528,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastInsideResidentialUnit = false;
   let _lastInsideStairwellShaft = false;
   let _lastHoistwayPlateBoost = false;
+  let _lastInsideElevatorHoistwayColumn = false;
   let _lastInsideApartmentInteriorLightingZone = false;
   let _lastStoryLevelIndexForLighting = 1;
   let _lastExteriorShellPlasterVisible = false;
@@ -686,6 +708,14 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       floorVisCamWorld.y,
       floorVisCamWorld.z,
     );
+    const insideElevatorCabChamber = fpElevators.isInsideAnyElevatorCabChamber(
+      feetPos.x,
+      feetPos.y,
+      feetPos.z,
+      floorVisCamWorld.x,
+      floorVisCamWorld.y,
+      floorVisCamWorld.z,
+    );
     const insideApartmentInteriorLightingZone = fpResolveApartmentInteriorLightingZone({
       insideResidentialUnit,
       trueExteriorView,
@@ -714,6 +744,19 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       trueExteriorView,
       cabOccludesWorld,
     });
+    const insideElevatorHoistwayColumn = fpResolveInsideElevatorHoistwayVoid({
+      hoistwayPlateBoost,
+      insideElevatorCabChamber,
+      trueExteriorView,
+      cabOccludesWorld,
+    });
+    _lastInsideElevatorHoistwayColumn = insideElevatorHoistwayColumn;
+    if (insideElevatorHoistwayColumn) {
+      band = fpHoistwayColumnPlateBand({
+        playerStorey: storeyPlateAnchor,
+        maxLevel: maxBuildingLevel,
+      });
+    }
 
     const targetBandLo = band.lo;
     const targetBandHi = band.hi;
@@ -736,7 +779,12 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
      * band. The unit walls occlude the rest of the tower, so every transitional frame spent narrowing
      * still submits floors that cannot contribute pixels.
      */
-    if (_visBandSmoothLo < 0 || teleportSnap || insideResidentialUnit) {
+    if (
+      _visBandSmoothLo < 0 ||
+      teleportSnap ||
+      insideResidentialUnit ||
+      insideElevatorHoistwayColumn
+    ) {
       _visBandSmoothLo = targetBandLo;
       _visBandSmoothHi = targetBandHi;
     } else {
@@ -896,6 +944,12 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
             containingStoryLevelIndex: containingResidentialUnit?.level ?? null,
             activePlateBandLo: _visBandSmoothLo,
             activePlateBandHi: _visBandSmoothHi,
+            insideElevatorHoistwayColumn:
+              _lastHoistwayPlateBoost &&
+              !insideElevatorCabChamber &&
+              !trueExteriorView &&
+              !cabOccludesWorld,
+            anchorStorey: storeyPlateAnchor,
           });
         entry.mesh.frustumCulled = true;
         if (
@@ -1024,7 +1078,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     isInsideResidentialUnit: () => _lastInsideResidentialUnit,
     isInsideApartmentInteriorLightingZone: () => _lastInsideApartmentInteriorLightingZone,
     isInsideStairwellShaft: () => _lastInsideStairwellShaft,
-    isInsideElevatorHoistwayColumn: () => _lastHoistwayPlateBoost,
+    isInsideElevatorHoistwayColumn: () => _lastInsideElevatorHoistwayColumn,
     getContainingResidentialUnitKey: () => _lastContainingResidentialUnitKey,
     getLastVisitedResidentialUnitKey: () => _lastVisitedResidentialUnitKey,
     isApartmentDecorInteriorVisible: () => _lastApartmentDecorInteriorVisible,

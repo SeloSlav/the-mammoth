@@ -150,13 +150,21 @@ const STAIR_SHAFT_LOCAL_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER = 4;
 const STAIR_SHAFT_LOCAL_PLATE_BAND_MAX_STOREYS_BELOW_PLAYER = 2;
 
 /**
- * Inside the hoistway column: same tight local budget as {@link fpStairShaftLocalVisibilityBand}.
- * Interior shaft slabs are not rendered; red landing doors + hail are band-scoped separately.
+ * Inside the hoistway column: **current storey only** for floor plates / neighbor glass.
+ * Pitch lookahead is suppressed separately in {@link fpElevatorFloorVisAndCabContext}; landing
+ * doors + hail still use {@link FP_FLOOR_VIS_BAND_PAD_STOREYS} on the smoothed band.
  */
-export const HOISTWAY_PLATE_MAX_STOREYS_ABOVE_PLAYER =
-  STAIR_SHAFT_LOCAL_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER;
-export const HOISTWAY_PLATE_MAX_STOREYS_BELOW_PLAYER =
-  STAIR_SHAFT_LOCAL_PLATE_BAND_MAX_STOREYS_BELOW_PLAYER;
+export const HOISTWAY_PLATE_MAX_STOREYS_ABOVE_PLAYER = 0;
+export const HOISTWAY_PLATE_MAX_STOREYS_BELOW_PLAYER = 0;
+
+/** Single-storey band while feet/eye are in the hoistway column (not cab, not true exterior). */
+export function fpHoistwayColumnPlateBand(input: {
+  playerStorey: number;
+  maxLevel: number;
+}): { lo: number; hi: number } {
+  const s = Math.max(1, Math.min(input.maxLevel, input.playerStorey));
+  return { lo: s, hi: s };
+}
 
 export function fpStairColumnPlateVisibilityBand(input: {
   globalLo: number;

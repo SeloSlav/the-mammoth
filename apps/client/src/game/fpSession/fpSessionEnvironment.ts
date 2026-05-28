@@ -215,6 +215,8 @@ export type FpSessionEnvironmentHandle = {
     stairwellInteriorDark01?: number;
     /** Hallway circulation bounce multiplier — see profile `circulation.bounceScale`. */
     apartmentInteriorBounceScale?: number;
+    /** Open hoistway / shaft void — hide procedural sky so the up-view reads as black interior. */
+    suppressExteriorSky?: boolean;
   }) => FpSessionEnvironmentFrameTimings;
 };
 
@@ -655,6 +657,7 @@ export function attachFpSessionEnvironment(
       interiorRenderLayersEnabled = false,
       stairwellInteriorDark01 = 0,
       apartmentInteriorBounceScale = 1,
+      suppressExteriorSky = false,
     }) => {
       const t0 = performance.now();
       const renderIsoSky = isFpDebugRenderIsolationEnabled("environmentSky");
@@ -666,11 +669,12 @@ export function attachFpSessionEnvironment(
         : (apartmentInteriorAtmosphere01 ?? apartmentInteriorDark01);
       applyApartmentInteriorClip(interiorBounds);
 
-      sky.visible = renderIsoSky;
+      const showExteriorSky = renderIsoSky && !suppressExteriorSky;
+      sky.visible = showExteriorSky;
       if (groundPlane) {
-        groundPlane.visible = renderIsoSky;
+        groundPlane.visible = showExteriorSky;
       }
-      if (renderIsoSky) {
+      if (showExteriorSky) {
         sky.updateTime(nowSec);
         sky.updateSun(sunDir);
         sky.updateCamera(camera);

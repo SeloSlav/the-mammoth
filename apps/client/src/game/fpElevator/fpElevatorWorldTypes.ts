@@ -184,6 +184,15 @@ export type MountFpElevatorWorldResult = {
     eyeWorldY?: number,
     eyeWorldZ?: number,
   ): boolean;
+  /** Cab interior body only — excludes the roof deck (hoistway void / plate band). */
+  isInsideAnyElevatorCabChamber(
+    px: number,
+    py: number,
+    pz: number,
+    eyeWorldX?: number,
+    eyeWorldY?: number,
+    eyeWorldZ?: number,
+  ): boolean;
   /**
    * When {@link isInsideCabOccludedView} is true, returns the cab's current display storey so the
    * session visibility pass can collapse to that floor instead of guessing from the widened band.

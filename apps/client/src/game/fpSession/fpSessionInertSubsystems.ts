@@ -75,6 +75,7 @@ export function createInertFpElevatorWorld(): MountFpElevatorWorldResult {
     syncShaftVisualCulling: noop,
     isInsideCabOccludedView: () => false,
     isInsideAnyCabHud: () => false,
+    isInsideAnyElevatorCabChamber: () => false,
     getCabOccludedViewStorey: () => null,
     sampleRideDebug: () => null,
     getHudMovingCabVyMps: () => 0,

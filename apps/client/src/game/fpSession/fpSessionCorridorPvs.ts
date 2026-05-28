@@ -3,9 +3,11 @@
  */
 import {
   buildOpenDoorUnitKeysByLevel,
+  buildStoreyRadiusVisibleUnitKeys,
   estimateStoreyFromFeetY,
   resolveCorridorPvsVisibleUnits,
   type BuildingCorridorPvsDoorEntry,
+  type BuildingStoreyUnitBoundsEntry,
   type CorridorPvsVisibleUnits,
 } from "@the-mammoth/world";
 import { residentUnitKeyFromParts } from "../fpApartment/fpApartmentGameplay.js";
@@ -21,6 +23,8 @@ export type FpSessionCorridorPvsContext = {
   maxLevel: number;
   unitIdForKey: (unitKey: string) => string | null;
   collectDoorEntries: () => readonly BuildingCorridorPvsDoorEntry[];
+  /** Replicated apartment hulls — drives same-storey interior peek radius. */
+  collectStoreyUnitBounds: () => readonly BuildingStoreyUnitBoundsEntry[];
 };
 
 export function createFpSessionCorridorPvsContext(
@@ -51,6 +55,14 @@ export function createFpSessionCorridorPvsContext(
         viewDirX: input.viewDirX,
         viewDirZ: input.viewDirZ,
       });
+      const storeyRadiusVisibleUnitKeys = buildStoreyRadiusVisibleUnitKeys(
+        ctx.collectStoreyUnitBounds(),
+        {
+          storeyLevel: playerLevel,
+          cameraX: input.cameraX,
+          cameraZ: input.cameraZ,
+        },
+      );
       const visible = resolveCorridorPvsVisibleUnits({
         playerLevel,
         insideResidentialUnit: input.insideResidentialUnit,
@@ -58,6 +70,7 @@ export function createFpSessionCorridorPvsContext(
         containingUnitKey: input.containingUnitKey,
         retainedUnitKey: input.retainedUnitKey,
         openDoorUnitKeysByLevel,
+        storeyRadiusVisibleUnitKeys,
         unitIdForKey: ctx.unitIdForKey,
       });
       return { openDoorUnitKeysByLevel, visible };

@@ -1244,6 +1244,25 @@ export async function mountFpSession(
     maxLevel: maxBuildingLevel,
     unitIdForKey: apartmentUnitIdForKey,
     collectDoorEntries: () => fpApartmentDoors.collectCorridorPvsDoorEntries(),
+    collectStoreyUnitBounds: () => {
+      const out: {
+        unitKey: string;
+        unitId: string;
+        level: number;
+        centerX: number;
+        centerZ: number;
+      }[] = [];
+      megablockSpatial?.units.forEachUnit((u) => {
+        out.push({
+          unitKey: u.unitKey,
+          unitId: u.unitId,
+          level: u.level,
+          centerX: (u.boundMinX + u.boundMaxX) * 0.5,
+          centerZ: (u.boundMinZ + u.boundMaxZ) * 0.5,
+        });
+      });
+      return out;
+    },
   });
 
   const {

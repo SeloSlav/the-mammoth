@@ -17,6 +17,22 @@ describe("createFpSessionCorridorPvsContext", () => {
           isResidentialUnitDoor: true,
         },
       ],
+      collectStoreyUnitBounds: () => [
+        {
+          unitKey: "floor|2|unit_e_003",
+          unitId: "unit_e_003",
+          level: 2,
+          centerX: 0,
+          centerZ: 0,
+        },
+        {
+          unitKey: "floor|2|unit_e_004",
+          unitId: "unit_e_004",
+          level: 2,
+          centerX: 1,
+          centerZ: 0,
+        },
+      ],
     });
     const snap = ctx.resolveSnapshot({
       feetY: 6.5,
@@ -32,5 +48,6 @@ describe("createFpSessionCorridorPvsContext", () => {
     expect([...snap.visible.unitKeys].sort()).toEqual(
       ["floor|2|unit_e_003", "floor|2|unit_e_004"].sort(),
     );
+    expect([...snap.visible.unitIds].sort()).toEqual(["unit_e_003", "unit_e_004"].sort());
   });
 });

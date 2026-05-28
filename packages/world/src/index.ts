@@ -179,12 +179,15 @@ export {
 } from "./aabbSpatialIndex.js";
 export {
   APARTMENT_DOOR_PVS_INTERIOR_PEEK_OPEN_01,
+  APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M,
   apartmentDecorUnitVisibleViaPvs,
   apartmentDoorAdmitsCorridorInteriorPeek,
   buildOpenDoorUnitKeysByLevel,
+  buildStoreyRadiusVisibleUnitKeys,
   resolveCorridorPvsVisibleUnits,
   unitInteriorVisibleViaCorridorPvs,
   type BuildingCorridorPvsDoorEntry,
+  type BuildingStoreyUnitBoundsEntry,
   type CorridorPvsVisibleUnits,
   type ResolveCorridorPvsVisibleUnitsInput,
 } from "./buildingCorridorPvs.js";

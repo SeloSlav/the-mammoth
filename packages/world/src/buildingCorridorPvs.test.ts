@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   apartmentDoorAdmitsCorridorInteriorPeek,
+  APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M,
   buildOpenDoorUnitKeysByLevel,
+  buildStoreyRadiusVisibleUnitKeys,
   resolveCorridorPvsVisibleUnits,
   unitInteriorVisibleViaCorridorPvs,
 } from "./buildingCorridorPvs.js";
@@ -113,17 +115,54 @@ describe("buildingCorridorPvs", () => {
     expect([...resolved.unitIds].sort()).toEqual(["unit_e_003", "unit_e_004"].sort());
   });
 
-  it("scopes to containing unit when indoors", () => {
+  it("includes same-storey radius units when indoors", () => {
     const resolved = resolveCorridorPvsVisibleUnits({
       playerLevel: 2,
       insideResidentialUnit: true,
       insideApartmentInteriorLightingZone: true,
       containingUnitKey: "floor|2|unit_e_003",
       retainedUnitKey: "floor|2|unit_e_004",
-      openDoorUnitKeysByLevel: new Map([[2, new Set(["floor|2|unit_e_004"])]]),
+      openDoorUnitKeysByLevel: new Map([[2, new Set(["floor|2|unit_e_005"])]]),
+      storeyRadiusVisibleUnitKeys: new Set([
+        "floor|2|unit_e_003",
+        "floor|2|unit_e_004",
+      ]),
       unitIdForKey: (key) => key.split("|")[2] ?? null,
     });
-    expect([...resolved.unitKeys]).toEqual(["floor|2|unit_e_003"]);
+    expect([...resolved.unitKeys].sort()).toEqual(
+      ["floor|2|unit_e_003", "floor|2|unit_e_004"].sort(),
+    );
+  });
+
+  it("builds storey-radius unit keys from hull centers", () => {
+    const keys = buildStoreyRadiusVisibleUnitKeys(
+      [
+        {
+          unitKey: "floor|2|unit_near",
+          unitId: "unit_near",
+          level: 2,
+          centerX: 2,
+          centerZ: 0,
+        },
+        {
+          unitKey: "floor|2|unit_far",
+          unitId: "unit_far",
+          level: 2,
+          centerX: 40,
+          centerZ: 0,
+        },
+        {
+          unitKey: "floor|3|unit_other_storey",
+          unitId: "unit_other_storey",
+          level: 3,
+          centerX: 1,
+          centerZ: 0,
+        },
+      ],
+      { storeyLevel: 2, cameraX: 0, cameraZ: 0 },
+    );
+    expect([...keys]).toEqual(["floor|2|unit_near"]);
+    expect(APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M).toBeGreaterThan(2);
   });
 
   it("gates plaster shells via corridor PVS unit ids", () => {

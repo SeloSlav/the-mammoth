@@ -1,9 +1,9 @@
 /**
- * Door-aware potentially-visible-set for corridor / hallway views.
+ * Potentially-visible-set for corridor / hallway and in-unit views on one storey.
  *
- * Units stay culled until their entry door opens enough to admit an interior peek — avoids
- * submitting neighbor furnished GLBs and plaster through closed doors while still allowing
- * doorway sightlines when doors are open.
+ * Every residential unit on the player's storey within {@link APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M}
+ * of the camera is eligible (same-time slab rendering). Open entry doors add units whose doors are
+ * farther than that radius but still admit a peek.
  */
 
 /** Replicated `swing_open_01` at/above this admits corridor PVS into a unit interior. */
@@ -84,6 +84,39 @@ export function buildOpenDoorUnitKeysByLevel(
   return out;
 }
 
+export type BuildingStoreyUnitBoundsEntry = {
+  unitKey: string;
+  unitId: string;
+  level: number;
+  /** Hull center XZ — used for camera-distance culling on the active storey. */
+  centerX: number;
+  centerZ: number;
+};
+
+export function buildStoreyRadiusVisibleUnitKeys(
+  units: readonly BuildingStoreyUnitBoundsEntry[],
+  input: {
+    storeyLevel: number;
+    cameraX: number;
+    cameraZ: number;
+    maxDistM?: number;
+  },
+): Set<string> {
+  const maxDistSq =
+    (input.maxDistM ?? APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M) ** 2;
+  const out = new Set<string>();
+  for (let i = 0; i < units.length; i++) {
+    const u = units[i]!;
+    if (u.level !== input.storeyLevel) continue;
+    const dx = u.centerX - input.cameraX;
+    const dz = u.centerZ - input.cameraZ;
+    if (dx * dx + dz * dz <= maxDistSq) {
+      out.add(u.unitKey);
+    }
+  }
+  return out;
+}
+
 export type ResolveCorridorPvsVisibleUnitsInput = {
   playerLevel: number;
   insideResidentialUnit: boolean;
@@ -91,6 +124,8 @@ export type ResolveCorridorPvsVisibleUnitsInput = {
   containingUnitKey: string | null;
   retainedUnitKey: string | null;
   openDoorUnitKeysByLevel: ReadonlyMap<number, ReadonlySet<string>>;
+  /** All units on {@link playerLevel} within the interior peek radius (omnidirectional). */
+  storeyRadiusVisibleUnitKeys?: ReadonlySet<string>;
   unitIdForKey: (unitKey: string) => string | null;
 };
 
@@ -112,8 +147,16 @@ export function resolveCorridorPvsVisibleUnits(
     if (id) unitIds.add(id);
   };
 
+  const addStoreyRadiusKeys = (): void => {
+    const radiusKeys = input.storeyRadiusVisibleUnitKeys;
+    if (!radiusKeys) return;
+    for (const key of radiusKeys) addKey(key);
+  };
+
   if (input.insideResidentialUnit) {
     addKey(input.containingUnitKey);
+    addKey(input.retainedUnitKey);
+    addStoreyRadiusKeys();
     return { unitKeys, unitIds };
   }
 
@@ -123,6 +166,7 @@ export function resolveCorridorPvsVisibleUnits(
 
   addKey(input.containingUnitKey);
   addKey(input.retainedUnitKey);
+  addStoreyRadiusKeys();
 
   const openOnLevel = input.openDoorUnitKeysByLevel.get(input.playerLevel);
   if (openOnLevel) {

@@ -3,11 +3,25 @@ import {
   fpCameraInsideBuildingFootprintXZ,
   fpBuildingExteriorViewShouldRevealFullStack,
   fpBuildingFloorPlateVisibilityBand,
+  fpHoistwayColumnPlateBand,
   fpCameraOrFeetInsideBuildingFootprintXZ,
   fpCameraOrFeetNearBuildingFootprintXZ,
   fpStairShaftLocalVisibilityBand,
   fpStairColumnPlateVisibilityBand,
 } from "./fpBuildingFloorPlateVisibilityBand.js";
+
+describe("fpHoistwayColumnPlateBand", () => {
+  it("pins to the player storey", () => {
+    expect(fpHoistwayColumnPlateBand({ playerStorey: 1, maxLevel: 80 })).toEqual({
+      lo: 1,
+      hi: 1,
+    });
+    expect(fpHoistwayColumnPlateBand({ playerStorey: 99, maxLevel: 20 })).toEqual({
+      lo: 20,
+      hi: 20,
+    });
+  });
+});
 
 describe("fpBuildingFloorPlateVisibilityBand", () => {
   it("uses full stack when revealFullStack is true", () => {
@@ -94,7 +108,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
     ).toEqual({ lo: 1, hi: 10 });
   });
 
-  it("hoistway plate boost uses the stair-local budget (no full-stack pitch override)", () => {
+  it("hoistway plate boost ignores pitch lookahead (caps are zero above/below player)", () => {
     expect(
       fpBuildingFloorPlateVisibilityBand({
         maxLevel: 80,
@@ -104,7 +118,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         upperTargetStorey: 80,
         lowerTargetStorey: 1,
       }),
-    ).toEqual({ lo: 8, hi: 14 });
+    ).toEqual({ lo: 10, hi: 10 });
   });
 
   it("caps pitch lookahead above the player so stairwell upsights do not submit distant slabs", () => {
@@ -151,7 +165,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
     ).toEqual({ lo: 10, hi: 15 });
   });
 
-  it("hoistway boost uses stair-local caps even when pitching down the shaft", () => {
+  it("hoistway boost stays on the player storey when pitching down the shaft", () => {
     expect(
       fpBuildingFloorPlateVisibilityBand({
         maxLevel: 80,
@@ -160,7 +174,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         elevatorHoistwayPlateBoost: true,
         lowerTargetStorey: 1,
       }),
-    ).toEqual({ lo: 18, hi: 20 });
+    ).toEqual({ lo: 20, hi: 20 });
   });
 
   it("normalizes maxLevel when below 1", () => {

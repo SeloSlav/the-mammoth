@@ -3,6 +3,7 @@ import type { ElevatorCar } from "../../../module_bindings/types";
 import {
   fpBuildingExteriorViewShouldRevealFullStack,
   fpBuildingFloorPlateVisibilityBand,
+  fpHoistwayColumnPlateBand,
 } from "../../fpFloor/fpBuildingFloorPlateVisibilityBand.js";
 import { ELEVATOR_PHASE_MOVING } from "../fpElevatorConstants.js";
 import {
@@ -245,15 +246,21 @@ export function createFpElevatorFloorVisAndCabContext(
         break;
       }
     }
+    if (elevatorHoistwayPlateBoost) {
+      return {
+        ...fpHoistwayColumnPlateBand({ playerStorey, maxLevel }),
+        hoistwayPlateBoost: true,
+      };
+    }
     const { lo, hi } = fpBuildingFloorPlateVisibilityBand({
       maxLevel,
       playerStorey,
       revealFullStack: false,
-      elevatorHoistwayPlateBoost,
+      elevatorHoistwayPlateBoost: false,
       upperTargetStorey: upperLookAheadStorey,
       lowerTargetStorey: lowerLookAheadStorey,
     });
-    return { lo, hi, hoistwayPlateBoost: elevatorHoistwayPlateBoost };
+    return { lo, hi, hoistwayPlateBoost: false };
   };
 
   /**
@@ -317,6 +324,59 @@ export function createFpElevatorFloorVisAndCabContext(
         isInsideCarHud(eyeWorldX, eyeWorldY, eyeWorldZ, key)
       ) {
         return true;
+      }
+    }
+    return false;
+  };
+
+  /**
+   * True inside the car **body** (not the roof deck). Roof riders stay in the open hoistway and need
+   * the void band / sky suppress — {@link isInsideAnyCabHud} incorrectly includes the roof slab.
+   */
+  const isInsideAnyElevatorCabChamber = (
+    px: number,
+    py: number,
+    pz: number,
+    eyeWorldX?: number,
+    eyeWorldY?: number,
+    eyeWorldZ?: number,
+  ): boolean => {
+    for (const [key, vis] of visuals) {
+      const row = latest.get(key);
+      if (!row) continue;
+      const cabY = getCabY(key);
+      if (!Number.isFinite(cabY)) continue;
+      const lxFeet = px - (ox + row.plateX);
+      const lzFeet = pz - (oz + row.plateZ);
+      if (
+        fpElevBlocksHoistwayFullStackRevealPlateLocal(
+          lxFeet,
+          lzFeet,
+          py,
+          cabY,
+          vis.inner,
+        )
+      ) {
+        return true;
+      }
+      if (
+        eyeWorldX !== undefined &&
+        eyeWorldY !== undefined &&
+        eyeWorldZ !== undefined
+      ) {
+        const lxEye = eyeWorldX - (ox + row.plateX);
+        const lzEye = eyeWorldZ - (oz + row.plateZ);
+        if (
+          fpElevBlocksHoistwayFullStackRevealPlateLocal(
+            lxEye,
+            lzEye,
+            eyeWorldY,
+            cabY,
+            vis.inner,
+          )
+        ) {
+          return true;
+        }
       }
     }
     return false;
@@ -528,6 +588,7 @@ export function createFpElevatorFloorVisAndCabContext(
     getFloorVisibilityBand,
     isInsideCabOccludedView,
     isInsideAnyCabHud,
+    isInsideAnyElevatorCabChamber,
     getCabOccludedViewStorey,
     syncShaftVisualCulling,
     sampleRideDebug,

@@ -60,6 +60,7 @@ function pickNearestUnit(
  */
 export type ApartmentUnitSpatialIndex = {
   rebuild: (units: readonly ApartmentUnit[]) => void;
+  forEachUnit: (fn: (unit: ApartmentUnit) => void) => void;
   unitAtFeet: (x: number, y: number, z: number) => ApartmentUnit | null;
   unitAtFeetSlack: (
     x: number,
@@ -137,6 +138,9 @@ export function createApartmentUnitSpatialIndex(): ApartmentUnitSpatialIndex {
 
   return {
     rebuild,
+    forEachUnit(fn) {
+      for (const u of units) fn(u);
+    },
     unitAtFeet(x, y, z) {
       const hits: ApartmentUnit[] = [];
       for (const u of collectAt(x, z)) {

@@ -1274,12 +1274,16 @@ export function createFpSessionMainRafFrame(
       apartmentInteriorDark01: mainRaf.apartmentInteriorDarkSmoothed,
       apartmentInteriorAtmosphere01: deps.isInsideResidentialUnit()
         ? mainRaf.apartmentInteriorDarkSmoothed
-        : 0,
+        : deps.isInsideElevatorHoistwayColumn()
+          ? 1
+          : 0,
       interiorRenderLayersEnabled:
         deps.isInsideApartmentInteriorLightingZone() ||
         deps.isApartmentDecorInteriorVisible() ||
-        deps.isInsideStairwellShaft(),
+        deps.isInsideStairwellShaft() ||
+        deps.isInsideElevatorHoistwayColumn(),
       stairwellInteriorDark01: mainRaf.stairwellInteriorDarkSmoothed,
+      suppressExteriorSky: deps.isInsideElevatorHoistwayColumn(),
       apartmentInteriorBounceScale: fpResolveApartmentInteriorBounceScale({
         insideApartmentInteriorLightingZone: deps.isInsideApartmentInteriorLightingZone(),
         insideResidentialUnit: deps.isInsideResidentialUnit(),
