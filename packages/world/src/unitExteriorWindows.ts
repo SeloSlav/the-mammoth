@@ -1,23 +1,31 @@
 import * as THREE from "three";
 import type { CardinalFace, WallHoleXY, WallHoleYZ } from "./wallWithDoorCutout.js";
+import type { FloorDoc, PlacedObject } from "@the-mammoth/schemas";
+import { unitHasAdjacentUnitAlongBarCap } from "./exteriorFaceExposure.js";
 
 /**
- * E/W long façades get the multi-segment window band. N/S bar caps get at most one face with a
- * single corner panel — same size/tint as one long-façade window (see {@link planUnitExteriorWindowsForFace}).
- *
- * When both short ends read as exposed, pick **south**: Mamutica's yard / primary exterior band
- * faces −Z; the north cap usually looks at interior brick (podium, opposite bar, shaft cheeks).
+ * E/W long façades get the multi-segment window band. N/S caps only on true bar ends — not the
+ * short wall shared with the next unit along the wing (see {@link unitHasAdjacentUnitAlongBarCap}).
  */
 export function unitShellFacesForExteriorWindows(
   exteriorFaces: readonly CardinalFace[],
+  barEndCtx: { floor: FloorDoc; placedObject: PlacedObject },
 ): CardinalFace[] {
   const longFaces = exteriorFaces.filter((f) => f === "e" || f === "w");
-  const nsCap: CardinalFace[] = exteriorFaces.includes("s")
-    ? ["s"]
-    : exteriorFaces.includes("n")
-      ? ["n"]
-      : [];
-  return [...longFaces, ...nsCap];
+  const nsCaps: CardinalFace[] = [];
+  if (
+    exteriorFaces.includes("n") &&
+    !unitHasAdjacentUnitAlongBarCap(barEndCtx.floor, barEndCtx.placedObject, "n")
+  ) {
+    nsCaps.push("n");
+  }
+  if (
+    exteriorFaces.includes("s") &&
+    !unitHasAdjacentUnitAlongBarCap(barEndCtx.floor, barEndCtx.placedObject, "s")
+  ) {
+    nsCaps.push("s");
+  }
+  return [...longFaces, ...nsCaps];
 }
 
 /** Corridor spine caps: one centered window on each exposed short end (north and south). */
@@ -33,12 +41,12 @@ export function corridorCapFacesForExteriorWindows(
 const EDGE_INSET_M = 0.35;
 const MULLION_GAP_M = 0.12;
 const MIN_SEGMENT_WIDTH_M = 0.42;
+/** Corridor N/S end caps: centered slit — tall and narrow, not unit E/W panels. */
+export const CORRIDOR_CAP_WINDOW_WIDTH_M = 0.95;
 const SILL_ABOVE_YLO_M = 0.55;
 const WINDOW_BOTTOM_TRIM_M = 0.36;
 const WINDOW_OPENING_HEIGHT_M = 1.78;
 const WINDOW_HEAD_CLEARANCE_M = 0.06;
-/** Corridor N/S end caps: centered slit — tall and narrow, not unit E/W panels. */
-export const CORRIDOR_CAP_WINDOW_WIDTH_M = 0.95;
 const CORRIDOR_CAP_SILL_ABOVE_YLO_M = 0.42;
 const CORRIDOR_CAP_HEAD_CLEARANCE_M = 0.08;
 /** Bump to reshuffle all unit facade window layouts (see `BuildFloorMeshesOptions.facadeSalt`). */
@@ -142,9 +150,118 @@ function primaryLongFacadeForUnit(placedObjectId: string): "e" | "w" {
   return placedObjectId.startsWith("unit_w_") ? "w" : "e";
 }
 
+type PlanLongFacadeOpts = {
+  face: "e" | "w";
+  vlenX: number;
+  vlenZ: number;
+  yLo: number;
+  yHi: number;
+  facadeSalt: number;
+  storyLevelIndex: number;
+  floorDocId: string;
+  placedObjectId: string;
+  /** When set, use this segment count instead of the seeded 1–4 draw (for corner sizing). */
+  forcedSegmentCount?: number;
+};
+
+function narrowestLongFacadePanel(
+  holes: readonly WallHoleYZ[],
+): WallHoleYZ | null {
+  if (holes.length === 0) return null;
+  let best = holes[0]!;
+  let bestW = Math.abs(best.z1 - best.z0);
+  for (let i = 1; i < holes.length; i++) {
+    const h = holes[i]!;
+    const w = Math.abs(h.z1 - h.z0);
+    if (w < bestW) {
+      best = h;
+      bestW = w;
+    }
+  }
+  return best;
+}
+
+/** E/W façade with the most segments that fit — yields the smallest normal window panels. */
+export function planSmallestLongFacadeWindowVariant(opts: PlanLongFacadeOpts): UnitExteriorWindowPlan {
+  for (let tryN = 4; tryN >= 1; tryN--) {
+    const plan = planLongFacadeWindowsForFace({ ...opts, forcedSegmentCount: tryN });
+    if (plan.count === tryN) return plan;
+  }
+  return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
+}
+
+function planLongFacadeWindowsForFace(opts: PlanLongFacadeOpts): UnitExteriorWindowPlan {
+  const seed = facadeSeedForUnitFace({
+    facadeSalt: opts.facadeSalt,
+    storyLevelIndex: opts.storyLevelIndex,
+    floorDocId: opts.floorDocId,
+    placedObjectId: opts.placedObjectId,
+    face: opts.face,
+  });
+  const rnd = mulberry32(seed);
+
+  const tangentSpan = Math.max(0, opts.vlenZ - 2 * EDGE_INSET_M);
+
+  const y0 = opts.yLo + SILL_ABOVE_YLO_M + WINDOW_BOTTOM_TRIM_M;
+  const y1 = Math.min(
+    opts.yHi - WINDOW_HEAD_CLEARANCE_M,
+    opts.yLo + SILL_ABOVE_YLO_M + WINDOW_OPENING_HEIGHT_M,
+  );
+  if (tangentSpan < MIN_SEGMENT_WIDTH_M || y1 <= y0 + 0.4) {
+    return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
+  }
+
+  let n =
+    opts.forcedSegmentCount !== undefined
+      ? opts.forcedSegmentCount
+      : 1 + Math.floor(rnd() * 4);
+  while (
+    n > 1 &&
+    tangentSpan < n * MIN_SEGMENT_WIDTH_M + (n - 1) * MULLION_GAP_M
+  ) {
+    n -= 1;
+  }
+  if (tangentSpan < MIN_SEGMENT_WIDTH_M + (n - 1) * MULLION_GAP_M) {
+    n = 1;
+  }
+
+  const tintId = Math.floor(rnd() * GLASS_TINT_PRESETS.length);
+
+  const tMin = -opts.vlenZ * 0.5 + EDGE_INSET_M;
+  const tMax = opts.vlenZ * 0.5 - EDGE_INSET_M;
+
+  const usable = tMax - tMin;
+  const gapTotal = (n - 1) * MULLION_GAP_M;
+  const remaining = usable - gapTotal;
+  if (remaining < n * MIN_SEGMENT_WIDTH_M) {
+    return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
+  }
+
+  const weights: number[] = [];
+  let wSum = 0;
+  for (let i = 0; i < n; i++) {
+    const w = 0.88 + rnd() * 0.24;
+    weights.push(w);
+    wSum += w;
+  }
+  const widths = weights.map((w) => (w / wSum) * remaining);
+
+  const holesEw: WallHoleYZ[] = [];
+  let cursor = tMin;
+  for (let i = 0; i < n; i++) {
+    const w = widths[i]!;
+    const a = cursor;
+    const b = cursor + w;
+    cursor = b + (i < n - 1 ? MULLION_GAP_M : 0);
+    holesEw.push({ z0: a, z1: b, y0, y1 });
+  }
+
+  return { count: n, tintId, holesEw, holesNs: [] };
+}
+
 /**
- * One E/W façade panel on an N/S cap at the tower corner — same opening size/tint as the long face,
- * not a separate narrow cap style.
+ * One E/W façade panel on an N/S cap at the tower corner — exact size of the narrowest panel from
+ * the densest (max-segment) normal long-façade variant for that unit, tint from the authored draw.
  */
 function planSingleCornerWindowOnNsFace(opts: {
   face: CardinalFace;
@@ -156,13 +273,36 @@ function planSingleCornerWindowOnNsFace(opts: {
   storyLevelIndex: number;
   floorDocId: string;
   placedObjectId: string;
+  wallSpanX?: { min: number; max: number };
 }): UnitExteriorWindowPlan {
   const longFace = primaryLongFacadeForUnit(opts.placedObjectId);
-  const longPlan = planUnitExteriorWindowsForFace({
-    ...opts,
+  const longPlan = planLongFacadeWindowsForFace({
     face: longFace,
+    vlenX: opts.vlenX,
+    vlenZ: opts.vlenZ,
+    yLo: opts.yLo,
+    yHi: opts.yHi,
+    facadeSalt: opts.facadeSalt,
+    storyLevelIndex: opts.storyLevelIndex,
+    floorDocId: opts.floorDocId,
+    placedObjectId: opts.placedObjectId,
   });
-  const ref = longPlan.holesEw[0];
+  if (longPlan.count === 0) {
+    return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
+  }
+
+  const smallestVariant = planSmallestLongFacadeWindowVariant({
+    face: longFace,
+    vlenX: opts.vlenX,
+    vlenZ: opts.vlenZ,
+    yLo: opts.yLo,
+    yHi: opts.yHi,
+    facadeSalt: opts.facadeSalt,
+    storyLevelIndex: opts.storyLevelIndex,
+    floorDocId: opts.floorDocId,
+    placedObjectId: opts.placedObjectId,
+  });
+  const ref = narrowestLongFacadePanel(smallestVariant.holesEw);
   if (!ref) {
     return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
   }
@@ -171,15 +311,15 @@ function planSingleCornerWindowOnNsFace(opts: {
   const y0 = ref.y0;
   const y1 = ref.y1;
 
-  const tMin = -opts.vlenX * 0.5 + EDGE_INSET_M;
-  const tMax = opts.vlenX * 0.5 - EDGE_INSET_M;
-  if (width < MIN_SEGMENT_WIDTH_M || tMax - tMin < width + 1e-4) {
+  const xLo = (opts.wallSpanX?.min ?? -opts.vlenX * 0.5) + EDGE_INSET_M;
+  const xHi = (opts.wallSpanX?.max ?? opts.vlenX * 0.5) - EDGE_INSET_M;
+  if (width < MIN_SEGMENT_WIDTH_M || xHi - xLo < width + 1e-4 || y1 <= y0 + 0.4) {
     return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
   }
 
   const corner = exteriorCornerTangentOnNsFace(opts.placedObjectId);
-  const x0 = corner === "max" ? tMax - width : tMin;
-  const x1 = corner === "max" ? tMax : tMin + width;
+  const x0 = corner === "max" ? xHi - width : xLo;
+  const x1 = corner === "max" ? xHi : xLo + width;
 
   return {
     count: 1,
@@ -213,9 +353,7 @@ export function planCorridorCapExteriorWindow(opts: {
   const tMin = -opts.vlenX * 0.5 + EDGE_INSET_M;
   const tMax = opts.vlenX * 0.5 - EDGE_INSET_M;
   const tangentSpan = tMax - tMin;
-  const y0 = opts.yLo + CORRIDOR_CAP_SILL_ABOVE_YLO_M;
-  const y1 = opts.yHi - CORRIDOR_CAP_HEAD_CLEARANCE_M;
-  if (tangentSpan < MIN_SEGMENT_WIDTH_M || y1 <= y0 + 0.8) {
+  if (tangentSpan < MIN_SEGMENT_WIDTH_M) {
     return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
   }
 
@@ -223,6 +361,16 @@ export function planCorridorCapExteriorWindow(opts: {
   const xMid = (tMin + tMax) * 0.5;
   const x0 = xMid - width * 0.5;
   const x1 = xMid + width * 0.5;
+
+  /** Tall slit — same opening height as before, centered on the N/S cap (was sill-anchored and read high). */
+  const openingHeight =
+    opts.yHi - opts.yLo - CORRIDOR_CAP_SILL_ABOVE_YLO_M - CORRIDOR_CAP_HEAD_CLEARANCE_M;
+  const yMid = (opts.yLo + opts.yHi) * 0.5;
+  const y0 = yMid - openingHeight * 0.5;
+  const y1 = yMid + openingHeight * 0.5;
+  if (y1 <= y0 + 0.8) {
+    return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
+  }
 
   return {
     count: 1,
@@ -242,90 +390,23 @@ export function planUnitExteriorWindowsForFace(opts: {
   storyLevelIndex: number;
   floorDocId: string;
   placedObjectId: string;
+  wallSpanX?: { min: number; max: number };
 }): UnitExteriorWindowPlan {
   if (opts.face === "n" || opts.face === "s") {
     return planSingleCornerWindowOnNsFace(opts);
   }
 
-  const seed = facadeSeedForUnitFace({
+  return planLongFacadeWindowsForFace({
+    face: opts.face,
+    vlenX: opts.vlenX,
+    vlenZ: opts.vlenZ,
+    yLo: opts.yLo,
+    yHi: opts.yHi,
     facadeSalt: opts.facadeSalt,
     storyLevelIndex: opts.storyLevelIndex,
     floorDocId: opts.floorDocId,
     placedObjectId: opts.placedObjectId,
-    face: opts.face,
   });
-  const rnd = mulberry32(seed);
-
-  const tangentSpan =
-    opts.face === "e" || opts.face === "w"
-      ? Math.max(0, opts.vlenZ - 2 * EDGE_INSET_M)
-      : Math.max(0, opts.vlenX - 2 * EDGE_INSET_M);
-
-  // Trim the opening from the bottom so adjacent units keep a consistent window head line.
-  const y0 = opts.yLo + SILL_ABOVE_YLO_M + WINDOW_BOTTOM_TRIM_M;
-  const y1 = Math.min(
-    opts.yHi - WINDOW_HEAD_CLEARANCE_M,
-    opts.yLo + SILL_ABOVE_YLO_M + WINDOW_OPENING_HEIGHT_M,
-  );
-  if (tangentSpan < MIN_SEGMENT_WIDTH_M || y1 <= y0 + 0.4) {
-    return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
-  }
-
-  let n = 1 + Math.floor(rnd() * 4);
-  while (
-    n > 1 &&
-    tangentSpan < n * MIN_SEGMENT_WIDTH_M + (n - 1) * MULLION_GAP_M
-  ) {
-    n -= 1;
-  }
-  if (tangentSpan < MIN_SEGMENT_WIDTH_M + (n - 1) * MULLION_GAP_M) {
-    n = 1;
-  }
-
-  const tintId = Math.floor(rnd() * GLASS_TINT_PRESETS.length);
-
-  const tMin =
-    opts.face === "e" || opts.face === "w"
-      ? -opts.vlenZ * 0.5 + EDGE_INSET_M
-      : -opts.vlenX * 0.5 + EDGE_INSET_M;
-  const tMax =
-    opts.face === "e" || opts.face === "w"
-      ? opts.vlenZ * 0.5 - EDGE_INSET_M
-      : opts.vlenX * 0.5 - EDGE_INSET_M;
-
-  const usable = tMax - tMin;
-  const gapTotal = (n - 1) * MULLION_GAP_M;
-  const remaining = usable - gapTotal;
-  if (remaining < n * MIN_SEGMENT_WIDTH_M) {
-    return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
-  }
-
-  /** Slight per-segment width jitter that preserves sum. */
-  const weights: number[] = [];
-  let wSum = 0;
-  for (let i = 0; i < n; i++) {
-    const w = 0.88 + rnd() * 0.24;
-    weights.push(w);
-    wSum += w;
-  }
-  const widths = weights.map((w) => (w / wSum) * remaining);
-
-  const holesEw: WallHoleYZ[] = [];
-  const holesNs: WallHoleXY[] = [];
-  let cursor = tMin;
-  for (let i = 0; i < n; i++) {
-    const w = widths[i]!;
-    const a = cursor;
-    const b = cursor + w;
-    cursor = b + (i < n - 1 ? MULLION_GAP_M : 0);
-    if (opts.face === "e" || opts.face === "w") {
-      holesEw.push({ z0: a, z1: b, y0, y1 });
-    } else {
-      holesNs.push({ x0: a, x1: b, y0, y1 });
-    }
-  }
-
-  return { count: n, tintId, holesEw, holesNs };
 }
 
 /**

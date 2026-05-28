@@ -429,6 +429,8 @@ export function buildFloorMeshes(
       let exteriorWindowHoles: CorridorShellWallHoles | undefined;
       let tintByExteriorFace: Partial<Record<CardinalFace, number>> | undefined;
       let exteriorGlassFaces: CardinalFace[] = [];
+      const balconyShell =
+        kind === "unit" ? residentialBalconyHollowShellExtras(obj.id, sx) : null;
       const partitionFace =
         kind === "unit" ? residentialBalconyPartitionFace(obj.id) : null;
       if (
@@ -438,7 +440,10 @@ export function buildFloorMeshes(
       ) {
         const windowFaces =
           kind === "unit"
-            ? unitShellFacesForExteriorWindows(roomExteriorFaces).filter(
+            ? unitShellFacesForExteriorWindows(roomExteriorFaces, {
+                floor,
+                placedObject: obj,
+              }).filter(
                 (face) => face !== partitionFace,
               )
             : corridorCapFacesForExteriorWindows(roomExteriorFaces);
@@ -480,6 +485,7 @@ export function buildFloorMeshes(
                     storyLevelIndex: story,
                     floorDocId: floor.id,
                     placedObjectId: obj.id,
+                    wallSpanX: balconyShell?.wallSpanX,
                   });
             tintByExteriorFace[face] = plan.tintId;
             if (face === "e") {
@@ -506,7 +512,6 @@ export function buildFloorMeshes(
           }
         }
       }
-      const balconyShell = residentialBalconyHollowShellExtras(obj.id, sx);
       addHollowRoomShell(room, sx, sy, sz, kind, {
         shaftHolesPlate: shaftHolesPlate,
         roomPx: obj.position[0],
@@ -521,7 +526,7 @@ export function buildFloorMeshes(
         exteriorFaces: roomExteriorFaces,
         exteriorWindowHoles,
         useAuthoringCorridorCeiling,
-        ...balconyShell,
+        ...(balconyShell ?? {}),
       });
       if (
         (kind === "unit" || kind === "corridor") &&
@@ -567,6 +572,8 @@ export function buildFloorMeshes(
             mesh.userData.mammothPlacedObjectId = placedObjectId;
             mesh.userData.mammothUnitInterior = true;
             mesh.userData.mammothResidentialUnitExteriorGlass = true;
+            /** Thin N/S corner panels — keep drawable at auth orbit distance. */
+            mesh.frustumCulled = false;
             return;
           }
           const isInteriorShell =
@@ -605,6 +612,8 @@ export function buildFloorMeshes(
           if (mesh.name.startsWith("unit_exterior_glass_")) {
             mesh.userData.mammothSkipFloorGeometryMerge = true;
             mesh.userData.mammothPlacedObjectId = placedObjectId;
+            /** N/S corridor end caps — same thin-panel culling issue as unit corner glass at auth orbit. */
+            mesh.frustumCulled = false;
             return;
           }
           if (

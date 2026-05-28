@@ -16,6 +16,10 @@ import {
   isConsumableFpAuthoringState,
   isWeaponFpAuthoringState,
 } from "./editorStoreModeGuards.js";
+import {
+  isMammothToonPassEnabled,
+  type MammothToonRenderPipeline,
+} from "@the-mammoth/engine";
 import { registerEditorSceneRenderWake } from "./editorSceneRenderDemand.js";
 
 export function startEditorSceneRenderLoop(deps: {
@@ -33,6 +37,7 @@ export function startEditorSceneRenderLoop(deps: {
   withProgrammaticTransformControls: <T>(fn: () => T) => T;
   isFpMode: (mode: ReturnType<typeof useEditorStore.getState>["mode"]) => boolean;
   beforeOrbitControlsUpdate?: () => void;
+  toonRenderPipeline: MammothToonRenderPipeline;
 }): () => void {
   const {
     canvas,
@@ -49,6 +54,7 @@ export function startEditorSceneRenderLoop(deps: {
     withProgrammaticTransformControls,
     isFpMode: isFpModeFn,
     beforeOrbitControlsUpdate,
+    toonRenderPipeline,
   } = deps;
 
   let raf = 0;
@@ -257,7 +263,8 @@ export function startEditorSceneRenderLoop(deps: {
     renderCam.getWorldDirection(renderCamForward);
     publishMammothCompassHeadingFromForwardXZ(renderCamForward.x, renderCamForward.z);
 
-    renderer.render(scene, renderCam);
+    toonRenderPipeline.syncToonPassEnabled(isMammothToonPassEnabled());
+    toonRenderPipeline.render();
 
     const orbitMotionActive =
       orbitPointerDown || orbitKeyboardMove.isActive();

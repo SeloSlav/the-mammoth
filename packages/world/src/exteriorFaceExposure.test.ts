@@ -1,6 +1,10 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { FloorDoc } from "@the-mammoth/schemas";
-import { exteriorFacesForPlacedObjectInFloor } from "./exteriorFaceExposure.js";
+import {
+  exteriorFacesForPlacedObjectInFloor,
+  unitHasAdjacentUnitAlongBarCap,
+} from "./exteriorFaceExposure.js";
 
 describe("exteriorFacesForPlacedObjectInFloor", () => {
   it("marks unit gap faces exposed, not just plate-AABB faces", () => {
@@ -96,5 +100,22 @@ describe("exteriorFacesForPlacedObjectInFloor", () => {
     };
 
     expect(exteriorFacesForPlacedObjectInFloor(floor, floor.objects[1]!)).toEqual(["e", "n", "s"]);
+  });
+});
+
+describe("unitHasAdjacentUnitAlongBarCap", () => {
+  it("detects bar-cap adjacency across typical Mamutica unit spacing", () => {
+    const floor = JSON.parse(
+      readFileSync(
+        new URL("../../../content/building/floors/floor_mamutica_typical.json", import.meta.url),
+        "utf8",
+      ),
+    ) as FloorDoc;
+    const southEnd = floor.objects.find((o) => o.id === "unit_e_003")!;
+    const midBar = floor.objects.find((o) => o.id === "unit_e_004")!;
+    expect(unitHasAdjacentUnitAlongBarCap(floor, southEnd, "n")).toBe(true);
+    expect(unitHasAdjacentUnitAlongBarCap(floor, southEnd, "s")).toBe(false);
+    expect(unitHasAdjacentUnitAlongBarCap(floor, midBar, "n")).toBe(true);
+    expect(unitHasAdjacentUnitAlongBarCap(floor, midBar, "s")).toBe(true);
   });
 });

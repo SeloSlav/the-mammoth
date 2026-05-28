@@ -7,6 +7,14 @@ const _mergePreserveLocal = new THREE.Matrix4();
 /** Scratch for world→group-local transform when cloning mesh geometry during merge gather. */
 const _mergeGatherLocal = new THREE.Matrix4();
 
+/** Façade glass preserved through floor merge — thin N/S corner panels must stay drawable at auth orbit. */
+export function isExteriorWindowGlassPreservedMesh(mesh: THREE.Mesh): boolean {
+  return (
+    mesh.userData.mammothResidentialUnitExteriorGlass === true ||
+    mesh.name.startsWith("unit_exterior_glass_")
+  );
+}
+
 type MergeBucket = {
   mat: THREE.Material;
   geos: THREE.BufferGeometry[];
@@ -262,6 +270,8 @@ function reattachPreservedMeshesWithSavedWorld(
       m.name.startsWith("shaft_hoistway_lintel_") ||
       m.name === "shaft_floor" ||
       m.name === "shaft_ceiling";
-    m.frustumCulled = !isShaftHoistwayPreservedMesh;
+    m.frustumCulled = !(
+      isShaftHoistwayPreservedMesh || isExteriorWindowGlassPreservedMesh(m)
+    );
   }
 }

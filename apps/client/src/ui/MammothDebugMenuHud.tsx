@@ -22,7 +22,14 @@ import {
 } from "../game/fpDebugGameplayFeedback.js";
 import { isFpCombatSimMode } from "../game/combatSim/fpCombatSimMode.js";
 import { isTextInputFocused } from "../game/isTextInputFocused.js";
-import { getFpDebugMenuSessionSnapshot } from "../game/fpDebugMenuSessionBridge.js";
+import {
+  getFpDebugMenuSessionSnapshot,
+} from "../game/fpDebugMenuSessionBridge.js";
+import {
+  MAMMOTH_TOON_PASS_LS_KEY,
+  isMammothToonPassEnabled,
+  setMammothToonPassEnabled,
+} from "@the-mammoth/engine";
 import {
   LS_APARTMENT_UNIT_BOUNDS_DEBUG,
   LS_DOOR_DEBUG_AUTOSTART,
@@ -71,6 +78,7 @@ type LsFlags = {
   fpDoorAnimSkewWarn: boolean;
   fpLegacyCollision: boolean;
   fpLoadingDebug: boolean;
+  fpToonPass: boolean;
   fpPerfDebug: boolean;
   apartmentUnitBounds: boolean;
   doorDebugAutostart: boolean;
@@ -87,6 +95,7 @@ function readLsFlags(): LsFlags {
     fpLegacyCollision: lsLegacyCollisionIsOn(),
     fpPerfDebug: lsToggleIsOn(LS_FP_PERF_DEBUG),
     fpLoadingDebug: lsToggleIsOn(LS_FP_LOADING_DEBUG),
+    fpToonPass: isMammothToonPassEnabled(),
     apartmentUnitBounds: lsToggleIsOn(LS_APARTMENT_UNIT_BOUNDS_DEBUG),
     doorDebugAutostart: lsToggleIsOn(LS_DOOR_DEBUG_AUTOSTART),
     elevDebugAutostart: lsToggleIsOn(LS_ELEV_DEBUG_AUTOSTART),
@@ -534,6 +543,16 @@ export function MammothDebugMenuHud() {
               on: flags.fpPerfDebug,
               onToggle: () => {
                 lsToggleSet(LS_FP_PERF_DEBUG, !flags.fpPerfDebug);
+                refreshLs();
+              },
+            })}
+            {rowToggle({
+              label: "Toon shader pass",
+              description:
+                `Screen-space cel shading (${MAMMOTH_TOON_PASS_LS_KEY}) — toggles live; shared with editor`,
+              on: flags.fpToonPass,
+              onToggle: () => {
+                setMammothToonPassEnabled(!flags.fpToonPass);
                 refreshLs();
               },
             })}

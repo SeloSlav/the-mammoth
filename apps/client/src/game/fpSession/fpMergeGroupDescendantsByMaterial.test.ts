@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import {
   cloneGeometryForMerge,
+  isExteriorWindowGlassPreservedMesh,
   mergeGroupDescendantsByMaterial,
 } from "./fpMergeGroupDescendantsByMaterial.js";
 
@@ -80,6 +81,22 @@ describe("mergeGroupDescendantsByMaterial", () => {
         child instanceof THREE.Mesh && child.userData.mammothCorridorHallwayShell === true,
     );
     expect(tagged).toBeTruthy();
+  });
+
+  it("keeps preserved exterior window glass unculled after merge (auth orbit corner panels)", () => {
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true });
+    const g = new THREE.Group();
+    const cladding = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.2), mat);
+    const cornerGlass = new THREE.Mesh(new THREE.BoxGeometry(1, 1.8, 0.11), mat);
+    cornerGlass.name = "unit_exterior_glass_s_0";
+    cornerGlass.userData.mammothSkipFloorGeometryMerge = true;
+    cornerGlass.userData.mammothResidentialUnitExteriorGlass = true;
+    g.add(cladding, cornerGlass);
+
+    mergeGroupDescendantsByMaterial(g);
+
+    expect(cornerGlass.frustumCulled).toBe(false);
+    expect(isExteriorWindowGlassPreservedMesh(cornerGlass)).toBe(true);
   });
 });
 

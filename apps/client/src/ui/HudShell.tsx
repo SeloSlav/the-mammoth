@@ -69,6 +69,7 @@ export function HudShell({ onSignOut, conn }: HudProps) {
 
   const confirmQuitToMainMenu = useCallback(() => {
     setQuitModalOpen(false);
+    if (document.pointerLockElement) void document.exitPointerLock();
     onSignOut();
   }, [onSignOut]);
 

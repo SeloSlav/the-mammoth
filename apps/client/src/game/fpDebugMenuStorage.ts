@@ -10,6 +10,8 @@ export const LS_FP_LEGACY_COLLISION = "mammothFpLegacyCollision";
 export const LS_FP_PERF_DEBUG = "mammothFpDebug";
 /** Console [mmLoadDbg] — connect + FP mount timelines, long tasks, RAF hitches (`?loaddebug=1`). */
 export const LS_FP_LOADING_DEBUG = "mammothFpLoadingDebug";
+/** @deprecated Use {@link MAMMOTH_TOON_PASS_LS_KEY} from `@the-mammoth/engine`. */
+export { MAMMOTH_TOON_PASS_LS_KEY as LS_FP_TOON_PASS } from "@the-mammoth/engine";
 export const LS_APARTMENT_UNIT_BOUNDS_DEBUG = "mammothApartmentUnitBoundsDebug";
 export const LS_DOOR_DEBUG_AUTOSTART = "mmDoorDebugAutostart";
 export const LS_ELEV_DEBUG_AUTOSTART = "mmElevDebugAutostart";

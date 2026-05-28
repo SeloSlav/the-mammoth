@@ -70,6 +70,7 @@ export {
   CORRIDOR_CAP_WINDOW_WIDTH_M,
   facadeSeedForUnitFace,
   planCorridorCapExteriorWindow,
+  planSmallestLongFacadeWindowVariant,
   planUnitExteriorWindowsForFace,
   unitShellFacesForExteriorWindows,
   UNIT_SHELL_WALL_THICKNESS_M,
@@ -94,6 +95,7 @@ export {
 } from "./buildingStairShafts.js";
 export {
   exteriorFacesForPlacedObjectInFloor,
+  unitHasAdjacentUnitAlongBarCap,
   shaftFacesTowardAdjacentElevatorHoistways,
   shaftFacesTowardAdjacentStairwells,
 } from "./exteriorFaceExposure.js";

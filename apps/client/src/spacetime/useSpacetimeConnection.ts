@@ -114,6 +114,8 @@ export type SpacetimeSession = {
   startGuestPlay: () => void;
   /** Quit current session — guests return to local save picker (slots kept). */
   signOut: () => void;
+  /** Leave gameplay — account-auth builds return to sign-in; guest-only builds return to save picker. */
+  quitToMainMenu: () => void;
   /** Auth-enabled builds: guest save screen → account vs guest lobby. */
   signOutToAuthGate: () => void;
   selectGuestSaveSlot: (slotId: string) => void;
@@ -408,6 +410,24 @@ export function useSpacetimeConnection(): SpacetimeSession {
     setConnEpoch((e) => e + 1);
   }, []);
 
+  const quitToMainMenu = useCallback(() => {
+    abandonMegablockStaticWorldMeshCache();
+    const hadOidcJwt = !!readOidcAccessToken();
+    clearOidcAccessToken();
+    setConn(null);
+    setDisplayName(null);
+    setErrorMsg(null);
+    setSpacetimeUserSnapshotReady(false);
+    if (hadOidcJwt || readEnableAccountAuth()) {
+      setConnectionKind(null);
+      setPhase("needs_auth");
+    } else {
+      setConnectionKind("guest");
+      setPhase("guest_save_menu");
+    }
+    setConnEpoch((e) => e + 1);
+  }, []);
+
   const submitProfile = useCallback(
     async (args: ProfileSubmitArgs) => {
       if (!conn || !spacetimeUserSnapshotReady) return;
@@ -447,6 +467,7 @@ export function useSpacetimeConnection(): SpacetimeSession {
     startPasswordSignIn,
     startGuestPlay,
     signOut,
+    quitToMainMenu,
     signOutToAuthGate,
     selectGuestSaveSlot,
     startNewGuestSave,

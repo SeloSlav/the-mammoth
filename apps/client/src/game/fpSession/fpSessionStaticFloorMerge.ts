@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import {
   cloneGeometryForMerge,
+  isExteriorWindowGlassPreservedMesh,
   mergeGroupDescendantsByMaterial,
   mergeGroupDescendantsByMaterialYielding,
 } from "./fpMergeGroupDescendantsByMaterial.js";
@@ -167,7 +168,13 @@ function mergeUnitPreservedShellsByPlacedObject(floorPlateGroup: THREE.Group): v
     }
 
     for (const { mat, list } of byMat.values()) {
-      if (list.length <= 1) continue;
+      if (list.length <= 1) {
+        const solo = list[0];
+        if (solo && isExteriorWindowGlassPreservedMesh(solo)) {
+          solo.frustumCulled = false;
+        }
+        continue;
+      }
       const geos: THREE.BufferGeometry[] = [];
       for (const m of list) {
         m.updateWorldMatrix(true, false);
@@ -182,9 +189,7 @@ function mergeUnitPreservedShellsByPlacedObject(floorPlateGroup: THREE.Group): v
       for (const g of geos) g.dispose();
       // If merge fails, keep originals — otherwise the apartment shell vanishes (only glass remains).
       if (!merged) continue;
-      const allResidentialExteriorGlass = list.every(
-        (m) => m.userData.mammothResidentialUnitExteriorGlass === true,
-      );
+      const allExteriorWindowGlass = list.every(isExteriorWindowGlassPreservedMesh);
       for (const m of list) {
         m.removeFromParent();
         m.geometry.dispose();
@@ -193,10 +198,10 @@ function mergeUnitPreservedShellsByPlacedObject(floorPlateGroup: THREE.Group): v
       merged.computeBoundingBox();
       const mesh = new THREE.Mesh(merged, mat);
       // Thin N/S corner panels sit on end caps — keep them drawable at auth orbit distance.
-      mesh.frustumCulled = !allResidentialExteriorGlass;
+      mesh.frustumCulled = !allExteriorWindowGlass;
       mesh.userData.mammothPlacedObjectId = placedObjectId;
       mesh.userData.mammothUnitInterior = true;
-      if (allResidentialExteriorGlass) {
+      if (allExteriorWindowGlass) {
         mesh.userData.mammothResidentialUnitExteriorGlass = true;
       }
       mesh.name = `merged_unit_shell:${placedObjectId}`;
@@ -242,7 +247,13 @@ async function mergeUnitPreservedShellsByPlacedObjectYielding(
     }
 
     for (const { mat, list } of byMat.values()) {
-      if (list.length <= 1) continue;
+      if (list.length <= 1) {
+        const solo = list[0];
+        if (solo && isExteriorWindowGlassPreservedMesh(solo)) {
+          solo.frustumCulled = false;
+        }
+        continue;
+      }
       const geos: THREE.BufferGeometry[] = [];
       for (const m of list) {
         m.updateWorldMatrix(true, false);
@@ -256,9 +267,7 @@ async function mergeUnitPreservedShellsByPlacedObjectYielding(
       const merged = mergeGeometries(geos, false);
       for (const g of geos) g.dispose();
       if (!merged) continue;
-      const allResidentialExteriorGlass = list.every(
-        (m) => m.userData.mammothResidentialUnitExteriorGlass === true,
-      );
+      const allExteriorWindowGlass = list.every(isExteriorWindowGlassPreservedMesh);
       for (const m of list) {
         m.removeFromParent();
         m.geometry.dispose();
@@ -266,10 +275,10 @@ async function mergeUnitPreservedShellsByPlacedObjectYielding(
       merged.computeBoundingSphere();
       merged.computeBoundingBox();
       const mesh = new THREE.Mesh(merged, mat);
-      mesh.frustumCulled = !allResidentialExteriorGlass;
+      mesh.frustumCulled = !allExteriorWindowGlass;
       mesh.userData.mammothPlacedObjectId = placedObjectId;
       mesh.userData.mammothUnitInterior = true;
-      if (allResidentialExteriorGlass) {
+      if (allExteriorWindowGlass) {
         mesh.userData.mammothResidentialUnitExteriorGlass = true;
       }
       mesh.name = `merged_unit_shell:${placedObjectId}`;

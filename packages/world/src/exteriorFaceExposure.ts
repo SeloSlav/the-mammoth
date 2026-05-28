@@ -65,6 +65,37 @@ function isUnitPrefab(prefabId: string): boolean {
 }
 
 /**
+ * Plan gap between unit short walls along the bar (typical Mamutica plates ≈ 0.1 m) — still the same
+ * run, not a tower-end cap.
+ */
+const MAX_UNIT_BAR_CAP_ADJACENCY_GAP_M = 0.15;
+
+/** Another residential unit immediately north/south on the same wing — not a corner-cap face. */
+export function unitHasAdjacentUnitAlongBarCap(
+  floor: FloorDoc,
+  obj: PlacedObject,
+  cap: "n" | "s",
+): boolean {
+  if (obj.rotation) return false;
+  const a = objectBounds(obj);
+  for (const other of floor.objects) {
+    if (other.id === obj.id || other.rotation || !isUnitPrefab(other.prefabId)) continue;
+    const b = objectBounds(other);
+    const xw0 = Math.max(a.x0, b.x0);
+    const xw1 = Math.min(a.x1, b.x1);
+    if (xw1 - xw0 < MIN_BLOCKING_OVERLAP_M) continue;
+    if (cap === "n") {
+      const dz = b.z0 - a.z1;
+      if (dz >= -MAX_UNIT_BAR_CAP_ADJACENCY_GAP_M && dz <= 1.25) return true;
+    } else {
+      const dz = a.z0 - b.z1;
+      if (dz >= -MAX_UNIT_BAR_CAP_ADJACENCY_GAP_M && dz <= 1.25) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Faces that remain visible to the outside because no other axis-aligned room/core shell extends
  * farther outward over a meaningful overlap span on that side.
  */

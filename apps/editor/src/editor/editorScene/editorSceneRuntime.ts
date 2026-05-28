@@ -6,6 +6,7 @@ import {
   assertWebGpuAdapterOrThrow,
   assertWebGpuRendererBackend,
   createFPCamera,
+  createMammothToonRenderPipeline,
   ensureConfiguredGltfLoaderKtx2Support,
   getConfiguredGltfLoader,
   applyMammothApartmentInteriorEditorLayoutPresentation,
@@ -19,6 +20,7 @@ import {
   mountMammothApartmentInteriorSceneRig,
   prepareMammothApartmentInteriorContentRoots,
   requestMammothRendererShadowMapUpdate,
+  subscribeMammothToonPassEnabled,
   syncMammothApartmentInteriorMetallicEnv,
   syncMammothStairwellCeilingFixturePresentation,
   type ApartmentPracticalLightsMount,
@@ -1657,6 +1659,11 @@ export async function mountEditorScene(
   rewireCanvasPrimaryPointerListeners();
   canvas.addEventListener("pointerup", pointers.onPointerUp);
 
+  const toonRenderPipeline = createMammothToonRenderPipeline(renderer, scene, camera);
+  const unsubscribeToonPassPref = subscribeMammothToonPassEnabled(() => {
+    demandEditorSceneRender();
+  });
+
   const stopRenderLoop = startEditorSceneRenderLoop({
     canvas,
     scene,
@@ -1672,6 +1679,7 @@ export async function mountEditorScene(
     withProgrammaticTransformControls,
     isFpMode,
     beforeOrbitControlsUpdate: applyDistanceInvariantOrbitSpeeds,
+    toonRenderPipeline,
   });
 
   const disposeTransformModeDigitHotkeys = registerEditorTransformModeDigitHotkeys({
@@ -1711,6 +1719,8 @@ export async function mountEditorScene(
     detachOrbitSnappyFeel();
     orbitControls.dispose();
     stopRenderLoop();
+    unsubscribeToonPassPref();
+    toonRenderPipeline.dispose();
     disposeTransformModeDigitHotkeys();
     disposeArrowNudgeHotkeys();
     disposeOrbitFlipViewHotkey();

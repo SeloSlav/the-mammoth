@@ -149,7 +149,7 @@ export default function App() {
         combatSimMode ? (
           <CombatSimMinimalHud conn={session.conn} onExit={exitCombatSim} />
         ) : (
-          <HudShell onSignOut={session.signOut} conn={session.conn} />
+          <HudShell onSignOut={session.quitToMainMenu} conn={session.conn} />
         )
       ) : null}
     </>

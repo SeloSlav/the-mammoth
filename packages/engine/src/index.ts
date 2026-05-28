@@ -387,3 +387,17 @@ export {
   type GpuRevealSchedulerState,
 } from "./rendering/gpuRevealScheduler.js";
 export { getOrCreateMaterial } from "./rendering/materialPool.js";
+export {
+  MAMMOTH_TOON_PASS_LS_KEY,
+  LS_FP_TOON_PASS,
+  getMammothToonPassEnabledSnapshot,
+  isMammothToonPassEnabled,
+  setMammothToonPassEnabled,
+  subscribeMammothToonPassEnabled,
+} from "./rendering/mammothToonPassPrefs.js";
+export {
+  createMammothToonRenderPipeline,
+  DEFAULT_MAMMOTH_TOON_POST_PROCESS_OPTIONS,
+  type MammothToonRenderPipeline,
+} from "./rendering/mammothToonRenderPipeline.js";
+export type { MammothToonPostProcessOptions } from "./rendering/mammothToonPostProcess.js";

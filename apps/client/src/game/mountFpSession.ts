@@ -12,6 +12,7 @@ import {
   assertWebGpuRendererBackend,
   createFPRig,
   createFpLocomotionState,
+  createMammothToonRenderPipeline,
   equippedHeldItemIdFromDefId,
   fpLocomotionConstants,
   queueFpJump,
@@ -1042,6 +1043,9 @@ export async function mountFpSession(
     })();
   }
   installFpSessionTransientDebugConsole({ scene, buildingRoot, cellRoot, renderer });
+
+  /** Each gameplay session starts unarmed — hotbar selection persists in module scope across remounts. */
+  setFpHotbarSelectedSlot(null);
 
   const selectedHotbarRow = () => {
     const slot = getFpHotbarSelectedSlot();
@@ -2434,6 +2438,8 @@ export async function mountFpSession(
   const fpLocomotionInputBlocked = () =>
     mammothCraftingOpen() || mammothDebugMenuOpen() || isTextInputFocused();
 
+  const fpRenderPipeline = createMammothToonRenderPipeline(renderer, scene, camera);
+
   const { runFrame } = createFpSessionMainRafFrame({
     mainRaf,
     canvas,
@@ -2515,6 +2521,7 @@ export async function mountFpSession(
     getFpPerfSceneCounters,
     sampleFpPerfHeavyMeshes,
     scheduleGpuTimestampResolve,
+    fpRenderPipeline,
     renderIsolationTargets: {
       buildingRoot,
       scene,
@@ -2664,6 +2671,7 @@ export async function mountFpSession(
     fpFirearmImpactDecals.dispose();
     hotbarConsumableVisual.dispose();
     cabMirrorCollection.dispose();
+    fpRenderPipeline.dispose();
     presentation.dispose();
     renderer.dispose();
     scene.clear();
@@ -2677,6 +2685,7 @@ export async function mountFpSession(
   resetFpDebugEmissiveIsolationState();
   resetFpDebugGameplayFeedbackFlags();
     resetFpPerfStore();
+    setFpHotbarSelectedSlot(null);
     if (document.pointerLockElement === canvas) void document.exitPointerLock();
     delete canvas.dataset.mammothFpCanvas;
   };

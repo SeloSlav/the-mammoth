@@ -11,6 +11,7 @@ import {
   faGripLinesVertical,
   faListUl,
   faObjectGroup,
+  faPaintBrush,
   faRulerCombined,
   faSitemap,
   faSliders,
@@ -60,6 +61,7 @@ import { EditorChromeInspector } from "./EditorChromeInspector.js";
 import { EditorChromeSelectedMaterialPanel } from "./EditorChromeSelectedMaterialPanel.js";
 import { EditorChromeOutliner } from "./EditorChromeOutliner.js";
 import { EditorChromeAuthoringIntroAndWorkspace } from "./EditorChromeAuthoringIntroAndWorkspace.js";
+import { EditorChromeViewport } from "./EditorChromeViewport.js";
 import { EditorChromeFpViewmodel } from "./EditorChromeFpViewmodel.js";
 import { EditorChromeMyApartment } from "./EditorChromeMyApartment.js";
 import { EditorChromeSceneGizmoBlock } from "./EditorChromeSceneGizmoBlock.js";
@@ -376,6 +378,7 @@ export function EditorChrome() {
   const chromeJumpItems = useMemo((): EditorChromeJumpBarItem[] => {
     const items: EditorChromeJumpBarItem[] = [
       { id: EDITOR_CHROME_SECTION.authoringTop, label: "Authoring", icon: faAnglesUp },
+      { id: EDITOR_CHROME_SECTION.viewport, label: "Viewport", icon: faPaintBrush },
       { id: EDITOR_CHROME_SECTION.workspace, label: "Workspace", icon: faSitemap },
     ];
     if (workspace === "apartment") {
@@ -516,6 +519,7 @@ export function EditorChrome() {
           undo={undo}
           redo={redo}
         />
+        <EditorChromeViewport />
         <EditorChromeMyApartment
           mode={mode}
           setWorkspace={setWorkspace}

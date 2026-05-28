@@ -1,6 +1,7 @@
 /** DOM ids for editor rail sections — used by {@link EditorChromeSectionJumpBar} and scroll targets. */
 export const EDITOR_CHROME_SECTION = {
   authoringTop: "editor-chrome-section-authoring-top",
+  viewport: "editor-chrome-section-viewport",
   workspace: "editor-chrome-section-workspace",
   apartmentUnit: "editor-chrome-section-apartment-unit",
   importDecor: "editor-chrome-section-import-decor",

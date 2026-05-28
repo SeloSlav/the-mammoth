@@ -3,7 +3,7 @@
 const listeners = new Set<() => void>();
 
 /** `null` = explicit unarmed; `0..5` = hotbar slot index. */
-let selectedSlot: number | null = 0;
+let selectedSlot: number | null = null;
 
 export function getFpHotbarSelectedSlot(): number | null {
   return selectedSlot;

@@ -115,10 +115,14 @@ export function planOwnedApartmentEditorShellForUnit(opts: {
   let exteriorWindowHoles: CorridorShellWallHoles | undefined;
   let windowFacesForGlass: CardinalFace[] = [];
 
+  const balconyShell = residentialBalconyHollowShellExtras(o.id, sx);
   const partitionFace = residentialBalconyPartitionFace(o.id);
 
   if (exteriorFaces.length > 0) {
-    windowFacesForGlass = unitShellFacesForExteriorWindows(exteriorFaces).filter(
+    windowFacesForGlass = unitShellFacesForExteriorWindows(exteriorFaces, {
+      floor: opts.floor,
+      placedObject: o,
+    }).filter(
       (face) => face !== partitionFace,
     );
     for (const face of windowFacesForGlass) {
@@ -132,6 +136,7 @@ export function planOwnedApartmentEditorShellForUnit(opts: {
         storyLevelIndex: opts.storyLevelIndex,
         floorDocId: opts.floor.id,
         placedObjectId: o.id,
+        wallSpanX: balconyShell?.wallSpanX,
       });
       tintByExteriorFace[face] = planFace.tintId;
       if (face === "e") {
@@ -157,8 +162,6 @@ export function planOwnedApartmentEditorShellForUnit(opts: {
       windowFacesForGlass = [];
     }
   }
-
-  const balconyShell = residentialBalconyHollowShellExtras(o.id, sx);
 
   return {
     wt,

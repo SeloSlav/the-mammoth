@@ -7,6 +7,7 @@ import {
   residentialBalconyPartitionFace,
   residentialUnitHasBalconyBay,
 } from "./residentialUnitBalcony.js";
+import { residentialBalconyHollowShellExtras } from "./residentialUnitBalconyShell.js";
 import {
   balconyBayFacadeCladOuterLocalX,
   balconyBayPlacedObjectId,
@@ -151,6 +152,7 @@ function appendUnitExteriorWindowAnalyticSolids(
       const partitionFace = residentialBalconyPartitionFace(obj.id);
       const faces = unitShellFacesForExteriorWindows(
         exteriorFacesForPlacedObjectInFloor(doc, obj),
+        { floor: doc, placedObject: obj },
       ).filter((face) => face !== partitionFace);
       if (faces.length === 0 && !residentialUnitHasBalconyBay(obj.id)) continue;
 
@@ -160,6 +162,7 @@ function appendUnitExteriorWindowAnalyticSolids(
       const vlenZ = Math.max(sz - 2 * wt, 0.05);
       const yLo = -vh * 0.5;
       const yHi = vh * 0.5;
+      const wallSpanX = residentialBalconyHollowShellExtras(obj.id, sx)?.wallSpanX;
 
       const baseWy = oy + plateY + py;
 
@@ -194,6 +197,7 @@ function appendUnitExteriorWindowAnalyticSolids(
           storyLevelIndex: ref.levelIndex,
           floorDocId: doc.id,
           placedObjectId: obj.id,
+          wallSpanX,
         });
         const holesEw = face === "e" || face === "w" ? plan.holesEw : [];
         const holesNs = face === "n" || face === "s" ? plan.holesNs : [];

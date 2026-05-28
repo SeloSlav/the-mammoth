@@ -89,6 +89,11 @@ import { createFpCollisionDebugOverlay } from "./fpSessionCollisionDebug.js";
 import type { createFpPlayerStealthDetectionDebugOverlay } from "./fpPlayerStealthDetectionDebug.js";
 import type { FpPlanarMirror } from "../fpRendering/fpPlanarMirror.js";
 import {
+  createMammothToonRenderPipeline,
+  isMammothToonPassEnabled,
+  type MammothToonRenderPipeline,
+} from "@the-mammoth/engine";
+import {
   FP_APARTMENT_MIRROR_REFLECTION_UPDATE_INTERVAL_MS,
   FP_CAB_MIRROR_REFLECTION_UPDATE_INTERVAL_MS,
   FP_CAB_MIRROR_SKIP_REFLECTION_ABS_FORWARD_Y,
@@ -339,6 +344,7 @@ export type FpSessionMainRafFrameDeps = {
   ) => void;
   /** No-op when GPU timestamp queries are unavailable. */
   scheduleGpuTimestampResolve: () => void;
+  fpRenderPipeline: MammothToonRenderPipeline;
 };
 
 /**
@@ -1331,7 +1337,8 @@ export function createFpSessionMainRafFrame(
     deps.renderer.info.reset();
     const drawCallsBefore = deps.renderer.info.render.drawCalls;
     const trianglesBefore = deps.renderer.info.render.triangles;
-    deps.renderer.render(deps.scene, deps.camera);
+    deps.fpRenderPipeline.syncToonPassEnabled(isMammothToonPassEnabled());
+    deps.fpRenderPipeline.render();
     const frameDrawCalls = Math.max(0, deps.renderer.info.render.drawCalls - drawCallsBefore);
     const frameTriangles = Math.max(0, deps.renderer.info.render.triangles - trianglesBefore);
     deps.scheduleGpuTimestampResolve();

@@ -22,7 +22,7 @@ pub fn ensure_player_active_hotbar_row(ctx: &ReducerContext, id: Identity) {
     }
     let _ = ctx.db.player_active_hotbar().insert(PlayerActiveHotbar {
         identity: id,
-        slot_index: 0,
+        slot_index: ACTIVE_HOTBAR_SLOT_CLEARED,
     });
 }
 
