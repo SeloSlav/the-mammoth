@@ -7,10 +7,8 @@ use crate::apartments::{apartment_unit, ApartmentUnit, UNIT_STATE_UNCLAIMED};
 use crate::megablock_floor_spawn::megablock_babushka_spawn_pose;
 use crate::elevator_layout;
 use crate::npc::{self, world_npc, WorldNpc};
-use crate::player_mission::{
-    self, player_mission_progress, PlayerMissionProgress, FIRST_EXTRACTION_FLOOR_DOC_ID,
-    FIRST_EXTRACTION_LEVEL_INDEX, FIRST_EXTRACTION_MISSION_ID,
-};
+use crate::combat_sim::BABUSHKA_CORPSE_TOTAL_MICROS;
+use crate::player_mission::{FIRST_EXTRACTION_FLOOR_DOC_ID, FIRST_EXTRACTION_LEVEL_INDEX};
 
 pub const MEGABLOCK_FLOOR_SESSION_PREFIX: &str = "megablock:floor:";
 
@@ -21,7 +19,6 @@ const FIRST_EXTRACTION_FLOOR_NPC_SPAWN_SALT: u64 = 0x0016_F1_00_01;
 const FIRST_EXTRACTION_FLOOR_BABUSHKA_COUNT: u32 = 6;
 
 struct MegablockFloorEncounterDef {
-    mission_id: &'static str,
     floor_doc_id: &'static str,
     level_index: u32,
     babushka_count: u32,
@@ -29,7 +26,6 @@ struct MegablockFloorEncounterDef {
 }
 
 const MEGABLOCK_FLOOR_ENCOUNTERS: &[MegablockFloorEncounterDef] = &[MegablockFloorEncounterDef {
-    mission_id: FIRST_EXTRACTION_MISSION_ID,
     floor_doc_id: FIRST_EXTRACTION_FLOOR_DOC_ID,
     level_index: FIRST_EXTRACTION_LEVEL_INDEX,
     babushka_count: FIRST_EXTRACTION_FLOOR_BABUSHKA_COUNT,
@@ -50,24 +46,6 @@ pub fn feet_on_megablock_storey_level(feet_y: f32, level_index: u32) -> bool {
     let expected =
         elevator_layout::support_feet_y_for_level(level_index, elevator_layout::BUILDING_ORIGIN_Y);
     (feet_y - expected).abs() <= MEGABLOCK_STOREY_VERTICAL_TOLERANCE_M
-}
-
-fn mission_in_progress_for_encounter(row: &PlayerMissionProgress, def: &MegablockFloorEncounterDef) -> bool {
-    if row.first_extraction_complete {
-        return false;
-    }
-    if row.active_mission_id != def.mission_id {
-        return false;
-    }
-    row.status >= player_mission::MISSION_STATUS_OFFERED
-        && row.status <= player_mission::MISSION_STATUS_COLLECTED
-}
-
-fn any_player_needs_encounter(ctx: &ReducerContext, def: &MegablockFloorEncounterDef) -> bool {
-    ctx.db
-        .player_mission_progress()
-        .iter()
-        .any(|row| mission_in_progress_for_encounter(&row, def))
 }
 
 pub fn unit_keys_on_floor(
@@ -199,23 +177,35 @@ pub fn encounter_floor_doc_for_level(level_index: u32) -> &'static str {
     FIRST_EXTRACTION_FLOOR_DOC_ID
 }
 
+#[inline]
+fn living_babushka_count(npcs: &[WorldNpc]) -> usize {
+    npcs.iter()
+        .filter(|n| {
+            n.archetype == npc::NPC_ARCHETYPE_BABUSHKA
+                && n.state != npc::NPC_STATE_DEAD
+                && n.health > 0.0
+        })
+        .count()
+}
+
 fn ensure_floor_encounter(ctx: &ReducerContext, def: &MegablockFloorEncounterDef) {
     let session_key = megablock_floor_session_key(def.level_index);
-    let live: Vec<WorldNpc> = ctx
+    let session_npcs: Vec<WorldNpc> = ctx
         .db
         .world_npc()
         .iter()
         .filter(|n| n.session_key == session_key)
         .collect();
-    if live.len() == def.babushka_count as usize
-        && live
-            .iter()
-            .all(|n| n.archetype == npc::NPC_ARCHETYPE_BABUSHKA && n.state != npc::NPC_STATE_DEAD)
-    {
+    let living = living_babushka_count(session_npcs.as_slice());
+    let target = def.babushka_count as usize;
+    if living >= target {
+        return;
+    }
+    // Dead corpses still occupy the session until corpse linger + respawn tick.
+    if session_npcs.len() >= target {
         return;
     }
 
-    npc::clear_npcs_for_session(ctx, session_key.as_str());
     let units = residential_units_on_floor(ctx, def.floor_doc_id, def.level_index);
     if units.is_empty() {
         log::warn!(
@@ -226,35 +216,77 @@ fn ensure_floor_encounter(ctx: &ReducerContext, def: &MegablockFloorEncounterDef
         return;
     }
 
-    for i in 0..def.babushka_count {
+    let deficit = target.saturating_sub(session_npcs.len());
+    for offset in 0..deficit {
+        let slot_index = session_npcs.len() as u32 + offset as u32;
         let (x, y, z, yaw) = megablock_babushka_spawn_pose(
             def.level_index,
             &units,
-            i,
+            slot_index,
             def.spawn_salt,
         );
         let _npc_id = npc::spawn_babushka(ctx, session_key.clone(), x, y, z, yaw, None);
     }
-    log::info!(
-        "megablock floor encounter: spawned {} babushkas on level {}",
-        def.babushka_count,
-        def.level_index
+    if deficit > 0 {
+        log::info!(
+            "megablock floor encounter: topped up {} babushkas on level {} ({} living)",
+            deficit,
+            def.level_index,
+            living
+        );
+    }
+}
+
+fn encounter_def_for_level(level_index: u32) -> Option<&'static MegablockFloorEncounterDef> {
+    MEGABLOCK_FLOOR_ENCOUNTERS
+        .iter()
+        .find(|def| def.level_index == level_index)
+}
+
+/// After corpse linger, delete the dead row and spawn a fresh babushka on the same floor session.
+/// Returns `true` when the corpse row was deleted (caller must not update that `npc_id`).
+pub fn maybe_despawn_megablock_floor_corpse_and_respawn(
+    ctx: &ReducerContext,
+    npc: &WorldNpc,
+    now_us: i64,
+) -> bool {
+    if npc.state != npc::NPC_STATE_DEAD {
+        return false;
+    }
+    let Some(level_index) = parse_megablock_floor_session_key(npc.session_key.as_str()) else {
+        return false;
+    };
+    let Some(def) = encounter_def_for_level(level_index) else {
+        return false;
+    };
+    if now_us - npc.last_melee_micros < BABUSHKA_CORPSE_TOTAL_MICROS {
+        return false;
+    }
+
+    let units = residential_units_on_floor(ctx, def.floor_doc_id, def.level_index);
+    if units.is_empty() {
+        return false;
+    }
+
+    let session_key = npc.session_key.clone();
+    let slot_index = (npc.npc_id % def.babushka_count as u64) as u32;
+    let salt = now_us as u64 ^ npc.npc_id.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    let (x, y, z, yaw) = megablock_babushka_spawn_pose(
+        def.level_index,
+        &units,
+        slot_index,
+        def.spawn_salt ^ salt,
     );
+    let npc_id = npc.npc_id;
+    ctx.db.world_npc().npc_id().delete(&npc_id);
+    let _ = npc::spawn_babushka(ctx, session_key, x, y, z, yaw, None);
+    true
 }
 
-fn clear_floor_encounter(ctx: &ReducerContext, def: &MegablockFloorEncounterDef) {
-    let session_key = megablock_floor_session_key(def.level_index);
-    npc::clear_npcs_for_session(ctx, session_key.as_str());
-}
-
-/// Spawn or despawn floor encounters based on active player missions.
+/// Keep megablock floor babushka populations topped up (always-on, not mission-gated).
 pub fn sync_all_megablock_floor_encounters(ctx: &ReducerContext) {
     for def in MEGABLOCK_FLOOR_ENCOUNTERS {
-        if any_player_needs_encounter(ctx, def) {
-            ensure_floor_encounter(ctx, def);
-        } else {
-            clear_floor_encounter(ctx, def);
-        }
+        ensure_floor_encounter(ctx, def);
     }
 }
 
@@ -274,5 +306,54 @@ mod tests {
         let y17 = elevator_layout::support_feet_y_for_level(18, elevator_layout::BUILDING_ORIGIN_Y);
         assert!(feet_on_megablock_storey_level(y16, 17));
         assert!(!feet_on_megablock_storey_level(y17, 17));
+    }
+
+    #[test]
+    fn living_babushka_count_ignores_corpses() {
+        use crate::npc::{
+            NPC_ARCHETYPE_BABUSHKA, NPC_LOCOMOTION_IDLE, NPC_STATE_DEAD, NPC_STATE_IDLE,
+        };
+
+        let living = WorldNpc {
+            npc_id: 1,
+            archetype: NPC_ARCHETYPE_BABUSHKA.to_string(),
+            session_key: "megablock:floor:17".to_string(),
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            yaw: 0.0,
+            vel_x: 0.0,
+            vel_z: 0.0,
+            grounded: 1,
+            health: 100.0,
+            max_health: 100.0,
+            state: NPC_STATE_IDLE,
+            locomotion: NPC_LOCOMOTION_IDLE,
+            melee_presentation_seq: 0,
+            hit_presentation_seq: 0,
+            last_melee_micros: 0,
+            chase_identity: None,
+        };
+        let corpse = WorldNpc {
+            npc_id: 2,
+            state: NPC_STATE_DEAD,
+            health: 0.0,
+            archetype: living.archetype.clone(),
+            session_key: living.session_key.clone(),
+            x: living.x,
+            y: living.y,
+            z: living.z,
+            yaw: living.yaw,
+            vel_x: 0.0,
+            vel_z: 0.0,
+            grounded: 1,
+            max_health: living.max_health,
+            locomotion: NPC_LOCOMOTION_IDLE,
+            melee_presentation_seq: 0,
+            hit_presentation_seq: 0,
+            last_melee_micros: 0,
+            chase_identity: None,
+        };
+        assert_eq!(living_babushka_count(&[living, corpse]), 1);
     }
 }

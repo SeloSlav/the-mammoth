@@ -194,35 +194,16 @@ export function buildDropMeshLayersFromGltf(gltfRoot: THREE.Object3D, defId: str
   return buildDropMeshLayersFromObject(gltfRoot, defId);
 }
 
-/** Bright unlit mesh for pickup-range drops — bypasses InstancedMesh (WebGPU can drop these). */
-export function buildPickupProxyVisualRoot(defId: string): THREE.Group {
-  const group = new THREE.Group();
-  const target = getMammothDroppedWorldTargetMaxDimM(defId);
-  const mat = new THREE.MeshBasicMaterial({
-    color: defId === "fuse-wire-pack" ? 0xd4a030 : 0x8a9aaa,
+/** Fitted catalog GLB root for pickup-range rendering (regular meshes, not instanced). */
+export function buildPickupVisualFromFittedGltf(fittedRoot: THREE.Object3D): THREE.Group {
+  const visual = fittedRoot.clone(true) as THREE.Group;
+  visual.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (mesh.isMesh) {
+      mesh.frustumCulled = false;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+    }
   });
-  const long = target * 0.94;
-  const thick = target * 0.14;
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(long, thick, thick * 0.9), mat);
-  mesh.position.y = thick * 0.5;
-  mesh.rotation.z = defId === "fuse-wire-pack" || defId === "crowbar" ? 0.08 : 0;
-  group.add(mesh);
-  fitDroppedWorldItemModelToCatalog(group, defId);
-  group.traverse((obj) => {
-    const m = obj as THREE.Mesh;
-    if (m.isMesh) m.frustumCulled = false;
-  });
-  return group;
-}
-
-export function attachPickupProxyLayers(
-  proxy: THREE.Group,
-  layers: readonly DropMeshLayer[],
-): void {
-  proxy.clear();
-  for (const layer of layers) {
-    const mesh = new THREE.Mesh(layer.geometry, layer.material.clone());
-    mesh.frustumCulled = false;
-    proxy.add(mesh);
-  }
+  return visual;
 }

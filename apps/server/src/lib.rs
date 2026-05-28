@@ -75,6 +75,7 @@ pub fn init(ctx: &ReducerContext) {
     crafting::start_hud_toast_cleanup_schedule(ctx);
     balcony_grow::start_balcony_grow_schedule(ctx);
     npc::start_world_npc_schedule(ctx);
+    megablock_floor_npc::sync_all_megablock_floor_encounters(ctx);
     game_time::start_game_time_schedule(ctx);
 }
 

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { getMammothDroppedWorldTargetMaxDimM } from "@the-mammoth/assets";
 import {
   buildDropMeshLayersFromObject,
-  buildPickupProxyVisualRoot,
+  buildPickupVisualFromFittedGltf,
   buildProceduralDropMeshLayers,
   droppedWorldInstancingMaterialFrom,
 } from "./droppedItemWorldMesh.js";
@@ -44,18 +44,14 @@ describe("buildDropMeshLayersFromObject", () => {
   });
 });
 
-describe("buildPickupProxyVisualRoot", () => {
-  it("builds a visible fuse-wire-pack crowbar stub with catalog fit", () => {
-    const root = buildPickupProxyVisualRoot("fuse-wire-pack");
-    root.updateWorldMatrix(true, true);
-    const bb = new THREE.Box3().setFromObject(root);
-    const sz = new THREE.Vector3();
-    bb.getSize(sz);
-    expect(Math.max(sz.x, sz.y, sz.z)).toBeCloseTo(
-      getMammothDroppedWorldTargetMaxDimM("fuse-wire-pack"),
-      2,
-    );
-    expect(bb.min.y).toBeCloseTo(0, 2);
+describe("buildPickupVisualFromFittedGltf", () => {
+  it("clones a fitted GLB root for pickup-range mesh rendering", () => {
+    const fitted = new THREE.Group();
+    fitted.add(new THREE.Mesh(new THREE.BoxGeometry(2, 0.4, 0.3), new THREE.MeshStandardMaterial()));
+    fitted.updateWorldMatrix(true, true);
+    const visual = buildPickupVisualFromFittedGltf(fitted);
+    expect(visual.children.length).toBe(1);
+    expect((visual.children[0] as THREE.Mesh).frustumCulled).toBe(false);
   });
 });
 

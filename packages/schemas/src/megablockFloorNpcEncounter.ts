@@ -5,15 +5,15 @@
 import {
   FIRST_EXTRACTION_FLOOR_DOC_ID,
   FIRST_EXTRACTION_LEVEL_INDEX,
-  FIRST_EXTRACTION_MISSION_ID,
 } from "./playerMissions.js";
 
 /** Live-world `world_npc.session_key` prefix (`megablock:floor:{levelIndex}`). */
 export const MEGABLOCK_FLOOR_SESSION_PREFIX = "megablock:floor:" as const;
 
+/** Corpse linger before a fresh babushka spawns — match `apps/server/src/combat_sim.rs`. */
+export const MEGABLOCK_FLOOR_BABUSHKA_CORPSE_RESPAWN_SEC = 22 as const;
+
 export type MegablockFloorNpcEncounterDef = {
-  /** Mission must be in progress (`offered`…`collected`) to keep this encounter live. */
-  missionId: string;
   floorDocId: string;
   /** `mammoth.json` `levelIndex` (elevator deck + 1). */
   levelIndex: number;
@@ -35,10 +35,9 @@ export function parseMegablockFloorSessionKey(
   return Number.isFinite(level) && level > 0 ? level : null;
 }
 
-/** First game loop — babushkas on extraction deck 16 only while the fuse wire work order is active. */
+/** Deck 16 (levelIndex 17) — always-on babushka patrol; corpses respawn on a fixed timer. */
 export const FIRST_EXTRACTION_FLOOR_NPC_ENCOUNTER: MegablockFloorNpcEncounterDef =
   {
-    missionId: FIRST_EXTRACTION_MISSION_ID,
     floorDocId: FIRST_EXTRACTION_FLOOR_DOC_ID,
     levelIndex: FIRST_EXTRACTION_LEVEL_INDEX,
     babushkaCount: 6,

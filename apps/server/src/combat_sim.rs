@@ -61,7 +61,8 @@ pub const BABUSHKA_PLAYER_MIN_SEPARATION_M: f32 =
     COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M + BABUSHKA_PLAYER_SPAWN_BUFFER_M;
 
 /// Death clip (~2.47 s) + die one-shot + epitaph MP3 — keep corpse until voice lines finish.
-const BABUSHKA_CORPSE_TOTAL_MICROS: i64 = 22_000_000;
+/// Corpse linger before a fresh babushka spawns (combat sim + megablock floor).
+pub(crate) const BABUSHKA_CORPSE_TOTAL_MICROS: i64 = 22_000_000;
 const COMBAT_SIM_DEFAULT_BABUSHKA_COUNT: usize = 5;
 const COMBAT_SIM_DEFAULT_BABUSHKA_CENTER_RING_M: f32 = 2.25;
 

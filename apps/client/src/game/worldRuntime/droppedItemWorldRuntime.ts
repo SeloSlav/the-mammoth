@@ -14,25 +14,17 @@ import { tables } from "../../module_bindings";
 import type { DroppedItem } from "../../module_bindings/types";
 import { fitDroppedWorldItemModelToCatalog } from "./droppedItemWorldFit.js";
 import {
-  attachPickupProxyLayers,
   buildDropMeshLayersFromGltf,
-  buildPickupProxyVisualRoot,
+  buildPickupVisualFromFittedGltf,
   buildProceduralDropMeshLayers,
   type DropMeshLayer,
 } from "./droppedItemWorldMesh.js";
 import {
-  addRowToDefPool,
-  addRowToFallbackPool,
   createDefInstancedPool,
-  createFallbackPool,
   disposeDefInstancedPools,
-  detachFallbackMesh,
   rebuildDefPoolFromRows,
-  rebuildFallbackPoolFromRows,
   removeRowFromDefPool,
-  removeRowFromFallbackPool,
   type DefInstancedPool,
-  type FallbackInstancedPool,
 } from "./droppedItemWorldInstancing.js";
 
 export { fitDroppedWorldItemModelToCatalog } from "./droppedItemWorldFit.js";
@@ -293,7 +285,7 @@ function droppedItemRowExists(conn: DbConnection, droppedItemId: bigint): boolea
 }
 
 type DefTemplateState =
-  | { status: "ready"; layers: DropMeshLayer[] }
+  | { status: "ready"; layers: DropMeshLayer[]; pickupVisual: THREE.Group }
   | { status: "glb_unavailable" };
 
 type CachedDropRow = {
@@ -337,10 +329,6 @@ export function mountDroppedItemsWorld(
   const defTemplateState = new Map<string, DefTemplateState>();
   const defTemplatePromise = new Map<string, Promise<DefTemplateState>>();
   const defInstancedPools = new Map<string, DefInstancedPool>();
-  const fallbackLocalByDefId = new Map<string, THREE.Matrix4>();
-  let fallbackPool: FallbackInstancedPool | null = null;
-  let sharedFallbackGeometry: THREE.BoxGeometry | null = null;
-  let sharedFallbackMaterial: THREE.MeshBasicMaterial | null = null;
 
   let templateReloadPending = false;
   let syncVisibleAtFeetImpl: (
@@ -405,7 +393,8 @@ export function mountDroppedItemsWorld(
         staging.add(mesh);
       }
       prepareLoadedSceneForTemplate(staging);
-      const st: DefTemplateState = { status: "ready", layers: procedural };
+      const pickupVisual = buildPickupVisualFromFittedGltf(staging);
+      const st: DefTemplateState = { status: "ready", layers: procedural, pickupVisual };
       defTemplateState.set(defId, st);
       templateReloadPending = true;
       syncVisibleAtFeetImpl(
@@ -427,7 +416,6 @@ export function mountDroppedItemsWorld(
 
     const p = loadGltfSceneFirstMatch(candidates)
       .then(({ scene: loadedScene }) => {
-        prepareLoadedSceneForTemplate(loadedScene);
         const layers = buildDropMeshLayersFromGltf(loadedScene, defId);
         if (layers.length === 0) {
           const st: DefTemplateState = { status: "glb_unavailable" };
@@ -435,7 +423,9 @@ export function mountDroppedItemsWorld(
           defTemplatePromise.delete(defId);
           return st;
         }
-        const st: DefTemplateState = { status: "ready", layers };
+        prepareLoadedSceneForTemplate(loadedScene);
+        const pickupVisual = buildPickupVisualFromFittedGltf(loadedScene);
+        const st: DefTemplateState = { status: "ready", layers, pickupVisual };
         defTemplateState.set(defId, st);
         defTemplatePromise.delete(defId);
         templateReloadPending = true;
@@ -465,35 +455,6 @@ export function mountDroppedItemsWorld(
 
     defTemplatePromise.set(defId, p);
     return p;
-  };
-
-  const ensureFallbackLocalMatrix = (defId: string): THREE.Matrix4 => {
-    const cached = fallbackLocalByDefId.get(defId);
-    if (cached) return cached;
-    const staging = new THREE.Group();
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.14, 0.04, 0.24),
-      new THREE.MeshBasicMaterial({ color: 0x9aa8b8 }),
-    );
-    staging.add(mesh);
-    fitDroppedWorldItemModelToCatalog(staging, defId);
-    staging.updateWorldMatrix(true, true);
-    const local = staging.matrix.clone();
-    fallbackLocalByDefId.set(defId, local);
-    return local;
-  };
-
-  const ensureSharedFallbackAssets = (): {
-    geometry: THREE.BoxGeometry;
-    material: THREE.MeshBasicMaterial;
-  } => {
-    if (!sharedFallbackGeometry) {
-      sharedFallbackGeometry = new THREE.BoxGeometry(0.14, 0.04, 0.24);
-    }
-    if (!sharedFallbackMaterial) {
-      sharedFallbackMaterial = new THREE.MeshBasicMaterial({ color: 0x9aa8b8 });
-    }
-    return { geometry: sharedFallbackGeometry, material: sharedFallbackMaterial };
   };
 
   const visGateChanged = (
@@ -573,45 +534,14 @@ export function mountDroppedItemsWorld(
     return pool;
   };
 
-  const ensureFallbackPoolObj = (): FallbackInstancedPool => {
-    const { geometry, material } = ensureSharedFallbackAssets();
-    if (!fallbackPool) {
-      const mesh = new THREE.InstancedMesh(geometry, material, 8);
-      mesh.name = "drop_inst:fallback";
-      mesh.visible = false;
-      mesh.count = 0;
-      mesh.castShadow = false;
-      mesh.receiveShadow = false;
-      root.add(mesh);
-      fallbackPool = createFallbackPool(mesh, 8);
-    }
-    return fallbackPool;
-  };
-
   const removeVisibleRow = (rowKey: string, defId: string): void => {
     const pool = defInstancedPools.get(defId);
     if (pool?.slotByKey.has(rowKey)) {
       removeRowFromDefPool(pool, rowKey);
-      return;
-    }
-    if (fallbackPool?.slotByKey.has(rowKey)) {
-      removeRowFromFallbackPool(fallbackPool, rowKey);
     }
   };
 
-  const addVisibleRow = (rowKey: string, row: DroppedItem): void => {
-    const state = defTemplateState.get(row.defId);
-    if (state?.status === "ready") {
-      const pool = ensureDefPool(row.defId, state.layers);
-      addRowToDefPool(root, pool, row.defId, rowKey, row);
-      return;
-    }
-    const fb = ensureFallbackPoolObj();
-    const { geometry, material } = ensureSharedFallbackAssets();
-    addRowToFallbackPool(root, fb, rowKey, row, ensureFallbackLocalMatrix(row.defId), geometry, material);
-  };
-
-  /** Beyond this horizontal distance, visible drops use the shared fallback box (triangle LOD). */
+  /** Beyond this horizontal distance, instanced GLB layers are skipped until the player moves closer. */
   const dropGlbNearHorizontalMSq =
     (DROPPED_ITEM_RENDER_MAX_HORIZONTAL_M * 0.6) *
     (DROPPED_ITEM_RENDER_MAX_HORIZONTAL_M * 0.6);
@@ -666,8 +596,6 @@ export function mountDroppedItemsWorld(
     containingUnitKey: string | null,
   ): void => {
     const glbRowsByDef = new Map<string, { rows: DroppedItem[]; keys: string[] }>();
-    const fallbackRows: DroppedItem[] = [];
-    const fallbackKeys: string[] = [];
 
     for (const [key, cached] of rowCache) {
       if (!rowShouldRender(cached, feetX, feetY, feetZ, containingUnitKey)) continue;
@@ -675,28 +603,26 @@ export function mountDroppedItemsWorld(
       const defId = cached.row.defId;
       void resolveDefTemplate(defId);
       const state = defTemplateState.get(defId);
-      const useGlb =
-        state?.status === "ready" &&
-        dropWithinGlbDetailRange(
+      if (state?.status !== "ready") continue;
+      if (
+        !dropWithinGlbDetailRange(
           cached.row.x,
           cached.row.z,
           cached.row.y,
           feetX,
           feetY,
           feetZ,
-        );
-      if (useGlb) {
-        let bucket = glbRowsByDef.get(defId);
-        if (!bucket) {
-          bucket = { rows: [], keys: [] };
-          glbRowsByDef.set(defId, bucket);
-        }
-        bucket.rows.push(cached.row);
-        bucket.keys.push(key);
-      } else {
-        fallbackRows.push(cached.row);
-        fallbackKeys.push(key);
+        )
+      ) {
+        continue;
       }
+      let bucket = glbRowsByDef.get(defId);
+      if (!bucket) {
+        bucket = { rows: [], keys: [] };
+        glbRowsByDef.set(defId, bucket);
+      }
+      bucket.rows.push(cached.row);
+      bucket.keys.push(key);
     }
 
     for (const [defId, pool] of defInstancedPools) {
@@ -715,22 +641,6 @@ export function mountDroppedItemsWorld(
       const pool = ensureDefPool(defId, state.layers);
       rebuildDefPoolFromRows(root, pool, defId, bucket.rows, bucket.keys);
     }
-
-    const { geometry, material } = ensureSharedFallbackAssets();
-    if (fallbackRows.length > 0) {
-      const fb = ensureFallbackPoolObj();
-      rebuildFallbackPoolFromRows(
-        root,
-        fb,
-        fallbackRows,
-        fallbackKeys,
-        (row) => ensureFallbackLocalMatrix(row.defId),
-        geometry,
-        material,
-      );
-    } else if (fallbackPool) {
-      clearFallbackPoolOnly(fallbackPool);
-    }
   };
 
   function clearDefPoolOnly(pool: DefInstancedPool): void {
@@ -741,14 +651,6 @@ export function mountDroppedItemsWorld(
       mesh.count = 0;
       mesh.visible = false;
     }
-  }
-
-  function clearFallbackPoolOnly(pool: FallbackInstancedPool): void {
-    pool.rows.length = 0;
-    pool.rowKeys.length = 0;
-    pool.slotByKey.clear();
-    pool.mesh.count = 0;
-    pool.mesh.visible = false;
   }
 
   function syncVisibleAtFeet(
@@ -801,23 +703,24 @@ export function mountDroppedItemsWorld(
       active.add(key);
       const row = cached.row;
       const state = defTemplateState.get(row.defId);
-      const templateKey =
-        state?.status === "ready" ? `ready:${state.layers.length}` : state?.status ?? "pending";
       let proxy = pickupProxies.get(key);
       if (!proxy) {
         proxy = new THREE.Group();
-        proxy.name = `pickup_proxy:${row.defId}`;
+        proxy.name = `pickup_glb:${row.defId}`;
         pickupProxies.set(key, proxy);
         pickupProxyRoot.add(proxy);
       }
-      if (proxy.userData.mammothPickupProxyTemplate !== templateKey) {
-        proxy.userData.mammothPickupProxyTemplate = templateKey;
-        if (state?.status === "ready" && state.layers.length > 0) {
-          attachPickupProxyLayers(proxy, state.layers);
-        } else {
-          proxy.clear();
-          proxy.add(buildPickupProxyVisualRoot(row.defId));
-        }
+      if (state?.status !== "ready") {
+        proxy.clear();
+        proxy.visible = false;
+        continue;
+      }
+      const templateKey = state.pickupVisual.uuid;
+      if (proxy.userData.mammothPickupGlbTemplate !== templateKey) {
+        proxy.userData.mammothPickupGlbTemplate = templateKey;
+        proxy.clear();
+        proxy.add(state.pickupVisual.clone(true));
+        bindMammothMetallicReadableEnv(proxy, metallicReadableEnv());
       }
       proxy.position.set(row.x, row.y, row.z);
       proxy.rotation.y = row.yaw;
@@ -826,12 +729,6 @@ export function mountDroppedItemsWorld(
     for (const [key, proxy] of pickupProxies) {
       if (active.has(key)) continue;
       proxy.removeFromParent();
-      proxy.traverse((obj) => {
-        const mesh = obj as THREE.Mesh;
-        if (!mesh.isMesh) return;
-        const mat = mesh.material;
-        if (!Array.isArray(mat) && mat) mat.dispose();
-      });
       pickupProxies.delete(key);
     }
   };
@@ -847,22 +744,17 @@ export function mountDroppedItemsWorld(
   };
 
   const onInsert = (_ctx: unknown, row: DroppedItem) => {
-    const key = droppedIdKey(row.id);
-    const cached = cacheRow(row);
+    cacheRow(row);
     void resolveDefTemplate(row.defId);
-    if (rowShouldRender(cached, lastRenderFeet.x, lastRenderFeet.y, lastRenderFeet.z, lastRenderFeet.unitKey)) {
-      addVisibleRow(key, row);
-    }
+    templateReloadPending = true;
   };
 
   const onUpdate = (_ctx: unknown, _old: DroppedItem, row: DroppedItem) => {
     const key = droppedIdKey(row.id);
     removeVisibleRow(key, _old.defId);
-    const cached = cacheRow(row);
+    cacheRow(row);
     void resolveDefTemplate(row.defId);
-    if (rowShouldRender(cached, lastRenderFeet.x, lastRenderFeet.y, lastRenderFeet.z, lastRenderFeet.unitKey)) {
-      addVisibleRow(key, row);
-    }
+    templateReloadPending = true;
   };
 
   const onDelete = (_ctx: unknown, row: DroppedItem) => {
@@ -983,21 +875,28 @@ export function mountDroppedItemsWorld(
     scene.remove(root);
     disposeDefInstancedPools(defInstancedPools.values());
     defInstancedPools.clear();
-    detachFallbackMesh(fallbackPool);
-    fallbackPool = null;
-    sharedFallbackGeometry?.dispose();
-    sharedFallbackGeometry = null;
-    sharedFallbackMaterial?.dispose();
-    sharedFallbackMaterial = null;
     rowCache.clear();
+    for (const st of defTemplateState.values()) {
+      if (st.status === "ready") {
+        st.pickupVisual.traverse((obj) => {
+          const mesh = obj as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          mesh.geometry?.dispose();
+          const mat = mesh.material;
+          if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+          else mat?.dispose();
+        });
+      }
+    }
     defTemplateState.clear();
     defTemplatePromise.clear();
-    fallbackLocalByDefId.clear();
     for (const proxy of pickupProxies.values()) {
       proxy.removeFromParent();
     }
     pickupProxies.clear();
   };
+
+  void resolveDefTemplate("fuse-wire-pack");
 
   return { subscribeAoi, syncDroppedItemVisualVisibility, tryPickupNearest, dispose };
 }

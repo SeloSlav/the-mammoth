@@ -4,10 +4,7 @@ import {
   megablockFloorSessionKey,
   parseMegablockFloorSessionKey,
 } from "./megablockFloorNpcEncounter.js";
-import {
-  FIRST_EXTRACTION_LEVEL_INDEX,
-  FIRST_EXTRACTION_MISSION_ID,
-} from "./playerMissions.js";
+import { FIRST_EXTRACTION_LEVEL_INDEX } from "./playerMissions.js";
 
 describe("megablockFloorNpcEncounter", () => {
   it("round-trips floor session keys", () => {
@@ -18,9 +15,6 @@ describe("megablockFloorNpcEncounter", () => {
   });
 
   it("first extraction encounter targets deck-16 slab", () => {
-    expect(FIRST_EXTRACTION_FLOOR_NPC_ENCOUNTER.missionId).toBe(
-      FIRST_EXTRACTION_MISSION_ID,
-    );
     expect(FIRST_EXTRACTION_FLOOR_NPC_ENCOUNTER.levelIndex).toBe(17);
     expect(FIRST_EXTRACTION_FLOOR_NPC_ENCOUNTER.babushkaCount).toBeGreaterThan(
       0,
