@@ -209,6 +209,8 @@ function apartmentPropPassesInteriorForwardGate(
 
 export function resolveApartmentInteriorPropGroupVisible(input: {
   allowDemand: boolean;
+  /** Sidewalk / orbit band — façade shutters stay visible without in-footprint decor demand. */
+  exteriorFacadeDecorVisible?: boolean;
   /** Active unit keys eligible for decor (containing + corridor PVS). */
   visibleUnitKeys: ReadonlySet<string> | null;
   groupUnitKey: string | undefined;
@@ -223,14 +225,29 @@ export function resolveApartmentInteriorPropGroupVisible(input: {
    * vs decor GLBs and do not participate in decor entry warm-up.
    */
   skipInteriorForwardCone?: boolean;
+  /** Standard window shutters on the bay façade — exterior visibility path when not in-unit. */
+  isExteriorFacadeDecor?: boolean;
 }): boolean {
+  const bounds = input.propWorldBounds;
+  const inUnitEligible =
+    input.allowDemand &&
+    input.visibleUnitKeys !== null &&
+    input.visibleUnitKeys.size > 0 &&
+    input.groupUnitKey !== undefined &&
+    input.visibleUnitKeys.has(input.groupUnitKey);
+
+  if (input.isExteriorFacadeDecor === true && !inUnitEligible) {
+    if (input.exteriorFacadeDecorVisible !== true) return false;
+    if (!(bounds instanceof THREE.Box3)) return true;
+    return input.viewFrustum.intersectsBox(bounds);
+  }
+
   if (!input.allowDemand) return false;
   if (input.visibleUnitKeys === null || input.visibleUnitKeys.size === 0) return false;
   const isEligibleUnit =
     input.groupUnitKey !== undefined && input.visibleUnitKeys.has(input.groupUnitKey);
   if (!isEligibleUnit) return false;
 
-  const bounds = input.propWorldBounds;
   if (!(bounds instanceof THREE.Box3)) return true;
 
   if (isEligibleUnit && input.skipInteriorForwardCone === true) {

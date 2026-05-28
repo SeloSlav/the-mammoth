@@ -85,6 +85,7 @@ import {
   ENABLE_RUNTIME_APARTMENT_STATIC_FIXTURE_LIGHTS,
   ENABLE_RUNTIME_DYNAMIC_DECOR_LIGHTS,
   ENABLE_RUNTIME_WINDOW_FILL_LIGHTS,
+  MAMMOTH_EXTERIOR_FACADE_DECOR_UD,
 } from "@the-mammoth/world";
 
 type FixtureEmissiveBackup = {
@@ -156,6 +157,7 @@ export type MountFpApartmentDecorMeshesResult = {
     allowDemand?: boolean,
     visibleUnitKeys?: ReadonlySet<string> | null,
     retainPracticalLightsUnitKey?: string | null,
+    exteriorFacadeDecorVisible?: boolean,
   ) => void;
   getDecorObject: (decorId: bigint) => THREE.Object3D | undefined;
   getStashPrompt: (
@@ -789,7 +791,13 @@ export function mountFpApartmentDecorMeshes(opts: {
 
   return {
     getDecorObject: (decorId) => groupByDecorId.get(decorId),
-    syncVisibility: (camera, allowDemand = true, visibleUnitKeys = null, retainPracticalLightsUnitKey = null) => {
+    syncVisibility: (
+      camera,
+      allowDemand = true,
+      visibleUnitKeys = null,
+      retainPracticalLightsUnitKey = null,
+      exteriorFacadeDecorVisible = false,
+    ) => {
       if (!isFpDebugRenderIsolationEnabled("apartmentDecor")) {
         if (root.visible) root.visible = false;
         clearInteriorLighting();
@@ -822,9 +830,11 @@ export function mountFpApartmentDecorMeshes(opts: {
           typeof g.userData.mammothApartmentUnitKey === "string"
             ? g.userData.mammothApartmentUnitKey
             : undefined;
+        const isExteriorFacadeDecor = g.userData[MAMMOTH_EXTERIOR_FACADE_DECOR_UD] === true;
         const needsWarmUp =
           useInUnitVisibility &&
           !skipInteriorForwardCone &&
+          !isExteriorFacadeDecor &&
           !propVisibilityState.warmedKeys.has(renderKey);
         const desiredVisible = needsWarmUp
           ? resolveApartmentInteriorPropWarmUpVisible({
@@ -834,6 +844,7 @@ export function mountFpApartmentDecorMeshes(opts: {
             })
           : resolveApartmentInteriorPropGroupVisible({
               allowDemand,
+              exteriorFacadeDecorVisible,
               visibleUnitKeys,
               groupUnitKey,
               propWorldBounds: bounds,
@@ -841,6 +852,7 @@ export function mountFpApartmentDecorMeshes(opts: {
               cameraWorldPos: _furnitureVisibilityCamPos,
               cameraWorldDir: _furnitureVisibilityCamDir,
               skipInteriorForwardCone,
+              isExteriorFacadeDecor,
             });
         if (skipInteriorForwardCone) {
           g.visible = desiredVisible;

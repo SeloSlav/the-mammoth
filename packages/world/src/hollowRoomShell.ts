@@ -315,11 +315,11 @@ export function addHollowRoomShell(
       ? (win?.w ?? [])
       : (cw?.w ?? []);
   const claddingN =
-    exteriorFaces.includes("n") && kind === "unit"
+    exteriorFaces.includes("n") && (kind === "unit" || kind === "corridor")
       ? (win?.n ?? [])
       : (cw?.n ?? []);
   const claddingS =
-    exteriorFaces.includes("s") && kind === "unit"
+    exteriorFaces.includes("s") && (kind === "unit" || kind === "corridor")
       ? (win?.s ?? [])
       : (cw?.s ?? []);
   const openInterior = new Set(opts.openInteriorFaces ?? []);

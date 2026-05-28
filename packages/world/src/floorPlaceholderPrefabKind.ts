@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { apartmentUnitAbandonedHardwoodFloorForStoryLevel } from "@the-mammoth/schemas";
 import { floorPlaceholderMeshMaterials as mat } from "./floorPlaceholderMeshMaterials.js";
 import type { PlaceholderKind } from "./floorPlaceholderMeshTypes.js";
 
@@ -36,13 +37,17 @@ export function matsFor(
         wall: mat.corridorWall,
         exteriorWall: mat.corridorExteriorWall,
       };
-    case "unit":
+    case "unit": {
+      const abandonedFloor =
+        storyLevelIndex != null &&
+        apartmentUnitAbandonedHardwoodFloorForStoryLevel(storyLevelIndex);
       return {
-        floor: mat.unitFloor,
+        floor: abandonedFloor ? mat.unitFloorAbandonedHardwood : mat.unitFloor,
         ceil: mat.unitCeil,
         wall: mat.unitWall,
         exteriorWall: mat.unitExteriorWall,
       };
+    }
     case "core":
       return {
         floor: mat.coreFloor,

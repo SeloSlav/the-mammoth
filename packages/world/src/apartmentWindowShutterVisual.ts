@@ -1,8 +1,12 @@
 import * as THREE from "three";
+import { exteriorConcreteWallMaterial } from "./floorPlaceholderMeshMaterials.js";
 
 /** Authoring / DB path kept for catalog compatibility — geometry is procedural, not the GLB. */
 export const APARTMENT_WINDOW_SHUTTER_MODEL_PATH =
   "static/models/objects/window-shutter.glb" as const;
+
+/** Façade shutters stay visible on sidewalk / orbit views — not gated by in-unit decor demand. */
+export const MAMMOTH_EXTERIOR_FACADE_DECOR_UD = "mammothExteriorFacadeDecor" as const;
 
 /** Matches the legacy Meshy GLB outer bounds so existing placements keep scale. */
 export const APARTMENT_WINDOW_SHUTTER_WIDTH_M = 1.953;
@@ -11,6 +15,9 @@ export const APARTMENT_WINDOW_SHUTTER_DEPTH_M = 0.215;
 
 const FRAME_BAR_W_M = 0.055;
 const FRAME_BAR_T_M = APARTMENT_WINDOW_SHUTTER_DEPTH_M * 0.96;
+/** Light concrete reveal from the legacy Meshy ref — outer perimeter within GLB bounds. */
+const CASING_BAR_W_M = 0.062;
+const CASING_DEPTH_M = 0.042;
 const PLATE_THICKNESS_M = 0.006;
 const BAR_RADIUS_M = 0.011;
 const RAIL_H_M = 0.008;
@@ -182,6 +189,7 @@ function createFrameSteelTextures(): {
 let cachedPlateMat: THREE.MeshStandardMaterial | null = null;
 let cachedFrameMat: THREE.MeshStandardMaterial | null = null;
 let cachedBarMat: THREE.MeshStandardMaterial | null = null;
+let cachedCasingMat: THREE.MeshStandardMaterial | null = null;
 
 function plateMaterial(): THREE.MeshStandardMaterial {
   if (cachedPlateMat) return cachedPlateMat;
@@ -215,6 +223,17 @@ function barMaterial(): THREE.MeshStandardMaterial {
   return cachedBarMat;
 }
 
+function casingMaterial(): THREE.MeshStandardMaterial {
+  if (cachedCasingMat) return cachedCasingMat;
+  cachedCasingMat = exteriorConcreteWallMaterial.clone();
+  cachedCasingMat.envMap = null;
+  cachedCasingMat.envMapIntensity = 0;
+  cachedCasingMat.roughness = 1;
+  cachedCasingMat.metalness = 0;
+  cachedCasingMat.normalScale.set(0.35, 0.35);
+  return cachedCasingMat;
+}
+
 export function isApartmentWindowShutterModelPath(modelRelPath: string): boolean {
   const norm = modelRelPath.trim().replace(/^\/+/u, "").toLowerCase();
   return norm.endsWith("window-shutter.glb");
@@ -236,6 +255,7 @@ function addBox(
   mesh.position.set(x, y, z);
   mesh.castShadow = true;
   mesh.receiveShadow = false;
+  mesh.frustumCulled = false;
   root.add(mesh);
 }
 
@@ -254,6 +274,7 @@ function addCylinderBar(
   mesh.position.set(x, y, z);
   mesh.castShadow = true;
   mesh.receiveShadow = false;
+  mesh.frustumCulled = false;
   root.add(mesh);
 }
 
@@ -274,7 +295,18 @@ function addBoltHead(
   bolt.position.set(x, y, z);
   bolt.castShadow = true;
   bolt.receiveShadow = false;
+  bolt.frustumCulled = false;
   root.add(bolt);
+}
+
+/** Thin façade props must not rely on tight frustum spheres when viewed from the street. */
+export function tagApartmentWindowShutterFacadeMeshes(root: THREE.Object3D): void {
+  root.userData[MAMMOTH_EXTERIOR_FACADE_DECOR_UD] = true;
+  root.traverse((obj) => {
+    if (obj instanceof THREE.Mesh) {
+      obj.frustumCulled = false;
+    }
+  });
 }
 
 /**
@@ -284,6 +316,7 @@ function addBoltHead(
 export function buildApartmentWindowShutterVisual(): THREE.Group {
   const root = new THREE.Group();
   root.name = "apartment_window_shutter";
+  tagApartmentWindowShutterFacadeMeshes(root);
 
   const w = APARTMENT_WINDOW_SHUTTER_WIDTH_M;
   const h = APARTMENT_WINDOW_SHUTTER_HEIGHT_M;
@@ -292,24 +325,83 @@ export function buildApartmentWindowShutterVisual(): THREE.Group {
   const halfH = h * 0.5;
   const halfD = d * 0.5;
 
+  const casingMat = casingMaterial();
   const frameMat = frameMaterial();
   const plateMat = plateMaterial();
   const barMat = barMaterial();
 
-  const innerW = w - FRAME_BAR_W_M * 2;
-  const innerH = h - FRAME_BAR_W_M * 2;
+  const shellInnerW = w - CASING_BAR_W_M * 2;
+  const shellInnerH = h - CASING_BAR_W_M * 2;
+  const innerW = shellInnerW - FRAME_BAR_W_M * 2;
+  const innerH = shellInnerH - FRAME_BAR_W_M * 2;
   const plateZ = -halfD + PLATE_THICKNESS_M * 0.5;
   const grilleZ = halfD * 0.22;
+  const casingZ = halfD * 0.12;
 
-  addBox(root, "shutter_frame_top", w, FRAME_BAR_W_M, FRAME_BAR_T_M, 0, halfH - FRAME_BAR_W_M * 0.5, 0, frameMat);
   addBox(
     root,
-    "shutter_frame_bottom",
+    "shutter_casing_top",
     w,
+    CASING_BAR_W_M,
+    CASING_DEPTH_M,
+    0,
+    halfH - CASING_BAR_W_M * 0.5,
+    casingZ,
+    casingMat,
+  );
+  addBox(
+    root,
+    "shutter_casing_bottom",
+    w,
+    CASING_BAR_W_M,
+    CASING_DEPTH_M,
+    0,
+    -halfH + CASING_BAR_W_M * 0.5,
+    casingZ,
+    casingMat,
+  );
+  addBox(
+    root,
+    "shutter_casing_left",
+    CASING_BAR_W_M,
+    shellInnerH,
+    CASING_DEPTH_M,
+    -halfW + CASING_BAR_W_M * 0.5,
+    0,
+    casingZ,
+    casingMat,
+  );
+  addBox(
+    root,
+    "shutter_casing_right",
+    CASING_BAR_W_M,
+    shellInnerH,
+    CASING_DEPTH_M,
+    halfW - CASING_BAR_W_M * 0.5,
+    0,
+    casingZ,
+    casingMat,
+  );
+
+  addBox(
+    root,
+    "shutter_frame_top",
+    shellInnerW,
     FRAME_BAR_W_M,
     FRAME_BAR_T_M,
     0,
-    -halfH + FRAME_BAR_W_M * 0.5,
+    halfH - CASING_BAR_W_M - FRAME_BAR_W_M * 0.5,
+    0,
+    frameMat,
+  );
+  addBox(
+    root,
+    "shutter_frame_bottom",
+    shellInnerW,
+    FRAME_BAR_W_M,
+    FRAME_BAR_T_M,
+    0,
+    -halfH + CASING_BAR_W_M + FRAME_BAR_W_M * 0.5,
     0,
     frameMat,
   );
@@ -319,7 +411,7 @@ export function buildApartmentWindowShutterVisual(): THREE.Group {
     FRAME_BAR_W_M,
     innerH,
     FRAME_BAR_T_M,
-    -halfW + FRAME_BAR_W_M * 0.5,
+    -halfW + CASING_BAR_W_M + FRAME_BAR_W_M * 0.5,
     0,
     0,
     frameMat,
@@ -330,7 +422,7 @@ export function buildApartmentWindowShutterVisual(): THREE.Group {
     FRAME_BAR_W_M,
     innerH,
     FRAME_BAR_T_M,
-    halfW - FRAME_BAR_W_M * 0.5,
+    halfW - CASING_BAR_W_M - FRAME_BAR_W_M * 0.5,
     0,
     0,
     frameMat,
@@ -342,8 +434,8 @@ export function buildApartmentWindowShutterVisual(): THREE.Group {
   const barSpan = innerW - FRAME_BAR_W_M * 0.6;
   const barStartX = -barSpan * 0.5;
   const barStep = barSpan / (barCount - 1);
-  const barBottomY = -halfH + FRAME_BAR_W_M;
-  const barTopY = halfH - FRAME_BAR_W_M;
+  const barBottomY = -halfH + CASING_BAR_W_M + FRAME_BAR_W_M;
+  const barTopY = halfH - CASING_BAR_W_M - FRAME_BAR_W_M;
   const barHeight = barTopY - barBottomY;
 
   for (let i = 0; i < barCount; i++) {
@@ -375,7 +467,7 @@ export function buildApartmentWindowShutterVisual(): THREE.Group {
     );
   }
 
-  const haspX = halfW - FRAME_BAR_W_M * 0.55;
+  const haspX = halfW - CASING_BAR_W_M - FRAME_BAR_W_M * 0.55;
   addBox(
     root,
     "shutter_hasp_plate",

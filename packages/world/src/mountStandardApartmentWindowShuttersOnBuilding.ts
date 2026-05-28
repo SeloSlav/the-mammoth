@@ -5,11 +5,13 @@ import {
   isOwnedApartmentWindowShutterModelRelPath,
   mergeStandardApartmentWindowShuttersIntoPlacedItems,
   resolveOwnedApartmentDecorRootScale,
+  unitExteriorGlassMeshesEnabledForStoryLevel,
 } from "@the-mammoth/schemas";
 import {
   buildProceduralApartmentDecorVisual,
   tagProceduralApartmentDecorMeshesSkipMerge,
 } from "./apartmentProceduralDecorCatalog.js";
+import { tagApartmentWindowShutterFacadeMeshes } from "./apartmentWindowShutterVisual.js";
 import { finalizeStandardWindowShutterPlacedItemsForUnit } from "./apartmentStandardWindowShutterPlacement.js";
 import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "./buildingFloorStack.js";
 import { classifyPrefab } from "./floorPlaceholderPrefabKind.js";
@@ -30,6 +32,8 @@ export function mountStandardApartmentWindowShuttersForBuilding(opts: {
   referencePlacedItems?: readonly OwnedApartmentPlacedItem[];
   buildingOriginY?: number;
   floorSpacingM?: number;
+  /** When set, only mount shutters for this storey (auth backdrop progressive attach). */
+  storyLevelIndex?: number;
 }): THREE.Group {
   const root = new THREE.Group();
   root.name = MAMMOTH_AUTH_STANDARD_WINDOW_SHUTTERS_ROOT_NAME;
@@ -39,12 +43,17 @@ export function mountStandardApartmentWindowShuttersForBuilding(opts: {
   );
   if (!shutterTemplate) return root;
   tagProceduralApartmentDecorMeshesSkipMerge(shutterTemplate);
+  tagApartmentWindowShutterFacadeMeshes(shutterTemplate);
 
   const spacing = opts.floorSpacingM ?? DEFAULT_BUILDING_FLOOR_SPACING_M;
   const originY = opts.buildingOriginY ?? opts.building.worldOrigin?.[1] ?? 0;
   const sorted = [...opts.building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex);
 
   for (const ref of sorted) {
+    if (opts.storyLevelIndex !== undefined && ref.levelIndex !== opts.storyLevelIndex) {
+      continue;
+    }
+    if (!unitExteriorGlassMeshesEnabledForStoryLevel(ref.levelIndex)) continue;
     const floorDoc = resolveFloorDocForLevel({
       building: opts.building,
       ref,
@@ -99,6 +108,7 @@ export function mountStandardApartmentWindowShuttersForBuilding(opts: {
         g.scale.set(s.x, s.y, s.z);
 
         g.add(shutterTemplate.clone(true));
+        tagApartmentWindowShutterFacadeMeshes(g);
         root.add(g);
       }
     }

@@ -192,8 +192,8 @@ function mergeUnitPreservedShellsByPlacedObject(floorPlateGroup: THREE.Group): v
       merged.computeBoundingSphere();
       merged.computeBoundingBox();
       const mesh = new THREE.Mesh(merged, mat);
-      // Separate culling volumes; corridor-wide frustum hits would submit every shell otherwise.
-      mesh.frustumCulled = true;
+      // Thin N/S corner panels sit on end caps — keep them drawable at auth orbit distance.
+      mesh.frustumCulled = !allResidentialExteriorGlass;
       mesh.userData.mammothPlacedObjectId = placedObjectId;
       mesh.userData.mammothUnitInterior = true;
       if (allResidentialExteriorGlass) {
@@ -266,7 +266,7 @@ async function mergeUnitPreservedShellsByPlacedObjectYielding(
       merged.computeBoundingSphere();
       merged.computeBoundingBox();
       const mesh = new THREE.Mesh(merged, mat);
-      mesh.frustumCulled = true;
+      mesh.frustumCulled = !allResidentialExteriorGlass;
       mesh.userData.mammothPlacedObjectId = placedObjectId;
       mesh.userData.mammothUnitInterior = true;
       if (allResidentialExteriorGlass) {

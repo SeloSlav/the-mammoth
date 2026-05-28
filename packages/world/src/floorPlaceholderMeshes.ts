@@ -42,9 +42,12 @@ import {
   readElevatorDoorFaceOverride,
   type BuildFloorMeshesOptions,
 } from "./elevatorDoorFacesFromGroundFloorDoc.js";
+import { unitExteriorGlassMeshesEnabledForStoryLevel } from "@the-mammoth/schemas";
 import {
   addUnitExteriorWindowGlassMeshes,
+  corridorCapFacesForExteriorWindows,
   DEFAULT_EXTERIOR_FACADE_SALT,
+  planCorridorCapExteriorWindow,
   planUnitExteriorWindowsForFace,
   unitShellFacesForExteriorWindows,
 } from "./unitExteriorWindows.js";
@@ -76,6 +79,7 @@ import {
   stairSignPlacementsFromCorridorWallHoleSpans,
   unitEntryWallHolesFromFloorAdjacency,
 } from "./floorCorridorPlateSignage.js";
+import { MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD } from "./mammothMeshUserData.js";
 import { expandBoxForPlacedObject } from "./floorPlaceholderExpandBounds.js";
 
 /**
@@ -424,16 +428,20 @@ export function buildFloorMeshes(
           : [];
       let exteriorWindowHoles: CorridorShellWallHoles | undefined;
       let tintByExteriorFace: Partial<Record<CardinalFace, number>> | undefined;
+      let exteriorGlassFaces: CardinalFace[] = [];
       const partitionFace =
         kind === "unit" ? residentialBalconyPartitionFace(obj.id) : null;
       if (
-        kind === "unit" &&
+        (kind === "unit" || kind === "corridor") &&
         roomExteriorFaces.length > 0 &&
         !skipShaftCutouts
       ) {
-        const windowFaces = unitShellFacesForExteriorWindows(roomExteriorFaces).filter(
-          (face) => face !== partitionFace,
-        );
+        const windowFaces =
+          kind === "unit"
+            ? unitShellFacesForExteriorWindows(roomExteriorFaces).filter(
+                (face) => face !== partitionFace,
+              )
+            : corridorCapFacesForExteriorWindows(roomExteriorFaces);
         if (windowFaces.length > 0) {
           const wt = 0.11;
           const vh = Math.max(sy - 2 * wt, 0.05);
@@ -450,17 +458,29 @@ export function buildFloorMeshes(
           };
           tintByExteriorFace = {};
           for (const face of windowFaces) {
-            const plan = planUnitExteriorWindowsForFace({
-              face,
-              vlenX,
-              vlenZ,
-              yLo,
-              yHi,
-              facadeSalt: salt,
-              storyLevelIndex: story,
-              floorDocId: floor.id,
-              placedObjectId: obj.id,
-            });
+            const plan =
+              kind === "corridor" && (face === "n" || face === "s")
+                ? planCorridorCapExteriorWindow({
+                    face,
+                    vlenX,
+                    yLo,
+                    yHi,
+                    facadeSalt: salt,
+                    storyLevelIndex: story,
+                    floorDocId: floor.id,
+                    placedObjectId: obj.id,
+                  })
+                : planUnitExteriorWindowsForFace({
+                    face,
+                    vlenX,
+                    vlenZ,
+                    yLo,
+                    yHi,
+                    facadeSalt: salt,
+                    storyLevelIndex: story,
+                    floorDocId: floor.id,
+                    placedObjectId: obj.id,
+                  });
             tintByExteriorFace[face] = plan.tintId;
             if (face === "e") {
               gathered.e.push(...plan.holesEw);
@@ -479,7 +499,11 @@ export function buildFloorMeshes(
               gathered.s.length >
             0;
           exteriorWindowHoles = anyHole ? gathered : undefined;
-          if (!anyHole) tintByExteriorFace = undefined;
+          if (!anyHole) {
+            tintByExteriorFace = undefined;
+          } else {
+            exteriorGlassFaces = windowFaces;
+          }
         }
       }
       const balconyShell = residentialBalconyHollowShellExtras(obj.id, sx);
@@ -499,14 +523,17 @@ export function buildFloorMeshes(
         useAuthoringCorridorCeiling,
         ...balconyShell,
       });
-      if (kind === "unit" && exteriorWindowHoles && tintByExteriorFace) {
+      if (
+        (kind === "unit" || kind === "corridor") &&
+        exteriorWindowHoles &&
+        tintByExteriorFace &&
+        exteriorGlassFaces.length > 0 &&
+        unitExteriorGlassMeshesEnabledForStoryLevel(story)
+      ) {
         const hx = sx * 0.5;
         const hz = sz * 0.5;
-        const glassFaces = unitShellFacesForExteriorWindows(roomExteriorFaces).filter(
-          (face) => face !== partitionFace,
-        );
         addUnitExteriorWindowGlassMeshes(room, {
-          faces: glassFaces,
+          faces: exteriorGlassFaces,
           hx,
           hz,
           tintByFace: tintByExteriorFace,
@@ -571,15 +598,27 @@ export function buildFloorMeshes(
          * Corridor meshes do NOT get `mammothSkipFloorGeometryMerge`: unlike unit hollow shells,
          * corridor geometry merges cleanly, and keeping merge on is critical for draw-call count.
          */
-        room.traverse((obj) => {
-          if (!(obj instanceof THREE.Mesh)) return;
-          if (obj.name.startsWith("shell_exterior_cladding")) return;
+        const placedObjectId = obj.id;
+        room.traverse((mesh) => {
+          if (!(mesh instanceof THREE.Mesh)) return;
+          if (mesh.name.startsWith("shell_exterior_cladding")) return;
+          if (mesh.name.startsWith("unit_exterior_glass_")) {
+            mesh.userData.mammothSkipFloorGeometryMerge = true;
+            mesh.userData.mammothPlacedObjectId = placedObjectId;
+            return;
+          }
           if (
-            obj.name.startsWith("shell_wall_") ||
-            obj.name.startsWith("shell_floor") ||
-            obj.name.startsWith("shell_ceiling")
+            mesh.name.startsWith("shell_wall_") ||
+            mesh.name.startsWith("shell_floor") ||
+            mesh.name.startsWith("shell_ceiling")
           ) {
-            obj.userData.mammothUnitInterior = true;
+            mesh.userData.mammothUnitInterior = true;
+            if (
+              mesh.name.startsWith("shell_floor") ||
+              mesh.name.startsWith("shell_ceiling")
+            ) {
+              mesh.userData[MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD] = true;
+            }
           }
         });
       }

@@ -67,6 +67,7 @@ export function createInertFpElevatorWorld(): MountFpElevatorWorldResult {
     tryRaycastFloorPick: () => false,
     consumeInteractKey: () => false,
     shouldSuppressEpickup: () => false,
+    getLandingHailInteractPrompt: () => null,
     getExteriorDoorInteractPrompt: () => null,
     visitCollisionAabbsInXZ: noop,
     applyCabRoofFeetSnap: () => false,

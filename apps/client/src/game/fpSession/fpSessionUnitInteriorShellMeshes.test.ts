@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   collectFpSessionTopFloorResidentialUnitShellMeshes,
   collectFpSessionUnitInteriorMeshEntries,
+  isResidentialUnitShellPlasterMesh,
 } from "./fpSessionUnitInteriorShellMeshes.js";
 
 describe("collectFpSessionTopFloorResidentialUnitShellMeshes", () => {
@@ -36,6 +37,19 @@ describe("collectFpSessionTopFloorResidentialUnitShellMeshes", () => {
     expect(result).toHaveLength(1);
     expect(result[0]?.mesh).toBe(topUnitMesh);
     expect(result[0]?.unitId).toBe("unit_e_003");
+  });
+});
+
+describe("isResidentialUnitShellPlasterMesh", () => {
+  it("treats merged unit shell bundles as plaster (not glass-only merges)", () => {
+    const parquet = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+    parquet.name = "merged_unit_shell:unit_e_003";
+    expect(isResidentialUnitShellPlasterMesh(parquet)).toBe(true);
+
+    const glassBundle = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+    glassBundle.name = "merged_unit_shell:unit_e_003";
+    glassBundle.userData.mammothResidentialUnitExteriorGlass = true;
+    expect(isResidentialUnitShellPlasterMesh(glassBundle)).toBe(false);
   });
 });
 
@@ -74,6 +88,23 @@ describe("collectFpSessionUnitInteriorMeshEntries", () => {
     expect(result[1]?.apartmentUnitKey).toBe("floor-7:unit_w_004");
     expect(result[1]?.residentialExteriorGlass).toBe(false);
     expect(result[1]?.plateLevelIndex).toBe(7);
+  });
+
+  it("classifies merged unit shell bundles as residential plaster", () => {
+    const buildingRoot = new THREE.Group();
+    const floor = new THREE.Group();
+    floor.userData.mammothPlateLevelIndex = 12;
+
+    const merged = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+    merged.name = "merged_unit_shell:unit_w_004";
+    merged.userData.mammothUnitInterior = true;
+    merged.userData.mammothPlacedObjectId = "unit_w_004";
+    floor.add(merged);
+    buildingRoot.add(floor);
+
+    const [entry] = collectFpSessionUnitInteriorMeshEntries(buildingRoot);
+    expect(entry?.isResidentialShellPlaster).toBe(true);
+    expect(entry?.residentialUnitId).toBe("unit_w_004");
   });
 
   it("recognizes generic unit ids and exterior unit glass", () => {

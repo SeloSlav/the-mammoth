@@ -61,6 +61,26 @@ describe("mergeGroupDescendantsByMaterial", () => {
       ),
     ).toHaveLength(1);
   });
+
+  it("does not merge hallway-slab tagged geometry with untagged interior geometry sharing a material", () => {
+    const mat = new THREE.MeshStandardMaterial({ color: 0x888888 });
+    const g = new THREE.Group();
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+    slab.userData.mammothUnitInterior = true;
+    slab.userData.mammothCorridorHallwayShell = true;
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+    wall.userData.mammothUnitInterior = true;
+    g.add(slab, wall);
+
+    mergeGroupDescendantsByMaterial(g);
+
+    expect(g.children.length).toBe(2);
+    const tagged = g.children.find(
+      (child) =>
+        child instanceof THREE.Mesh && child.userData.mammothCorridorHallwayShell === true,
+    );
+    expect(tagged).toBeTruthy();
+  });
 });
 
 describe("cloneGeometryForMerge", () => {

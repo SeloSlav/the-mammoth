@@ -20,7 +20,7 @@ import {
   LANDING_PASSAGE_DOCK_Y_TOL_M,
 } from "../fpElevatorLandingExteriorDoor.js";
 import { ELEVATOR_PHASE_MOVING } from "../fpElevatorConstants.js";
-import { floorButtonLabel } from "../fpElevatorLabels.js";
+import { elevatorLandingFloorHudLabel } from "../fpElevatorLabels.js";
 import {
   fpElevatorHudCarContainsLocalPoint,
   fpElevPlayerInsideCabAuthoritativePlateLocal,
@@ -435,9 +435,7 @@ export function createFpElevatorExteriorDoorInteract(
     const rk = landingExteriorDoorRowKey(ext.shaftKey, ext.level);
     const ld = landingByRowKey.get(rk);
     const willClose = (ld?.desiredOpen ?? 0) !== 0;
-    const shortLabel = floorButtonLabel(ext.level, floorLabelByLevel);
-    const floorLabel =
-      shortLabel === "PR" ? "PR / Ground" : `Floor ${shortLabel}`;
+    const floorLabel = elevatorLandingFloorHudLabel(ext.level, floorLabelByLevel);
     return { willClose, floorLabel };
   };
 

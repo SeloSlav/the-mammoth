@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { WebGPURenderer } from "three/webgpu";
 import {
   applyStandardAuthoringSlot,
   stripArchitecturalDetailMaps,
@@ -12,16 +13,70 @@ import { FLOOR_SHELL_DISABLE_NORMAL_MAPS } from "./featureFlags.js";
 export { FLOOR_SHELL_DISABLE_NORMAL_MAPS } from "./featureFlags.js";
 
 /**
- * Tiled shell PBR: default renderer anisotropy (often 16×) scales texture fetches at grazing
- * angles — huge interior surfaces make that disproportionately expensive vs. visible gain.
+ * Tiled shell PBR: cap anisotropy below the renderer max (often 16×). Full anisotropy on every
+ * merged shell face is expensive; `1×` moirés on distant façades. `4×` is the quality/perf sweet spot.
  */
-const BUILDING_SHELL_TEXTURE_ANISOTROPY = 1;
+const BUILDING_SHELL_TEXTURE_ANISOTROPY_CAP = 4;
 
-function applyShellTextureAnisotropy(mat: THREE.MeshStandardMaterial): void {
-  for (const key of ["map", "normalMap", "roughnessMap", "bumpMap", "aoMap"] as const) {
+/** Runtime cap from {@link initBuildingShellTextureSampling}; defaults to {@link BUILDING_SHELL_TEXTURE_ANISOTROPY_CAP}. */
+let buildingShellTextureAnisotropy = BUILDING_SHELL_TEXTURE_ANISOTROPY_CAP;
+
+const BUILDING_SHELL_TEXTURE_KEYS = ["map", "normalMap", "roughnessMap", "bumpMap", "aoMap"] as const;
+
+/** Apply trilinear mips + modest anisotropy so distant tiled cladding does not shimmer. */
+export function configureBuildingShellTextureSampling(tex: THREE.Texture): void {
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.anisotropy = buildingShellTextureAnisotropy;
+  tex.needsUpdate = true;
+}
+
+function applyBuildingShellTextureSampling(mat: THREE.MeshStandardMaterial): void {
+  for (const key of BUILDING_SHELL_TEXTURE_KEYS) {
     const t = mat[key];
-    if (t instanceof THREE.Texture) t.anisotropy = BUILDING_SHELL_TEXTURE_ANISOTROPY;
+    if (t instanceof THREE.Texture) configureBuildingShellTextureSampling(t);
   }
+}
+
+/** Re-apply shell sampling after async PBR maps resolve (see {@link drainAsyncPbrMaterialRevealBudget}). */
+export function refreshBuildingShellTextureSampling(): void {
+  for (const mat of buildingShellMaterials) {
+    applyBuildingShellTextureSampling(mat);
+  }
+  if (concreteSurfaceTextures) {
+    configureBuildingShellTextureSampling(concreteSurfaceTextures.map);
+    configureBuildingShellTextureSampling(concreteSurfaceTextures.roughnessMap);
+    configureBuildingShellTextureSampling(concreteSurfaceTextures.bumpMap);
+  }
+}
+
+/** `WebGPURenderer` after `init()` — optional `capabilities` when the backend exposes anisotropy. */
+export type BuildingShellTextureSamplingRenderer = WebGPURenderer;
+
+function resolveRendererMaxAnisotropy(renderer: WebGPURenderer): number {
+  const cap = (
+    renderer as WebGPURenderer & {
+      capabilities?: { getMaxAnisotropy?: () => number };
+    }
+  ).capabilities;
+  if (cap?.getMaxAnisotropy) {
+    try {
+      return cap.getMaxAnisotropy();
+    } catch {
+      return BUILDING_SHELL_TEXTURE_ANISOTROPY_CAP;
+    }
+  }
+  return BUILDING_SHELL_TEXTURE_ANISOTROPY_CAP;
+}
+
+/** Clamp shell anisotropy to GPU max; call once after `WebGPURenderer.init()`. */
+export function initBuildingShellTextureSampling(
+  renderer: BuildingShellTextureSamplingRenderer,
+): void {
+  const max = resolveRendererMaxAnisotropy(renderer);
+  buildingShellTextureAnisotropy = Math.min(BUILDING_SHELL_TEXTURE_ANISOTROPY_CAP, Math.max(1, max));
+  refreshBuildingShellTextureSampling();
 }
 
 function applyShellNormalMapToggle(mat: THREE.MeshStandardMaterial): void {
@@ -130,9 +185,9 @@ function createConcreteSurfaceTextures():
   bumpMap.wrapT = THREE.RepeatWrapping;
   bumpMap.repeat.copy(map.repeat);
 
-  map.anisotropy = BUILDING_SHELL_TEXTURE_ANISOTROPY;
-  roughnessMap.anisotropy = BUILDING_SHELL_TEXTURE_ANISOTROPY;
-  bumpMap.anisotropy = BUILDING_SHELL_TEXTURE_ANISOTROPY;
+  configureBuildingShellTextureSampling(map);
+  configureBuildingShellTextureSampling(roughnessMap);
+  configureBuildingShellTextureSampling(bumpMap);
 
   return { map, roughnessMap, bumpMap };
 }
@@ -188,7 +243,7 @@ const corridorHallFloorMaterial = (() => {
       t.repeat.set(rep, rep);
     }
   }
-  applyShellTextureAnisotropy(m);
+  applyBuildingShellTextureSampling(m);
   applyShellNormalMapToggle(m);
   return m;
 })();
@@ -220,7 +275,7 @@ export const interiorConcreteFloorShellMaterial = (() => {
       t.repeat.set(rep, rep);
     }
   }
-  applyShellTextureAnisotropy(m);
+  applyBuildingShellTextureSampling(m);
   applyShellNormalMapToggle(m);
   return m;
 })();
@@ -254,18 +309,21 @@ export const exteriorConcreteWallMaterial = (() => {
       t.repeat.set(rep, rep);
     }
   }
-  applyShellTextureAnisotropy(m);
+  applyBuildingShellTextureSampling(m);
   applyShellNormalMapToggle(m);
+  /** Exterior slab concrete — lower normal than interior plaster so distant walls stay matte. */
+  m.normalScale.set(0.42, 0.42);
   return m;
 })();
 
-/** Weathered red brick PATINA set for unit N/S shell cladding and balcony bay side cheeks. */
+/** Faded PATINA brick for unit N/S shell cladding and balcony bay side cheeks (fal-ai/patina/material). */
 const APARTMENT_UNIT_EXTERIOR_BRICK_AUTHORING: StandardAuthoringSlot = {
   name: "apartment-unit-exterior-brick",
   roughness: 1,
   metalness: 0,
   mapUrl: "/static/materials/apartment-unit-exterior-brick/basecolor.png",
   normalMapUrl: "/static/materials/apartment-unit-exterior-brick/normal.png",
+  roughnessMapUrl: "/static/materials/apartment-unit-exterior-brick/roughness.png",
 };
 
 export const unitExteriorBrickWallMaterial = (() => {
@@ -278,7 +336,7 @@ export const unitExteriorBrickWallMaterial = (() => {
   stripArchitecturalDetailMaps(m, { metalness: 0 });
   /** Brick courses read tighter than slab concrete at the same world-metric wall UV scale. */
   const rep = 0.52;
-  for (const key of ["map", "normalMap"] as const) {
+  for (const key of ["map", "normalMap", "roughnessMap"] as const) {
     const t = m[key];
     if (t) {
       t.wrapS = THREE.RepeatWrapping;
@@ -286,18 +344,21 @@ export const unitExteriorBrickWallMaterial = (() => {
       t.repeat.set(rep, rep);
     }
   }
-  applyShellTextureAnisotropy(m);
-  m.roughness = 1;
+  applyBuildingShellTextureSampling(m);
+  m.roughness = 0.86;
   m.metalness = 0;
   m.envMap = null;
   m.envMapIntensity = 0;
-  /** Softer normals — sun-bleached mortar reads flatter than fresh brick relief. */
-  m.normalScale.set(0.42, 0.42);
   /**
-   * Albedo multiply above 1.0 lifts the dark PATINA basecolor toward dusty salmon-beige.
-   * Warm bias (R > G > B) keeps a hint of brick without the deep burgundy read outdoors.
+   * PATINA basecolor averages ~rgb(128,94,93) vs slab concrete ~rgb(202,200,191). Lift with G/B
+   * above R for sun-bleached panel brick — no warm emissive (salmon at distance) or sub-1 multiply.
    */
-  m.color.setRGB(1.62, 1.52, 1.42);
+  m.color.setRGB(1.82, 2.08, 2.02);
+  m.emissive.setHex(0x000000);
+  m.emissiveIntensity = 0;
+  m.normalScale.set(0.28, 0.28);
+  /** Grey scene fog crushes saturated brick at distance — keep N/S bar faces readable from the yard. */
+  m.fog = false;
   return m;
 })();
 
@@ -332,7 +393,7 @@ export const elevatorLandingDoorFrameMaterial = (() => {
       t.repeat.set(rep, rep);
     }
   }
-  applyShellTextureAnisotropy(m);
+  applyBuildingShellTextureSampling(m);
   return m;
 })();
 
@@ -364,7 +425,7 @@ export const groundLevelCorridorInteriorWallMaterial = (() => {
       t.repeat.set(rep, rep);
     }
   }
-  applyShellTextureAnisotropy(m);
+  applyBuildingShellTextureSampling(m);
   applyShellNormalMapToggle(m);
   return m;
 })();
@@ -398,7 +459,7 @@ export const buildingCorridorCeilingMaterial = (() => {
       t.repeat.set(rep, rep);
     }
   }
-  applyShellTextureAnisotropy(m);
+  applyBuildingShellTextureSampling(m);
   applyShellNormalMapToggle(m);
   return m;
 })();
@@ -432,7 +493,7 @@ const apartmentUnitInteriorWallCeilingMaterial = (() => {
       t.repeat.set(rep, rep);
     }
   }
-  applyShellTextureAnisotropy(m);
+  applyBuildingShellTextureSampling(m);
   /** Keep tangent detail for plaster; `applyShellNormalMapToggle` would drop it and flatten the read. */
   /** Authored basecolor only — profile tint applied at mount via engine shell mood grade. */
   m.color.setHex(0xffffff);
@@ -468,13 +529,62 @@ const apartmentUnitFloorMaterial = (() => {
       t.repeat.set(rep, rep);
     }
   }
-  applyShellTextureAnisotropy(m);
+  applyBuildingShellTextureSampling(m);
   /** Apartment parquet keeps normals — raking lamp light reads plank depth (see profile `floorNormalScale`). */
   m.normalScale.set(1.26, 1.26);
   /** Authored basecolor only — profile tint applied at mount via engine shell mood grade. */
   m.color.setHex(0xffffff);
   return m;
 })();
+
+/** PATINA hardwood + fungus for abandoned extraction-band unit floors (display ≤ 16). */
+const APARTMENT_UNIT_FLOOR_ABANDONED_HARDWOOD_FUNGUS_AUTHORING: StandardAuthoringSlot = {
+  name: "apartment-unit-abandoned-hardwood-fungus-floor",
+  roughness: 1,
+  metalness: 0.02,
+  mapUrl: "/static/materials/apartment-unit-floor-abandoned-hardwood-fungus/basecolor.png",
+  normalMapUrl: "/static/materials/apartment-unit-floor-abandoned-hardwood-fungus/normal.png",
+  roughnessMapUrl: "/static/materials/apartment-unit-floor-abandoned-hardwood-fungus/roughness.png",
+};
+
+export const apartmentUnitAbandonedHardwoodFloorMaterial = (() => {
+  const m = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 1,
+    metalness: 0,
+  });
+  applyStandardAuthoringSlot(m, APARTMENT_UNIT_FLOOR_ABANDONED_HARDWOOD_FUNGUS_AUTHORING);
+  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
+  /** Plank courses read at room scale — match occupied parquet repeat band. */
+  const rep = 0.42;
+  for (const key of ["map", "normalMap", "roughnessMap"] as const) {
+    const t = m[key];
+    if (t) {
+      t.wrapS = THREE.RepeatWrapping;
+      t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(rep, rep);
+    }
+  }
+  applyBuildingShellTextureSampling(m);
+  m.normalScale.set(1.26, 1.26);
+  /** Authored basecolor only — profile tint applied at mount via engine shell mood grade. */
+  m.color.setHex(0xffffff);
+  return m;
+})();
+
+/** Shell PBR mats whose maps may hydrate async — refreshed by {@link refreshBuildingShellTextureSampling}. */
+const buildingShellMaterials: readonly THREE.MeshStandardMaterial[] = [
+  corridorHallFloorMaterial,
+  interiorConcreteFloorShellMaterial,
+  exteriorConcreteWallMaterial,
+  unitExteriorBrickWallMaterial,
+  elevatorLandingDoorFrameMaterial,
+  groundLevelCorridorInteriorWallMaterial,
+  buildingCorridorCeilingMaterial,
+  apartmentUnitInteriorWallCeilingMaterial,
+  apartmentUnitFloorMaterial,
+  apartmentUnitAbandonedHardwoodFloorMaterial,
+];
 
 export const floorPlaceholderMeshMaterials = {
   corridorFloor: interiorConcreteFloorShellMaterial,
@@ -488,6 +598,7 @@ export const floorPlaceholderMeshMaterials = {
   /** Elevator landing swing-door frame rail/stile/fill — red panel PBR (clone for each leaf). */
   elevatorLandingDoorFrame: elevatorLandingDoorFrameMaterial,
   unitFloor: apartmentUnitFloorMaterial,
+  unitFloorAbandonedHardwood: apartmentUnitAbandonedHardwoodFloorMaterial,
   unitCeil: apartmentUnitInteriorWallCeilingMaterial,
   unitWall: apartmentUnitInteriorWallCeilingMaterial,
   unitExteriorWall: exteriorConcreteWallMaterial,

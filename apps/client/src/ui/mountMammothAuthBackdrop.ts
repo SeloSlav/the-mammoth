@@ -6,7 +6,9 @@ import {
 import {
   disposeStandardApartmentWindowShuttersRoot,
   ensureStairwellCigaretteMeshReady,
+  MAMMOTH_AUTH_STANDARD_WINDOW_SHUTTERS_ROOT_NAME,
   mountStandardApartmentWindowShuttersForBuilding,
+  parseBuildingDoc,
   parseFloorDoc,
 } from "@the-mammoth/world";
 import { OwnedApartmentBuiltinsDocSchema } from "@the-mammoth/schemas";
@@ -14,18 +16,21 @@ import {
   attachFpSessionEnvironment,
   FP_SESSION_SKY_CAMERA_FAR,
 } from "../game/fpSession/fpSessionEnvironment.js";
+import buildingDoc from "../../../../content/building/mammoth.json";
 import { floorPayloadByDocId } from "../game/fpSession/fpSessionContentLoad.js";
 import {
   primeMegablockStaticWorldMeshBuild,
   waitMegablockStaticWorldMeshReady,
   type MegablockBackdropHooks,
 } from "../game/fpSession/fpSessionStaticWorldMeshCache.js";
-import type { FpSessionStaticWorld } from "../game/fpSession/fpSessionWorldMount.js";
 import {
   FP_SESSION_MAX_PIXEL_RATIO,
   FP_SESSION_WEBGPU_ANTIALIAS,
 } from "../game/fpSession/fpSessionConstants.js";
+import { bootstrapFpSessionRenderer } from "../game/fpSession/fpSessionRendererBootstrap.js";
 import { yieldToMain } from "../game/fpSession/yieldToMain.js";
+import { bindAuthBackdropFacadeReadableEnv } from "./mammothAuthBackdropFacadeLighting.js";
+import { hideUnitInteriorMeshesForAuthView } from "./mammothAuthBackdropInteriorVisibility.js";
 
 const AUTH_BACKDROP_CAMERA_FOV_DEG = 38;
 const AUTH_BACKDROP_ORBIT_WOBBLE_AMPLITUDE_RAD = 0.045;
@@ -57,21 +62,6 @@ async function loadAuthBackdropShutterReferencePlacedItems() {
   }
 }
 
-async function attachAuthBackdropStandardWindowShutters(
-  world: FpSessionStaticWorld,
-  assignRoot: (root: THREE.Group | null) => void,
-): Promise<void> {
-  const referencePlacedItems = await loadAuthBackdropShutterReferencePlacedItems();
-  await yieldToMain();
-  const shutterRoot = mountStandardApartmentWindowShuttersForBuilding({
-    building: world.building,
-    getFloorDoc: (id) => parseFloorDoc(floorPayloadByDocId(id)),
-    referencePlacedItems,
-  });
-  world.buildingRoot.add(shutterRoot);
-  assignRoot(shutterRoot);
-}
-
 export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promise<() => void> {
   await assertWebGpuAdapterOrThrow();
   await yieldToMain();
@@ -79,24 +69,53 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
   await yieldToMain();
 
   const scene = new THREE.Scene();
+  const building = parseBuildingDoc(buildingDoc);
+  const shutterReferencePlacedItemsPromise = loadAuthBackdropShutterReferencePlacedItems();
 
   let disposed = false;
   let raf = 0;
-  let worldAttached = false;
-  let buildingRootForDispose: THREE.Group | null = null;
   let authShutterRootForDispose: THREE.Group | null = null;
+  const shutterMountedStoryLevels = new Set<number>();
+
+  const authShutterRoot = new THREE.Group();
+  authShutterRoot.name = MAMMOTH_AUTH_STANDARD_WINDOW_SHUTTERS_ROOT_NAME;
+  authShutterRootForDispose = authShutterRoot;
+
+  const mountAuthShuttersForStoryLevel = async (
+    buildingRoot: THREE.Group,
+    storyLevelIndex: number,
+  ): Promise<void> => {
+    if (disposed || shutterMountedStoryLevels.has(storyLevelIndex)) return;
+    shutterMountedStoryLevels.add(storyLevelIndex);
+    const referencePlacedItems = await shutterReferencePlacedItemsPromise;
+    if (disposed) return;
+    const fragment = mountStandardApartmentWindowShuttersForBuilding({
+      building,
+      getFloorDoc: (id) => parseFloorDoc(floorPayloadByDocId(id)),
+      referencePlacedItems,
+      storyLevelIndex,
+    });
+    while (fragment.children.length > 0) {
+      authShutterRoot.add(fragment.children[0]!);
+    }
+    if (authShutterRoot.parent !== buildingRoot) {
+      buildingRoot.add(authShutterRoot);
+    }
+    bindAuthBackdropFacadeReadableEnv(scene, buildingRoot, authShutterRoot);
+  };
 
   /** World-space stack bounds for orbit framing — grows each storey during progressive attach. */
   const framingBounds = AUTH_BACKDROP_FALLBACK_BUILDING_BOUNDS.clone();
 
   const backdropHooks: MegablockBackdropHooks = {
-    onFloorPlateInstantiated: async ({ buildingRoot }) => {
+    onFloorPlateInstantiated: async ({ buildingRoot, ref }) => {
       if (disposed) return;
       if (buildingRoot.parent !== scene) scene.add(buildingRoot);
       buildingRoot.updateMatrixWorld(true);
+      hideUnitInteriorMeshesForAuthView(buildingRoot);
+      bindAuthBackdropFacadeReadableEnv(scene, buildingRoot, authShutterRoot);
       framingBounds.copy(new THREE.Box3().setFromObject(buildingRoot));
-      worldAttached = true;
-      buildingRootForDispose = buildingRoot;
+      await mountAuthShuttersForStoryLevel(buildingRoot, ref.levelIndex);
     },
   };
 
@@ -111,6 +130,7 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
   });
   await renderer.init();
   assertWebGpuRendererBackend(renderer);
+  await bootstrapFpSessionRenderer(renderer);
   await yieldToMain();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, FP_SESSION_MAX_PIXEL_RATIO));
 
@@ -153,12 +173,9 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
       world.buildingRoot.updateMatrixWorld(true);
       world.cellRoot.updateMatrixWorld(true);
       await yieldToMain();
+      hideUnitInteriorMeshesForAuthView(world.buildingRoot);
       framingBounds.copy(world.buildingBodyWorldBounds);
-      worldAttached = true;
-      buildingRootForDispose = world.buildingRoot;
-      await attachAuthBackdropStandardWindowShutters(world, (root) => {
-        authShutterRootForDispose = root;
-      });
+      bindAuthBackdropFacadeReadableEnv(scene, world.buildingRoot, authShutterRoot);
     })
     .catch((err: unknown) => {
       if (disposed) return;
@@ -221,4 +238,4 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
     scene.clear();
     renderer.dispose();
   };
-}
+};

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { unitExteriorGlassMeshesEnabledForStoryLevel } from "@the-mammoth/schemas";
 import type { PlacedObject } from "@the-mammoth/schemas";
 import type { CollisionAabb } from "./collisionScene.js";
 import type { HollowShellOpts } from "./floorPlaceholderMeshTypes.js";
@@ -327,7 +328,7 @@ export function addResidentialBalconyBayShell(
       : "shell_exterior_cladding_w",
   );
 
-  if (holesEw.length > 0) {
+  if (holesEw.length > 0 && unitExteriorGlassMeshesEnabledForStoryLevel(opts.storyLevelIndex)) {
     const glassGroup = new THREE.Group();
     glassGroup.name = "balcony_bay";
     glassGroup.position.set(cx, 0, 0);

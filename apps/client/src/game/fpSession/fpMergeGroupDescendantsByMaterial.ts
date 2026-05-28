@@ -12,13 +12,15 @@ type MergeBucket = {
   geos: THREE.BufferGeometry[];
   isInterior: boolean;
   genericInteriorVisibleInResidentialUnit: boolean;
+  corridorHallwayShell: boolean;
 };
 
 function mergeBucketKey(material: THREE.Material, mesh: THREE.Mesh): string {
   const isInterior = mesh.userData.mammothUnitInterior === true ? 1 : 0;
   const genericInteriorVisibleInResidentialUnit =
     mesh.userData.mammothGenericInteriorVisibleInResidentialUnit === true ? 1 : 0;
-  return `${material.uuid}|interior:${isInterior}|genericInUnit:${genericInteriorVisibleInResidentialUnit}`;
+  const corridorHallwayShell = mesh.userData.mammothCorridorHallwayShell === true ? 1 : 0;
+  return `${material.uuid}|interior:${isInterior}|genericInUnit:${genericInteriorVisibleInResidentialUnit}|hallwaySlab:${corridorHallwayShell}`;
 }
 
 function createMergeBucket(material: THREE.Material, mesh: THREE.Mesh): MergeBucket {
@@ -28,7 +30,16 @@ function createMergeBucket(material: THREE.Material, mesh: THREE.Mesh): MergeBuc
     isInterior: mesh.userData.mammothUnitInterior === true,
     genericInteriorVisibleInResidentialUnit:
       mesh.userData.mammothGenericInteriorVisibleInResidentialUnit === true,
+    corridorHallwayShell: mesh.userData.mammothCorridorHallwayShell === true,
   };
+}
+
+function absorbMergeMeshFlags(bucket: MergeBucket, mesh: THREE.Mesh): void {
+  if (mesh.userData.mammothUnitInterior === true) bucket.isInterior = true;
+  if (mesh.userData.mammothGenericInteriorVisibleInResidentialUnit === true) {
+    bucket.genericInteriorVisibleInResidentialUnit = true;
+  }
+  if (mesh.userData.mammothCorridorHallwayShell === true) bucket.corridorHallwayShell = true;
 }
 
 function applyMergedUserData(mesh: THREE.Mesh, bucket: MergeBucket): void {
@@ -36,6 +47,7 @@ function applyMergedUserData(mesh: THREE.Mesh, bucket: MergeBucket): void {
   if (bucket.genericInteriorVisibleInResidentialUnit) {
     mesh.userData.mammothGenericInteriorVisibleInResidentialUnit = true;
   }
+  if (bucket.corridorHallwayShell) mesh.userData.mammothCorridorHallwayShell = true;
 }
 
 /**
@@ -121,6 +133,7 @@ export function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
       bucket = createMergeBucket(material, obj);
       geosByMat.set(key, bucket);
     }
+    absorbMergeMeshFlags(bucket, obj);
     bucket.geos.push(geo);
   });
 
@@ -197,6 +210,7 @@ export async function mergeGroupDescendantsByMaterialYielding(
         bucket = createMergeBucket(material, obj);
         geosByMat.set(key, bucket);
       }
+      absorbMergeMeshFlags(bucket, obj);
       bucket.geos.push(geo);
     }
     if (end < mergeMeshes.length) await yieldToMain();

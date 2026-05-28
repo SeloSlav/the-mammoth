@@ -2,13 +2,32 @@ import * as THREE from "three";
 import type { CardinalFace, WallHoleXY, WallHoleYZ } from "./wallWithDoorCutout.js";
 
 /**
- * East/west elevations get façade windows. North/south short ends stay solid even when
- * `exteriorFacesForPlacedObjectInFloor` marks them exposed (bar ends, slots, etc.).
+ * E/W long façades get the multi-segment window band. N/S bar caps get at most one face with a
+ * single corner panel — same size/tint as one long-façade window (see {@link planUnitExteriorWindowsForFace}).
+ *
+ * When both short ends read as exposed, pick **south**: Mamutica's yard / primary exterior band
+ * faces −Z; the north cap usually looks at interior brick (podium, opposite bar, shaft cheeks).
  */
 export function unitShellFacesForExteriorWindows(
   exteriorFaces: readonly CardinalFace[],
 ): CardinalFace[] {
-  return exteriorFaces.filter((f) => f === "e" || f === "w");
+  const longFaces = exteriorFaces.filter((f) => f === "e" || f === "w");
+  const nsCap: CardinalFace[] = exteriorFaces.includes("s")
+    ? ["s"]
+    : exteriorFaces.includes("n")
+      ? ["n"]
+      : [];
+  return [...longFaces, ...nsCap];
+}
+
+/** Corridor spine caps: one centered window on each exposed short end (north and south). */
+export function corridorCapFacesForExteriorWindows(
+  exteriorFaces: readonly CardinalFace[],
+): CardinalFace[] {
+  const out: CardinalFace[] = [];
+  if (exteriorFaces.includes("n")) out.push("n");
+  if (exteriorFaces.includes("s")) out.push("s");
+  return out;
 }
 
 const EDGE_INSET_M = 0.35;
@@ -18,8 +37,18 @@ const SILL_ABOVE_YLO_M = 0.55;
 const WINDOW_BOTTOM_TRIM_M = 0.36;
 const WINDOW_OPENING_HEIGHT_M = 1.78;
 const WINDOW_HEAD_CLEARANCE_M = 0.06;
+/** Corridor N/S end caps: centered slit — tall and narrow, not unit E/W panels. */
+export const CORRIDOR_CAP_WINDOW_WIDTH_M = 0.95;
+const CORRIDOR_CAP_SILL_ABOVE_YLO_M = 0.42;
+const CORRIDOR_CAP_HEAD_CLEARANCE_M = 0.08;
 /** Bump to reshuffle all unit facade window layouts (see `BuildFloorMeshesOptions.facadeSalt`). */
 export const DEFAULT_EXTERIOR_FACADE_SALT = 1;
+
+/** Room-local X tangent on N/S faces: east wing → +X corner, west wing → −X corner. */
+export function exteriorCornerTangentOnNsFace(placedObjectId: string): "min" | "max" {
+  if (placedObjectId.startsWith("unit_w_")) return "min";
+  return "max";
+}
 
 function hashStringToUint32(s: string): number {
   let h = 2166136261;
@@ -108,10 +137,101 @@ export type UnitExteriorWindowPlan = {
   holesNs: WallHoleXY[];
 };
 
+/** Long façade on the same unit — N/S caps reuse one panel from this face (size + tint). */
+function primaryLongFacadeForUnit(placedObjectId: string): "e" | "w" {
+  return placedObjectId.startsWith("unit_w_") ? "w" : "e";
+}
+
 /**
- * Plans rectangular openings + tint for one exterior face of an axis-aligned unit shell.
- * `vlenX` / `vlenZ` match `addHollowRoomShell` interior wall spans (after wall thickness).
+ * One E/W façade panel on an N/S cap at the tower corner — same opening size/tint as the long face,
+ * not a separate narrow cap style.
  */
+function planSingleCornerWindowOnNsFace(opts: {
+  face: CardinalFace;
+  vlenX: number;
+  vlenZ: number;
+  yLo: number;
+  yHi: number;
+  facadeSalt: number;
+  storyLevelIndex: number;
+  floorDocId: string;
+  placedObjectId: string;
+}): UnitExteriorWindowPlan {
+  const longFace = primaryLongFacadeForUnit(opts.placedObjectId);
+  const longPlan = planUnitExteriorWindowsForFace({
+    ...opts,
+    face: longFace,
+  });
+  const ref = longPlan.holesEw[0];
+  if (!ref) {
+    return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
+  }
+
+  const width = Math.abs(ref.z1 - ref.z0);
+  const y0 = ref.y0;
+  const y1 = ref.y1;
+
+  const tMin = -opts.vlenX * 0.5 + EDGE_INSET_M;
+  const tMax = opts.vlenX * 0.5 - EDGE_INSET_M;
+  if (width < MIN_SEGMENT_WIDTH_M || tMax - tMin < width + 1e-4) {
+    return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
+  }
+
+  const corner = exteriorCornerTangentOnNsFace(opts.placedObjectId);
+  const x0 = corner === "max" ? tMax - width : tMin;
+  const x1 = corner === "max" ? tMax : tMin + width;
+
+  return {
+    count: 1,
+    tintId: longPlan.tintId,
+    holesEw: [],
+    holesNs: [{ x0, x1, y0, y1 }],
+  };
+}
+
+/** Centered tall narrow slit on a corridor north/south end cap. */
+export function planCorridorCapExteriorWindow(opts: {
+  face: "n" | "s";
+  vlenX: number;
+  yLo: number;
+  yHi: number;
+  facadeSalt: number;
+  storyLevelIndex: number;
+  floorDocId: string;
+  placedObjectId: string;
+}): UnitExteriorWindowPlan {
+  const seed = facadeSeedForUnitFace({
+    facadeSalt: opts.facadeSalt,
+    storyLevelIndex: opts.storyLevelIndex,
+    floorDocId: opts.floorDocId,
+    placedObjectId: opts.placedObjectId,
+    face: opts.face,
+  });
+  const rnd = mulberry32(seed);
+  const tintId = Math.floor(rnd() * GLASS_TINT_PRESETS.length);
+
+  const tMin = -opts.vlenX * 0.5 + EDGE_INSET_M;
+  const tMax = opts.vlenX * 0.5 - EDGE_INSET_M;
+  const tangentSpan = tMax - tMin;
+  const y0 = opts.yLo + CORRIDOR_CAP_SILL_ABOVE_YLO_M;
+  const y1 = opts.yHi - CORRIDOR_CAP_HEAD_CLEARANCE_M;
+  if (tangentSpan < MIN_SEGMENT_WIDTH_M || y1 <= y0 + 0.8) {
+    return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
+  }
+
+  const width = Math.min(CORRIDOR_CAP_WINDOW_WIDTH_M, tangentSpan * 0.88);
+  const xMid = (tMin + tMax) * 0.5;
+  const x0 = xMid - width * 0.5;
+  const x1 = xMid + width * 0.5;
+
+  return {
+    count: 1,
+    tintId,
+    holesEw: [],
+    holesNs: [{ x0, x1, y0, y1 }],
+  };
+}
+
 export function planUnitExteriorWindowsForFace(opts: {
   face: CardinalFace;
   vlenX: number;
@@ -123,6 +243,10 @@ export function planUnitExteriorWindowsForFace(opts: {
   floorDocId: string;
   placedObjectId: string;
 }): UnitExteriorWindowPlan {
+  if (opts.face === "n" || opts.face === "s") {
+    return planSingleCornerWindowOnNsFace(opts);
+  }
+
   const seed = facadeSeedForUnitFace({
     facadeSalt: opts.facadeSalt,
     storyLevelIndex: opts.storyLevelIndex,
@@ -248,6 +372,7 @@ export function addUnitExteriorWindowGlassMeshes(
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(wt, dy, dz), mat);
         mesh.name = `unit_exterior_glass_${face}_${gi++}`;
         mesh.position.set(xCenter, (y0 + y1) * 0.5, (z0 + z1) * 0.5);
+        mesh.frustumCulled = false;
         group.add(mesh);
       }
     } else {
@@ -265,6 +390,7 @@ export function addUnitExteriorWindowGlassMeshes(
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(dx, dy, wt), mat);
         mesh.name = `unit_exterior_glass_${face}_${gi++}`;
         mesh.position.set((x0 + x1) * 0.5, (y0 + y1) * 0.5, zCenter);
+        mesh.frustumCulled = false;
         group.add(mesh);
       }
     }

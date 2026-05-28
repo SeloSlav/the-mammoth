@@ -34,7 +34,13 @@ export {
   elevatorDoorFacesFromGroundFloorDoc,
   readElevatorDoorFaceOverride,
 };
-export { floorPlaceholderMeshMaterials } from "./floorPlaceholderMeshMaterials.js";
+export {
+  configureBuildingShellTextureSampling,
+  floorPlaceholderMeshMaterials,
+  initBuildingShellTextureSampling,
+  refreshBuildingShellTextureSampling,
+} from "./floorPlaceholderMeshMaterials.js";
+export { MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD } from "./mammothMeshUserData.js";
 export type { BuildFloorMeshesOptions };
 export {
   applyStairOpeningCollisionOverlay,
@@ -60,7 +66,10 @@ export {
 } from "./buildingFloorStack.js";
 export {
   addUnitExteriorWindowGlassMeshes,
+  corridorCapFacesForExteriorWindows,
+  CORRIDOR_CAP_WINDOW_WIDTH_M,
   facadeSeedForUnitFace,
+  planCorridorCapExteriorWindow,
   planUnitExteriorWindowsForFace,
   unitShellFacesForExteriorWindows,
   UNIT_SHELL_WALL_THICKNESS_M,
@@ -210,6 +219,8 @@ export {
   APARTMENT_WINDOW_SHUTTER_WIDTH_M,
   buildApartmentWindowShutterVisual,
   isApartmentWindowShutterModelPath,
+  MAMMOTH_EXTERIOR_FACADE_DECOR_UD,
+  tagApartmentWindowShutterFacadeMeshes,
 } from "./apartmentWindowShutterVisual.js";
 export {
   finalizeStandardWindowShutterPlacedItemsForUnit,
@@ -363,6 +374,7 @@ export {
   DEFAULT_ASYNC_PBR_REVEALS_PER_FRAME,
   drainAsyncPbrMaterialRevealBudget,
   scheduleAsyncPbrMaterialReveal,
+  setAsyncPbrMaterialRevealDrainCompleteHook,
 } from "./pbrAsyncMaterialReveal.js";
 export { textureCandidatesFromSpec } from "./pbrTexturePath.js";
 export { disposeMaterial, disposeTexture, disposeObject3D } from "./threeDispose.js";

@@ -1249,6 +1249,7 @@ export async function mountFpSession(
     isInsideStairwellShaft,
     getContainingResidentialUnitKey,
     isApartmentDecorInteriorVisible,
+    isExteriorFacadeDecorVisible,
     getCorridorPvsVisibleUnitKeys,
     getCorridorPvsVisibleUnitIds,
     getActiveFloorPlateBand,
@@ -1411,6 +1412,9 @@ export async function mountFpSession(
   const isApartmentDecorInteriorVisibleForFrame = isCombatSim
     ? () => false
     : isApartmentDecorInteriorVisible;
+  const isExteriorFacadeDecorVisibleForFrame = isCombatSim
+    ? () => false
+    : isExteriorFacadeDecorVisible;
   const getCorridorPvsVisibleUnitKeysForFrame = isCombatSim
     ? () => new Set<string>() as ReadonlySet<string>
     : getCorridorPvsVisibleUnitKeys;
@@ -2491,6 +2495,7 @@ export async function mountFpSession(
     getActiveApartmentDecorUnitKey: getActiveApartmentDecorUnitKeyForFrame,
     getContainingResidentialUnitBounds: getContainingResidentialUnitBoundsForFrame,
     isApartmentDecorInteriorVisible: isApartmentDecorInteriorVisibleForFrame,
+    isExteriorFacadeDecorVisible: isExteriorFacadeDecorVisibleForFrame,
     selectedHotbarRow,
     logFpPerf,
     tickFpSessionElevDebug,

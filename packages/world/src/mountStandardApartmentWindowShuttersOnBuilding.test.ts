@@ -6,6 +6,7 @@ import {
   BuildingDocSchema,
   FloorDocSchema,
   apartmentStoryLevelIndexToDisplayFloor,
+  unitExteriorGlassMeshesEnabledForStoryLevel,
 } from "@the-mammoth/schemas";
 import { classifyPrefab } from "./floorPlaceholderPrefabKind.js";
 import {
@@ -31,7 +32,7 @@ function readTypicalFloorDoc() {
 }
 
 describe("mountStandardApartmentWindowShuttersForBuilding", () => {
-  it("mounts two shutters per qualifying east/west unit on display floors 13–19", () => {
+  it("mounts two shutters per qualifying east/west unit on display floors 17–19", () => {
     const building = readMammothBuildingDoc();
     const typicalFloor = readTypicalFloorDoc();
     const qualifyingUnitCount = typicalFloor.objects.filter((obj) => {
@@ -42,6 +43,7 @@ describe("mountStandardApartmentWindowShuttersForBuilding", () => {
     const qualifyingFloorCount = building.floorRefs.filter((ref) => {
       const displayFloor = apartmentStoryLevelIndexToDisplayFloor(ref.levelIndex);
       return (
+        unitExteriorGlassMeshesEnabledForStoryLevel(ref.levelIndex) &&
         displayFloor >= APARTMENT_STANDARD_WINDOW_SHUTTER_FLOOR_MIN &&
         displayFloor <= APARTMENT_STANDARD_WINDOW_SHUTTER_FLOOR_MAX
       );
@@ -55,6 +57,38 @@ describe("mountStandardApartmentWindowShuttersForBuilding", () => {
     expect(root.name).toBe(MAMMOTH_AUTH_STANDARD_WINDOW_SHUTTERS_ROOT_NAME);
     expect(root.children.length).toBe(qualifyingUnitCount * qualifyingFloorCount * 2);
     expect(root.children.length).toBeGreaterThan(0);
+  });
+
+  it("mounts only one storey when storyLevelIndex is set", () => {
+    const building = readMammothBuildingDoc();
+    const typicalFloor = readTypicalFloorDoc();
+    const qualifyingRef = building.floorRefs.find((ref) => {
+      const displayFloor = apartmentStoryLevelIndexToDisplayFloor(ref.levelIndex);
+      return (
+        unitExteriorGlassMeshesEnabledForStoryLevel(ref.levelIndex) &&
+        displayFloor >= APARTMENT_STANDARD_WINDOW_SHUTTER_FLOOR_MIN &&
+        displayFloor <= APARTMENT_STANDARD_WINDOW_SHUTTER_FLOOR_MAX
+      );
+    });
+    expect(qualifyingRef).toBeDefined();
+
+    const qualifyingUnitCount = typicalFloor.objects.filter((obj) => {
+      if (classifyPrefab(obj.prefabId) !== "unit") return false;
+      return obj.id.startsWith("unit_e_") || obj.id.startsWith("unit_w_");
+    }).length;
+
+    const singleFloorRoot = mountStandardApartmentWindowShuttersForBuilding({
+      building,
+      getFloorDoc: (id) => (id === typicalFloor.id ? typicalFloor : readTypicalFloorDoc()),
+      storyLevelIndex: qualifyingRef!.levelIndex,
+    });
+    const allFloorsRoot = mountStandardApartmentWindowShuttersForBuilding({
+      building,
+      getFloorDoc: (id) => (id === typicalFloor.id ? typicalFloor : readTypicalFloorDoc()),
+    });
+
+    expect(singleFloorRoot.children.length).toBe(qualifyingUnitCount * 2);
+    expect(allFloorsRoot.children.length).toBeGreaterThan(singleFloorRoot.children.length);
   });
 
   it("skips display floors below the shutter band", () => {

@@ -1,9 +1,14 @@
+import { readFileSync } from "node:fs";
 import type { FloorDoc, PlacedObject } from "@the-mammoth/schemas";
 import { describe, expect, it } from "vitest";
 import { buildFloorMeshes } from "./floorPlaceholderMeshes.js";
 import { parseBuildingDoc } from "./index.js";
 import {
+  corridorCapFacesForExteriorWindows,
+  exteriorCornerTangentOnNsFace,
   facadeSeedForUnitFace,
+  CORRIDOR_CAP_WINDOW_WIDTH_M,
+  planCorridorCapExteriorWindow,
   planUnitExteriorWindowsForFace,
   unitShellFacesForExteriorWindows,
 } from "./unitExteriorWindows.js";
@@ -61,10 +66,32 @@ describe("planUnitExteriorWindowsForFace", () => {
     expect(a.holesEw).not.toEqual(b.holesEw);
   });
 
-  it("produces north/south holes on n/s faces", () => {
+  it("puts one corner N/S window with the same panel size and tint as the long façade", () => {
+    const e = planUnitExteriorWindowsForFace({ ...base, face: "e" });
     const n = planUnitExteriorWindowsForFace({ ...base, face: "n" });
-    expect(n.holesNs.length).toBe(n.count);
-    expect(n.holesEw.length).toBe(0);
+    expect(n.count).toBe(1);
+    expect(n.holesNs).toHaveLength(1);
+    expect(n.holesEw).toHaveLength(0);
+    const ew0 = e.holesEw[0]!;
+    const hole = n.holesNs[0]!;
+    expect(hole.y0).toBeCloseTo(ew0.y0, 4);
+    expect(hole.y1).toBeCloseTo(ew0.y1, 4);
+    expect(hole.x1 - hole.x0).toBeCloseTo(ew0.z1 - ew0.z0, 4);
+    expect(n.tintId).toBe(e.tintId);
+    const tMax = base.vlenX * 0.5 - 0.35;
+    expect(hole.x1).toBeCloseTo(tMax, 2);
+  });
+
+  it("places west-wing corner windows on the −X end of the short wall", () => {
+    const w = planUnitExteriorWindowsForFace({
+      ...base,
+      face: "s",
+      placedObjectId: "unit_w_012",
+    });
+    expect(w.count).toBe(1);
+    const hole = w.holesNs[0]!;
+    const tMin = -base.vlenX * 0.5 + 0.35;
+    expect(hole.x0).toBeCloseTo(tMin, 2);
   });
 
   it("shortens openings from the bottom while keeping the head height", () => {
@@ -94,6 +121,77 @@ describe("planUnitExteriorWindowsForFace", () => {
   });
 });
 
+describe("planCorridorCapExteriorWindow", () => {
+  const base = {
+    vlenX: 3.63,
+    yLo: -1.415,
+    yHi: 1.415,
+    facadeSalt: 3,
+    storyLevelIndex: 12,
+    floorDocId: "floor_mamutica_typical",
+    placedObjectId: "corridor_main",
+  };
+
+  it("places a tall narrow centered slit, not a unit E/W panel", () => {
+    const unitEw = planUnitExteriorWindowsForFace({
+      face: "e",
+      vlenX: 8.78,
+      vlenZ: 7.1,
+      yLo: base.yLo,
+      yHi: base.yHi,
+      facadeSalt: base.facadeSalt,
+      storyLevelIndex: base.storyLevelIndex,
+      floorDocId: base.floorDocId,
+      placedObjectId: "unit_e_003",
+    });
+    const n = planCorridorCapExteriorWindow({ ...base, face: "n" });
+    const s = planCorridorCapExteriorWindow({ ...base, face: "s" });
+    expect(n.count).toBe(1);
+    expect(s.count).toBe(1);
+    const hole = n.holesNs[0]!;
+    const unitHole = unitEw.holesEw[0]!;
+    const tMin = -base.vlenX * 0.5 + 0.35;
+    const tMax = base.vlenX * 0.5 - 0.35;
+    const xMid = (tMin + tMax) * 0.5;
+    expect(hole.x1 - hole.x0).toBeCloseTo(CORRIDOR_CAP_WINDOW_WIDTH_M, 2);
+    expect((hole.x0 + hole.x1) * 0.5).toBeCloseTo(xMid, 2);
+    expect(hole.y1 - hole.y0).toBeGreaterThan(unitHole.y1 - unitHole.y0 + 0.25);
+    expect(hole.y0).toBeLessThan(unitHole.y0);
+  });
+});
+
+describe("corridorCapFacesForExteriorWindows", () => {
+  it("includes both exposed short ends", () => {
+    expect(corridorCapFacesForExteriorWindows(["e", "n", "s"])).toEqual(["n", "s"]);
+    expect(corridorCapFacesForExteriorWindows(["n"])).toEqual(["n"]);
+  });
+});
+
+describe("unitShellFacesForExteriorWindows", () => {
+  it("includes e/w façades and at most one n/s cap face", () => {
+    expect(unitShellFacesForExteriorWindows(["e", "n", "s"])).toEqual(["e", "s"]);
+    expect(unitShellFacesForExteriorWindows(["w", "s"])).toEqual(["w", "s"]);
+    expect(unitShellFacesForExteriorWindows(["e", "n"])).toEqual(["e", "n"]);
+    expect(exteriorCornerTangentOnNsFace("unit_e_003")).toBe("max");
+    expect(exteriorCornerTangentOnNsFace("unit_w_003")).toBe("min");
+  });
+
+  it("on Mamutica typical plates prefers south cap over north when both short ends are exposed", () => {
+    const floor = JSON.parse(
+      readFileSync(
+        new URL("../../../content/building/floors/floor_mamutica_typical.json", import.meta.url),
+        "utf8",
+      ),
+    ) as FloorDoc;
+    const unit = floor.objects.find((o) => o.id === "unit_e_003")!;
+    const exposed = exteriorFacesForPlacedObjectInFloor(floor, unit);
+    expect(exposed).toContain("e");
+    expect(exposed).toContain("n");
+    expect(exposed).toContain("s");
+    expect(unitShellFacesForExteriorWindows(exposed)).toEqual(["e", "s"]);
+  });
+});
+
 describe("facadeSeedForUnitFace", () => {
   it("differs by face for same unit", () => {
     const a = facadeSeedForUnitFace({
@@ -115,7 +213,34 @@ describe("facadeSeedForUnitFace", () => {
 });
 
 describe("buildFloorMeshes unit exterior windows", () => {
-  it("does not cut north/south façade windows when only those faces read as exposed slots", () => {
+  it("cuts centered cap windows on corridor north and south ends", () => {
+    const floor = JSON.parse(
+      readFileSync(
+        new URL("../../../content/building/floors/floor_mamutica_typical.json", import.meta.url),
+        "utf8",
+      ),
+    ) as FloorDoc;
+    const corridor = floor.objects.find((o) => o.id === "corridor_main")!;
+    const exposed = exteriorFacesForPlacedObjectInFloor(floor, corridor);
+    expect(corridorCapFacesForExteriorWindows(exposed)).toEqual(["n", "s"]);
+
+    const root = buildFloorMeshes(floor, { storyLevelIndex: 18, facadeSalt: 7 });
+    const corridorGroup = root.getObjectByName("corridor_main");
+    expect(corridorGroup).toBeTruthy();
+    const wallNames: string[] = [];
+    const glassNames: string[] = [];
+    corridorGroup!.traverse((o) => {
+      if (o.name.startsWith("shell_wall_n") || o.name.startsWith("shell_wall_s")) {
+        wallNames.push(o.name);
+      }
+      if (o.name.startsWith("unit_exterior_glass_")) glassNames.push(o.name);
+    });
+    expect(wallNames.some((n) => n.includes("_x_") || n.includes("_y_"))).toBe(true);
+    expect(glassNames.filter((n) => n.includes("_glass_n_"))).toHaveLength(1);
+    expect(glassNames.filter((n) => n.includes("_glass_s_"))).toHaveLength(1);
+  });
+
+  it("cuts a single corner window on the south bar cap when both short ends are exposed", () => {
     const floor: FloorDoc = {
       id: "gap_faces_mesh",
       version: 1,
@@ -127,7 +252,7 @@ describe("buildFloorMeshes unit exterior windows", () => {
           scale: [4, 3, 30],
         },
         {
-          id: "unit_a",
+          id: "unit_e_cap",
           prefabId: "apartment_unit_small_a",
           position: [6.5, 0, -10],
           scale: [8, 3, 8],
@@ -138,39 +263,41 @@ describe("buildFloorMeshes unit exterior windows", () => {
     const unitObj = floor.objects[1]!;
     expect(
       unitShellFacesForExteriorWindows(exteriorFacesForPlacedObjectInFloor(floor, unitObj)),
-    ).toEqual(["e"]);
+    ).toEqual(["e", "s"]);
 
-    const root = buildFloorMeshes(floor, { storyLevelIndex: 2, facadeSalt: 42 });
+    const root = buildFloorMeshes(floor, { storyLevelIndex: 18, facadeSalt: 42 });
+    const unitGroup = root.getObjectByName("unit_e_cap");
+    expect(unitGroup).toBeTruthy();
     const glassNames: string[] = [];
-    root.traverse((o) => {
+    unitGroup!.traverse((o) => {
       if (o.name.startsWith("unit_exterior_glass_")) glassNames.push(o.name);
     });
-    expect(glassNames.length).toBeGreaterThan(0);
-    expect(glassNames.every((n) => !n.includes("_glass_n_") && !n.includes("_glass_s_"))).toBe(true);
+    expect(glassNames.filter((n) => n.includes("_glass_s_"))).toHaveLength(1);
+    expect(glassNames.filter((n) => n.includes("_glass_n_"))).toHaveLength(0);
+    expect(glassNames.filter((n) => n.includes("_glass_e_")).length).toBeGreaterThan(0);
   });
 
-  it("cuts east shell wall into fragments when unit has exterior facade windows", () => {
-    const root = buildFloorMeshes(
+  const winTestFloor: FloorDoc = {
+    id: "win_test_floor",
+    version: 1,
+    objects: [
       {
-        id: "win_test_floor",
-        version: 1,
-        objects: [
-          {
-            id: "corridor_main",
-            prefabId: "corridor_segment_a",
-            position: [0, 1.605, 0],
-            scale: [3.85, 3.05, 40],
-          },
-          {
-            id: "unit_e",
-            prefabId: "apartment_unit_small_a",
-            position: [6.425, 1.605, 0],
-            scale: [9, 3.05, 7.38],
-          },
-        ],
+        id: "corridor_main",
+        prefabId: "corridor_segment_a",
+        position: [0, 1.605, 0],
+        scale: [3.85, 3.05, 40],
       },
-      { storyLevelIndex: 2, facadeSalt: 99 },
-    );
+      {
+        id: "unit_e",
+        prefabId: "apartment_unit_small_a",
+        position: [6.425, 1.605, 0],
+        scale: [9, 3.05, 7.38],
+      },
+    ],
+  };
+
+  it("cuts east shell wall into fragments when unit has exterior facade windows", () => {
+    const root = buildFloorMeshes(winTestFloor, { storyLevelIndex: 18, facadeSalt: 99 });
 
     const names: string[] = [];
     root.traverse((o) => {
@@ -184,6 +311,22 @@ describe("buildFloorMeshes unit exterior windows", () => {
       if (o.name.startsWith("unit_exterior_glass_")) glass += 1;
     });
     expect(glass).toBeGreaterThan(0);
+  });
+
+  it("keeps blown-out abandoned floors holed but omits glass panes (display floor 16)", () => {
+    const root = buildFloorMeshes(winTestFloor, { storyLevelIndex: 17, facadeSalt: 99 });
+
+    const names: string[] = [];
+    root.traverse((o) => {
+      if (o.name.startsWith("shell_wall_e")) names.push(o.name);
+    });
+    expect(names.some((n) => n.includes("_y_") || n.includes("_z_"))).toBe(true);
+
+    let glass = 0;
+    root.traverse((o) => {
+      if (o.name.startsWith("unit_exterior_glass_")) glass += 1;
+    });
+    expect(glass).toBe(0);
   });
 
   it("adds analytic window seal blockers without changing floor meshes", () => {

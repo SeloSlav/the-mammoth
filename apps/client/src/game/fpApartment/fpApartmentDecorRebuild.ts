@@ -8,7 +8,10 @@ import {
   clampOwnedApartmentWallOpeningsForLength,
   buildApartmentPlanarMirrorVisual,
   isProceduralApartmentDecorModelPath,
+  isApartmentWindowShutterModelPath,
   tagApartmentDecorMeshesSkipMaterialMerge,
+  tagApartmentWindowShutterFacadeMeshes,
+  MAMMOTH_EXTERIOR_FACADE_DECOR_UD,
   MAMMOTH_FP_INTERIOR_PARTITION_SOLID,
 } from "@the-mammoth/world";
 import {
@@ -76,6 +79,7 @@ import {
   attachApartmentWarmFixtureBulbGlow,
   bindMammothApartmentPropReadableEnv,
   moodGradeMammothApartmentDecorMesh,
+  MAMMOTH_APARTMENT_DECOR_SKIP_MOOD_GRADE_UD,
 } from "@the-mammoth/engine";
 import {
   growTrayIdForPlacement,
@@ -694,6 +698,9 @@ export async function runFpApartmentDecorFullRebuild(
       g.userData.mammothPlateLevelIndex = d.unit.level;
       g.userData.mammothApartmentDecorModelRelPath = effectiveModelRelPath;
       g.userData.mammothApartmentDecorPlacedKind = d.placedKind;
+      if (isApartmentWindowShutterModelPath(effectiveModelRelPath)) {
+        g.userData[MAMMOTH_EXTERIOR_FACADE_DECOR_UD] = true;
+      }
       g.position.set(d.posX, d.posY, d.posZ);
       g.rotation.order = "YXZ";
       g.rotation.y = d.yawRad;
@@ -713,10 +720,18 @@ export async function runFpApartmentDecorFullRebuild(
       vis.userData.mammothApartmentDecorProp = true;
       vis.userData.mammothApartmentDecorId = d.decorId;
       vis.userData.mammothApartmentUnitKey = d.unit.unitKey;
+      const isFacadeShutter = isApartmentWindowShutterModelPath(effectiveModelRelPath);
+      if (isFacadeShutter) {
+        tagApartmentWindowShutterFacadeMeshes(vis);
+      }
       vis.traverse((o) => {
         if (o instanceof THREE.Mesh) {
-          moodGradeMammothApartmentDecorMesh(o, { modelRelPath: effectiveModelRelPath });
-          o.frustumCulled = true;
+          if (!isFacadeShutter) {
+            moodGradeMammothApartmentDecorMesh(o, { modelRelPath: effectiveModelRelPath });
+          } else {
+            o.userData[MAMMOTH_APARTMENT_DECOR_SKIP_MOOD_GRADE_UD] = true;
+          }
+          o.frustumCulled = !isFacadeShutter;
           o.userData.mammothUnitInterior = true;
           o.userData.mammothPlateLevelIndex = d.unit.level;
         }

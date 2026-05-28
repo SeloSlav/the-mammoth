@@ -22,6 +22,9 @@ export type FpSessionUnitInteriorMeshEntry = {
 /** Plaster hollow shell pieces for a `unit_*` placed object (not exterior cladding or glass). */
 export function isResidentialUnitShellPlasterMesh(mesh: THREE.Mesh): boolean {
   if (mesh.name.startsWith("shell_exterior_cladding")) return false;
+  if (mesh.name.startsWith("merged_unit_shell:")) {
+    return mesh.userData.mammothResidentialUnitExteriorGlass !== true;
+  }
   return (
     mesh.name.startsWith("shell_wall_") ||
     mesh.name.startsWith("shell_floor") ||

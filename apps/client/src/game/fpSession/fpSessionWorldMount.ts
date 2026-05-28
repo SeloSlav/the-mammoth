@@ -132,7 +132,11 @@ export type MegablockBackdropHooks = {
    * Called after each storey plate is stacked **and** its static geometry is merged — avoids showing raw
    * placeholders that later disappear when the global merge pass runs.
    */
-  onFloorPlateInstantiated?: (ctx: { buildingRoot: THREE.Group }) => void | Promise<void>;
+  onFloorPlateInstantiated?: (ctx: {
+    buildingRoot: THREE.Group;
+    ref: BuildingDoc["floorRefs"][number];
+    plateGroup: THREE.Object3D;
+  }) => void | Promise<void>;
 };
 
 export type FpSessionStaticWorldAsyncOpts = {
@@ -290,12 +294,12 @@ export async function createFpSessionStaticWorldAsync(
   const buildingRoot = await instantiateBuildingFloorStackAsync(building, getFloorDoc, {
     stairWellDef,
     yieldAfterEachPlate: yieldToMain,
-    afterEachPlate: async ({ root, plateGroup }) => {
+    afterEachPlate: async ({ root, ref, plateGroup }) => {
       if (typeof plateGroup.userData.mammothPlateLevelIndex === "number") {
         await mergeMegablockStaticDirectChildYielding(plateGroup, yieldToMain);
       }
       const hooks = opts?.getBackdropHooks?.();
-      await hooks?.onFloorPlateInstantiated?.({ buildingRoot: root });
+      await hooks?.onFloorPlateInstantiated?.({ buildingRoot: root, ref, plateGroup });
     },
   });
 

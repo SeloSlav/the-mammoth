@@ -151,6 +151,26 @@ function PickupPromptBody({
     );
   }
 
+  if (prompt.kind === "elevator_landing_hail") {
+    return (
+      <FpBottomInteractPromptFrame
+        stackIndex={stackIndex}
+        borderRgb="rgba(100,170,255,0.45)"
+        glowRgb="rgba(80,150,255,0.18)"
+      >
+        <span style={{ opacity: 0.92 }}>Press </span>
+        <InteractKeyE
+          kbdGradient="linear-gradient(180deg, #8ec8ff 0%, #4a9ae8 45%, #2a6db8 100%)"
+          kbdBorderRgb="rgba(180,220,255,0.55)"
+          kbdShadowRgb="rgba(80,150,255,0.35)"
+          kbdText="#041018"
+        />
+        <span style={{ opacity: 0.92 }}> — Hail cab — </span>
+        <strong style={{ color: "#f0f6ff", fontWeight: 700 }}>{prompt.floorLabel}</strong>
+      </FpBottomInteractPromptFrame>
+    );
+  }
+
   if (prompt.kind === "dropped_item") {
     const isWorld = prompt.worldAnchorSpawn === true;
     return (

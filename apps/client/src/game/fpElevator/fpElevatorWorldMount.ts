@@ -396,8 +396,8 @@ export function mountFpElevatorWorld(
   const {
     collectNearbyLandingHailPickRoots,
     flushPendingExteriorDoorToggle,
-    consumeInteractKey,
-    shouldSuppressEpickup,
+    consumeInteractKey: consumeExteriorDoorInteractKey,
+    shouldSuppressEpickup: shouldSuppressExteriorDoorEpickup,
     getExteriorDoorInteractPrompt,
   } = createFpElevatorExteriorDoorInteract({
     conn: opts.conn,
@@ -462,7 +462,12 @@ export function mountFpElevatorWorld(
     getHudMovingCabVyMps,
     ignoreSmallPoseReconcileWhileMovingElevatorRider,
   } = elevVisCab;
-  const { tryRaycastLandingHail, syncLandingHailUi, tryRaycastFloorPick } =
+  const {
+    syncLandingHailUi,
+    tryRaycastFloorPick,
+    getLandingHailInteractPrompt,
+    consumeLandingHailInteractKey,
+  } =
     createFpElevatorHailAndFloorPickRaycasts({
       raycaster,
       screenCenterNdc,
@@ -470,9 +475,11 @@ export function mountFpElevatorWorld(
       visuals,
       latest,
       layoutByKey,
+      floorLabelByLevel,
       ox,
       oz,
       collectNearbyLandingHailPickRoots,
+      feetYForLayout,
       getCabY,
       getDoor,
       hailPickFlash,
@@ -604,8 +611,14 @@ export function mountFpElevatorWorld(
     syncLandingHailUi,
     kinematicSupport,
     tryRaycastFloorPick,
-    consumeInteractKey,
-    shouldSuppressEpickup,
+    consumeInteractKey: (playerPos, camera) =>
+      consumeLandingHailInteractKey(camera, playerPos, performance.now()) ||
+      consumeExteriorDoorInteractKey(playerPos, camera),
+    shouldSuppressEpickup: (playerPos, camera) =>
+      getLandingHailInteractPrompt(camera, playerPos) !== null ||
+      shouldSuppressExteriorDoorEpickup(playerPos, camera),
+    getLandingHailInteractPrompt: (playerPos, camera) =>
+      getLandingHailInteractPrompt(camera, playerPos),
     getExteriorDoorInteractPrompt,
     visitCollisionAabbsInXZ,
     applyCabRoofFeetSnap,

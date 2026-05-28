@@ -16,6 +16,11 @@ export type FpPickupPromptElevatorExteriorDoor = {
   floorLabel: string;
 };
 
+export type FpPickupPromptElevatorLandingHail = {
+  kind: "elevator_landing_hail";
+  floorLabel: string;
+};
+
 export type FpPickupPromptApartmentDoor = {
   kind: "apartment_door";
   willClose: boolean;
@@ -86,6 +91,7 @@ export type FpPickupPromptApartmentNotebook = {
 export type FpPickupPromptState =
   | FpPickupPromptDroppedItem
   | FpPickupPromptElevatorExteriorDoor
+  | FpPickupPromptElevatorLandingHail
   | FpPickupPromptApartmentDoor
   | FpPickupPromptApartmentClaim
   | FpPickupPromptApartmentClaimBlockedGear
@@ -118,6 +124,9 @@ function same(a: FpPickupPromptState, b: FpPickupPromptState): boolean {
   }
   if (a.kind === "elevator_exterior_door" && b.kind === "elevator_exterior_door") {
     return a.willClose === b.willClose && a.floorLabel === b.floorLabel;
+  }
+  if (a.kind === "elevator_landing_hail" && b.kind === "elevator_landing_hail") {
+    return a.floorLabel === b.floorLabel;
   }
   if (a.kind === "apartment_door" && b.kind === "apartment_door") {
     return a.willClose === b.willClose && a.promptKind === b.promptKind;

@@ -86,6 +86,13 @@ export type MountFpElevatorWorldResult = {
   ): boolean;
   consumeInteractKey(playerPos: THREE.Vector3, camera: THREE.PerspectiveCamera): boolean;
   shouldSuppressEpickup(playerPos: THREE.Vector3, camera: THREE.PerspectiveCamera): boolean;
+  /** When crosshair is on a landing hail button, drive the shared bottom interact prompt. */
+  getLandingHailInteractPrompt(
+    playerPos: THREE.Vector3,
+    camera: THREE.PerspectiveCamera,
+  ): {
+    floorLabel: string;
+  } | null;
   /** When in the narrow sill strip, drive the shared bottom interact prompt (see `fpPickupPrompt`). */
   getExteriorDoorInteractPrompt(
     playerPos: THREE.Vector3,

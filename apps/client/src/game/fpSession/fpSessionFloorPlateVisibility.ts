@@ -335,6 +335,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   /** Last unit feet occupied — retained in corridor lighting zone for seamless practical-light remount. */
   getLastVisitedResidentialUnitKey: () => string | null;
   isApartmentDecorInteriorVisible: () => boolean;
+  /** Sidewalk / orbit band for façade shutters (matches plaster exterior margin). */
+  isExteriorFacadeDecorVisible: () => boolean;
   /** Door-aware corridor PVS unit ids for decor / NPC gates (updated each sync). */
   getCorridorPvsVisibleUnitKeys: () => ReadonlySet<string>;
   getCorridorPvsVisibleUnitIds: () => ReadonlySet<string>;
@@ -889,6 +891,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     getContainingResidentialUnitKey: () => _lastContainingResidentialUnitKey,
     getLastVisitedResidentialUnitKey: () => _lastVisitedResidentialUnitKey,
     isApartmentDecorInteriorVisible: () => _lastApartmentDecorInteriorVisible,
+    isExteriorFacadeDecorVisible: () => _lastExteriorShellPlasterVisible,
     getCorridorPvsVisibleUnitKeys: () => _lastCorridorPvsUnitKeys,
     getCorridorPvsVisibleUnitIds: () => _lastCorridorPvsUnitIds,
     getActiveFloorPlateBand: () => ({ lo: _lastBandLo, hi: _lastBandHi }),

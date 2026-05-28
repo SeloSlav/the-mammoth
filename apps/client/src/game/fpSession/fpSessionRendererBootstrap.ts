@@ -3,7 +3,13 @@ import {
   ensureConfiguredGltfLoaderKtx2Support,
   getConfiguredGltfLoader,
 } from "@the-mammoth/engine";
-import { ensurePbrKtx2Support, setStairwellLandingPropGltfLoader } from "@the-mammoth/world";
+import {
+  ensurePbrKtx2Support,
+  initBuildingShellTextureSampling,
+  refreshBuildingShellTextureSampling,
+  setAsyncPbrMaterialRevealDrainCompleteHook,
+  setStairwellLandingPropGltfLoader,
+} from "@the-mammoth/world";
 
 /**
  * One-shot WebGPU + PBR loader setup for FP / combat-sim sessions.
@@ -16,5 +22,7 @@ export async function bootstrapFpSessionRenderer(
     ensurePbrKtx2Support(renderer),
     ensureConfiguredGltfLoaderKtx2Support(renderer),
   ]);
+  initBuildingShellTextureSampling(renderer);
+  setAsyncPbrMaterialRevealDrainCompleteHook(refreshBuildingShellTextureSampling);
   setStairwellLandingPropGltfLoader(getConfiguredGltfLoader());
 }

@@ -292,6 +292,7 @@ export type FpSessionMainRafFrameDeps = {
     maxZ: number;
   } | null;
   isApartmentDecorInteriorVisible: () => boolean;
+  isExteriorFacadeDecorVisible: () => boolean;
   selectedHotbarRow: () => InventoryItem | undefined;
   logFpPerf: () => void;
   tickFpSessionElevDebug: (ctx: FpSessionElevDebugTickCtx) => void;
@@ -385,6 +386,8 @@ export function createFpSessionMainRafFrame(
   let cachedSitPromptHud: ApartmentSittablePrompt | null = null;
   let cachedNotebookPromptHud: ApartmentNotebookPrompt | null = null;
   let cachedElevDoorPrompt: ReturnType<MountFpElevatorWorldResult["getExteriorDoorInteractPrompt"]> =
+    null;
+  let cachedElevHailPrompt: ReturnType<MountFpElevatorWorldResult["getLandingHailInteractPrompt"]> =
     null;
   let cachedApartmentDoorHud: ReturnType<MountFpApartmentDoorsResult["getInteractPrompt"]> = null;
   let cachedBalconyGrowPrompt: BalconyGrowTrayPrompt | null = null;
@@ -760,6 +763,7 @@ export function createFpSessionMainRafFrame(
       deps.isApartmentDecorInteriorVisible(),
       visibleDecorUnitKeys.size > 0 ? visibleDecorUnitKeys : null,
       practicalLightsUnitKey,
+      deps.isExteriorFacadeDecorVisible(),
     );
     deps.fpApartmentDecorMeshes.updateFishTankFish(dt);
     deps.fpBalconyGrowSession?.updateFrame(
@@ -864,6 +868,7 @@ export function createFpSessionMainRafFrame(
         cachedBalconyGrowPrompt !== null ||
         cachedSitPromptHud !== null ||
         cachedNotebookPromptHud !== null ||
+        cachedElevHailPrompt !== null ||
         cachedElevDoorPrompt !== null ||
         cachedApartmentDoorHud !== null;
       const hudPickRaycastDue = fpHudPickRaycastDue({
@@ -886,6 +891,7 @@ export function createFpSessionMainRafFrame(
           ? deps.getApartmentSittablePrompt()
           : null;
         cachedNotebookPromptHud = deps.getApartmentNotebookPrompt();
+        cachedElevHailPrompt = deps.fpElevators.getLandingHailInteractPrompt(ft, deps.camera);
         cachedElevDoorPrompt = deps.fpElevators.getExteriorDoorInteractPrompt(ft, deps.camera);
         cachedApartmentDoorHud = deps.fpApartmentDoors.getInteractPrompt(ft, deps.camera);
         hudPickThrottleState = fpHudPickThrottleStateFromSample({
@@ -970,9 +976,17 @@ export function createFpSessionMainRafFrame(
       let nextClaimSmoothCarry: ApartmentClaimHoldSmooth | null = null;
       const sitPromptHud =
         !isFpSitActive() && !cachedNotebookPromptHud ? cachedSitPromptHud : null;
+      const rawElevHailPrompt = cachedElevHailPrompt;
+      const elevHailPrompt =
+        sitPromptHud !== null
+          ? null
+          : rawElevHailPrompt !== null &&
+              !(aSys !== null && apartmentClaimInteriorsPreferOverUnitDoor(aSys))
+            ? rawElevHailPrompt
+            : null;
       const rawElevDoorPrompt = cachedElevDoorPrompt;
       const doorPrompt =
-        sitPromptHud !== null
+        sitPromptHud !== null || elevHailPrompt !== null
           ? null
           : rawElevDoorPrompt !== null &&
               !(aSys !== null && apartmentClaimInteriorsPreferOverUnitDoor(aSys))
@@ -1072,6 +1086,11 @@ export function createFpSessionMainRafFrame(
               ? lookedAtStash.stashLabel
               : cachedBalconyGrowPrompt!.stashLabel,
           willClose: activeStash?.stashKey === growStash.stashKey,
+        });
+      } else if (elevHailPrompt) {
+        publishPickup({
+          kind: "elevator_landing_hail",
+          floorLabel: elevHailPrompt.floorLabel,
         });
       } else if (doorPrompt) {
         publishPickup({

@@ -15,6 +15,15 @@ export function floorButtonLabel(
   return shortFloorLabelForLevel(levelIndex, floorLabelByLevel);
 }
 
+/** Human-readable storey label for bottom interact prompts (landing hail, corridor door). */
+export function elevatorLandingFloorHudLabel(
+  levelIndex: number,
+  floorLabelByLevel?: FloorShortLabelMap,
+): string {
+  const shortLabel = floorButtonLabel(levelIndex, floorLabelByLevel);
+  return shortLabel === "PR" ? "PR / Ground" : `Floor ${shortLabel}`;
+}
+
 export function doorSlideAxis(face: ElevatorDoorFace): THREE.Vector3 {
   switch (face) {
     case "e":

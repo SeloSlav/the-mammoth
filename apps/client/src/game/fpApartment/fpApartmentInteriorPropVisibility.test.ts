@@ -55,6 +55,36 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
     ).toBe(false);
   });
 
+  it("shows façade shutters from the sidewalk band without in-footprint decor demand", () => {
+    const bounds = new THREE.Box3(new THREE.Vector3(-1, -1, -2), new THREE.Vector3(1, 1, 2));
+    expect(
+      resolveApartmentInteriorPropGroupVisible({
+        allowDemand: false,
+        exteriorFacadeDecorVisible: true,
+        visibleUnitKeys: null,
+        groupUnitKey: "unit_a",
+        propWorldBounds: bounds,
+        viewFrustum: frustum,
+        cameraWorldPos: camPos,
+        cameraWorldDir: camDir,
+        isExteriorFacadeDecor: true,
+      }),
+    ).toBe(true);
+    expect(
+      resolveApartmentInteriorPropGroupVisible({
+        allowDemand: false,
+        exteriorFacadeDecorVisible: false,
+        visibleUnitKeys: null,
+        groupUnitKey: "unit_a",
+        propWorldBounds: bounds,
+        viewFrustum: frustum,
+        cameraWorldPos: camPos,
+        cameraWorldDir: camDir,
+        isExteriorFacadeDecor: true,
+      }),
+    ).toBe(false);
+  });
+
   it("hides non-containing units when a containing unit key is set", () => {
     expect(
       resolveApartmentInteriorPropGroupVisible({

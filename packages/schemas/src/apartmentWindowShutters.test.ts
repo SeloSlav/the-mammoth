@@ -2,18 +2,37 @@ import { describe, expect, it } from "vitest";
 import {
   adaptStandardWindowShutterPlacementForUnit,
   APARTMENT_STANDARD_WINDOW_SHUTTER_EAST_TEMPLATES,
+  apartmentUnitAbandonedHardwoodFloorForStoryLevel,
   apartmentUnitQualifiesForStandardWindowShutters,
   mergeStandardApartmentWindowShuttersIntoPlacedItems,
   standardApartmentWindowShutterPlacedItemsForUnit,
+  unitExteriorGlassMeshesEnabledForStoryLevel,
 } from "./apartmentWindowShutters.js";
 
 describe("apartmentWindowShutters", () => {
-  it("qualifies typical residential units on display floors 13–19 only", () => {
-    expect(apartmentUnitQualifiesForStandardWindowShutters("floor_mamutica_typical|14|unit_e_003")).toBe(
+  it("omits glass and shutters on abandoned display floors 16 and below", () => {
+    expect(unitExteriorGlassMeshesEnabledForStoryLevel(17)).toBe(false);
+    expect(unitExteriorGlassMeshesEnabledForStoryLevel(18)).toBe(true);
+    expect(apartmentUnitQualifiesForStandardWindowShutters("floor_mamutica_typical|17|unit_e_003")).toBe(
+      false,
+    );
+  });
+
+  it("uses abandoned hardwood-fungus floor on display floors 16 and below", () => {
+    expect(apartmentUnitAbandonedHardwoodFloorForStoryLevel(17)).toBe(true);
+    expect(apartmentUnitAbandonedHardwoodFloorForStoryLevel(18)).toBe(false);
+    expect(apartmentUnitAbandonedHardwoodFloorForStoryLevel(99)).toBe(false);
+  });
+
+  it("qualifies typical residential units on display floors 17–19 only", () => {
+    expect(apartmentUnitQualifiesForStandardWindowShutters("floor_mamutica_typical|18|unit_e_003")).toBe(
       true,
     );
     expect(apartmentUnitQualifiesForStandardWindowShutters("floor_mamutica_typical|20|unit_w_011")).toBe(
       true,
+    );
+    expect(apartmentUnitQualifiesForStandardWindowShutters("floor_mamutica_typical|14|unit_e_003")).toBe(
+      false,
     );
     expect(apartmentUnitQualifiesForStandardWindowShutters("floor_mamutica_typical|13|unit_e_003")).toBe(
       false,

@@ -8,6 +8,29 @@ export const OWNED_APARTMENT_MODEL_WINDOW_SHUTTER =
 export const APARTMENT_STANDARD_WINDOW_SHUTTER_FLOOR_MIN = 13 as const;
 export const APARTMENT_STANDARD_WINDOW_SHUTTER_FLOOR_MAX = 19 as const;
 
+/**
+ * Abandoned extraction band (elevator "16" and below): façade keeps window holes only — glass
+ * panes and shutters are omitted (`docs/building-floors.md`).
+ */
+export const BLOWN_OUT_FACADE_MAX_DISPLAY_FLOOR = 16 as const;
+
+/** True when unit façade glass meshes / standard shutters should spawn for this plate. */
+export function unitExteriorGlassMeshesEnabledForStoryLevel(storyLevelIndex: number): boolean {
+  if (storyLevelIndex === 99) return true;
+  if (storyLevelIndex <= 1) return false;
+  return (
+    apartmentStoryLevelIndexToDisplayFloor(storyLevelIndex) > BLOWN_OUT_FACADE_MAX_DISPLAY_FLOOR
+  );
+}
+
+/** True when apartment unit shells use the abandoned PATINA hardwood-fungus floor (display ≤ 16). */
+export function apartmentUnitAbandonedHardwoodFloorForStoryLevel(storyLevelIndex: number): boolean {
+  if (storyLevelIndex === 99) return false;
+  return (
+    apartmentStoryLevelIndexToDisplayFloor(storyLevelIndex) <= BLOWN_OUT_FACADE_MAX_DISPLAY_FLOOR
+  );
+}
+
 export type StandardWindowShutterTemplate = Pick<
   OwnedApartmentPlacedItem,
   | "id"
@@ -88,6 +111,7 @@ export function apartmentUnitQualifiesForStandardWindowShutters(unitKey: string)
   }
   const displayFloor = apartmentStoryLevelIndexToDisplayFloor(parts.storyLevelIndex);
   return (
+    unitExteriorGlassMeshesEnabledForStoryLevel(parts.storyLevelIndex) &&
     displayFloor >= APARTMENT_STANDARD_WINDOW_SHUTTER_FLOOR_MIN &&
     displayFloor <= APARTMENT_STANDARD_WINDOW_SHUTTER_FLOOR_MAX
   );

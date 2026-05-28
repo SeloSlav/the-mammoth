@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { WebGPURenderer } from "three/webgpu";
 import { DecalGeometry } from "three/addons/geometries/DecalGeometry.js";
 import type { DecalManifest, DecalMeshResolver, DecalPlacement, DecalManifestEntry } from "./decalTypes.js";
 import {
@@ -18,12 +19,7 @@ import {
 
 const DECALS_GROUP_NAME = "Decals";
 
-/** WebGPU (FP) or any renderer that exposes GL-style `capabilities.getMaxAnisotropy`. */
-type DecalHostRenderer =
-  | THREE.WebGPURenderer
-  | {
-      capabilities?: { getMaxAnisotropy?: () => number };
-    };
+type DecalHostRenderer = WebGPURenderer;
 
 function manifestEntryById(manifest: DecalManifest, id: string): DecalManifestEntry | undefined {
   return manifest.find((e) => e.id === id);
@@ -185,15 +181,16 @@ export class DecalManager {
   }
 
   private maxAnisotropy(): number {
-    const r = this.renderer;
-    if (typeof r === "object" && r !== null && "capabilities" in r) {
-      const cap = (r as { capabilities?: { getMaxAnisotropy?: () => number } }).capabilities;
-      if (cap?.getMaxAnisotropy) {
-        try {
-          return cap.getMaxAnisotropy();
-        } catch {
-          return 4;
-        }
+    const cap = (
+      this.renderer as WebGPURenderer & {
+        capabilities?: { getMaxAnisotropy?: () => number };
+      }
+    ).capabilities;
+    if (cap?.getMaxAnisotropy) {
+      try {
+        return cap.getMaxAnisotropy();
+      } catch {
+        return 4;
       }
     }
     return 4;

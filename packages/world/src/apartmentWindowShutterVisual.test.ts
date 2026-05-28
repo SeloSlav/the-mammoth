@@ -7,6 +7,7 @@ import {
   APARTMENT_WINDOW_SHUTTER_WIDTH_M,
   buildApartmentWindowShutterVisual,
   isApartmentWindowShutterModelPath,
+  MAMMOTH_EXTERIOR_FACADE_DECOR_UD,
 } from "./apartmentWindowShutterVisual.js";
 
 function meshTriangleCount(root: THREE.Object3D): number {
@@ -40,6 +41,8 @@ describe("buildApartmentWindowShutterVisual", () => {
     expect(size.x).toBeCloseTo(APARTMENT_WINDOW_SHUTTER_WIDTH_M, 2);
     expect(size.y).toBeCloseTo(APARTMENT_WINDOW_SHUTTER_HEIGHT_M, 2);
     expect(size.z).toBeCloseTo(APARTMENT_WINDOW_SHUTTER_DEPTH_M, 2);
-    expect(meshTriangleCount(root)).toBeLessThan(1500);
+    expect(meshTriangleCount(root)).toBeLessThan(1700);
+    expect(root.getObjectByName("shutter_casing_top")).toBeTruthy();
+    expect(root.userData[MAMMOTH_EXTERIOR_FACADE_DECOR_UD]).toBe(true);
   });
 });
