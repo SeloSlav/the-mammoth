@@ -13,6 +13,7 @@ import {
   droppedItemWithinRenderHorizontalRange,
   MAMMOTH_DROPPED_RENDER_MAX_HORIZONTAL_M,
   MAMMOTH_PICKUP_MAX_ABS_DY_M,
+  MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
   MAMMOTH_PICKUP_RADIUS_M,
   resolveDroppedItemVisualVisible,
   tryNormalizeDroppedItemId,
@@ -175,6 +176,39 @@ describe("resolveDroppedItemVisualVisible", () => {
         dropResidentialUnitKey: null,
       }),
     ).toBe(true);
+  });
+
+  it("pickup probe reaches apartment mission loot while unit interior gate stays false in the hall", () => {
+    const feetY = 12.63;
+    const dropY = feetY + 0.05;
+    const bands = { buildingWorldOriginY: 0, floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M };
+    const missionUnitKey = "floor_mamutica_typical|17|unit_e_004";
+    expect(
+      droppedPickupWithinServerVolume(
+        0,
+        feetY,
+        0,
+        0.8,
+        dropY,
+        0.2,
+        MAMMOTH_PICKUP_RADIUS_M,
+        MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
+        bands,
+      ),
+    ).toBe(true);
+    expect(
+      resolveDroppedItemVisualVisible({
+        dropX: 0.8,
+        dropY,
+        dropZ: 0.2,
+        feetX: 0,
+        feetZ: 0,
+        feetY,
+        verticalBands: bands,
+        containingUnitKey: null,
+        dropResidentialUnitKey: missionUnitKey,
+      }),
+    ).toBe(false);
   });
 
   it("hides apartment-interior loot from the hallway on the same storey", () => {

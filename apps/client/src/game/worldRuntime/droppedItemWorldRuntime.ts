@@ -337,6 +337,13 @@ export function mountDroppedItemsWorld(
   let sharedFallbackMaterial: THREE.MeshBasicMaterial | null = null;
 
   let templateReloadPending = false;
+  let syncVisibleAtFeetImpl: (
+    feetX: number,
+    feetY: number,
+    feetZ: number,
+    containingUnitKey: string | null,
+    forceFullRebuild: boolean,
+  ) => void = () => {};
   let subscriptionFullRebuildPending = true;
   let lastVisGate = {
     feetBand: Number.NaN,
@@ -395,6 +402,13 @@ export function mountDroppedItemsWorld(
       const st: DefTemplateState = { status: "ready", layers: procedural };
       defTemplateState.set(defId, st);
       templateReloadPending = true;
+      syncVisibleAtFeetImpl(
+        lastRenderFeet.x,
+        lastRenderFeet.y,
+        lastRenderFeet.z,
+        lastRenderFeet.unitKey,
+        true,
+      );
       return Promise.resolve(st);
     }
 
@@ -419,6 +433,13 @@ export function mountDroppedItemsWorld(
         defTemplateState.set(defId, st);
         defTemplatePromise.delete(defId);
         templateReloadPending = true;
+        syncVisibleAtFeetImpl(
+          lastRenderFeet.x,
+          lastRenderFeet.y,
+          lastRenderFeet.z,
+          lastRenderFeet.unitKey,
+          true,
+        );
         return st;
       })
       .catch(() => {
@@ -500,6 +521,22 @@ export function mountDroppedItemsWorld(
     if (alwaysShowDroppedItems) {
       return droppedItemWithinRenderHorizontalRange(feetX, feetZ, row.x, row.z);
     }
+    /** Same volume as pickup / HUD prompts — mission apartment loot must not stay invisible at the sill. */
+    if (
+      droppedPickupWithinServerVolume(
+        feetX,
+        feetY,
+        feetZ,
+        row.x,
+        row.y,
+        row.z,
+        MAMMOTH_PICKUP_RADIUS_M,
+        MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
+        resolvedBandOpts,
+      )
+    ) {
+      return true;
+    }
     return resolveDroppedItemVisualVisible({
       dropX: row.x,
       dropY: row.y,
@@ -564,15 +601,30 @@ export function mountDroppedItemsWorld(
   const dropGlbNearHorizontalMSq =
     (DROPPED_ITEM_RENDER_MAX_HORIZONTAL_M * 0.6) *
     (DROPPED_ITEM_RENDER_MAX_HORIZONTAL_M * 0.6);
+  const pickupRadiusSq = MAMMOTH_PICKUP_RADIUS_M * MAMMOTH_PICKUP_RADIUS_M;
   const dropWithinGlbDetailRange = (
     rowX: number,
     rowZ: number,
+    rowY: number,
     feetX: number,
+    feetY: number,
     feetZ: number,
   ): boolean => {
     const dx = rowX - feetX;
     const dz = rowZ - feetZ;
-    return dx * dx + dz * dz <= dropGlbNearHorizontalMSq;
+    if (dx * dx + dz * dz <= pickupRadiusSq) return true;
+    if (dx * dx + dz * dz <= dropGlbNearHorizontalMSq) return true;
+    return droppedPickupWithinServerVolume(
+      feetX,
+      feetY,
+      feetZ,
+      rowX,
+      rowY,
+      rowZ,
+      MAMMOTH_PICKUP_RADIUS_M,
+      MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
+      resolvedBandOpts,
+    );
   };
 
   const fullRebuildInstances = (
@@ -592,7 +644,14 @@ export function mountDroppedItemsWorld(
       const state = defTemplateState.get(defId);
       const useGlb =
         state?.status === "ready" &&
-        dropWithinGlbDetailRange(cached.row.x, cached.row.z, feetX, feetZ);
+        dropWithinGlbDetailRange(
+          cached.row.x,
+          cached.row.z,
+          cached.row.y,
+          feetX,
+          feetY,
+          feetZ,
+        );
       if (useGlb) {
         let bucket = glbRowsByDef.get(defId);
         if (!bucket) {
@@ -659,13 +718,13 @@ export function mountDroppedItemsWorld(
     pool.mesh.visible = false;
   }
 
-  const syncVisibleAtFeet = (
+  function syncVisibleAtFeet(
     feetX: number,
     feetY: number,
     feetZ: number,
     containingUnitKey: string | null,
     forceFullRebuild: boolean,
-  ): void => {
+  ): void {
     lastRenderFeet = { x: feetX, y: feetY, z: feetZ, unitKey: containingUnitKey };
     if (
       forceFullRebuild ||
@@ -679,7 +738,8 @@ export function mountDroppedItemsWorld(
       fullRebuildInstances(feetX, feetY, feetZ, containingUnitKey);
       lastRebuildFeet = { x: feetX, z: feetZ };
     }
-  };
+  }
+  syncVisibleAtFeetImpl = syncVisibleAtFeet;
 
   const cacheRow = (row: DroppedItem): CachedDropRow => {
     const cached: CachedDropRow = {

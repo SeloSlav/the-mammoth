@@ -622,12 +622,7 @@ export function buildFloorMeshes(
             mesh.name.startsWith("shell_ceiling")
           ) {
             mesh.userData.mammothUnitInterior = true;
-            if (
-              mesh.name.startsWith("shell_floor") ||
-              mesh.name.startsWith("shell_ceiling")
-            ) {
-              mesh.userData[MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD] = true;
-            }
+            mesh.userData[MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD] = true;
           }
         });
       }

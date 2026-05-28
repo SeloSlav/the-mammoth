@@ -5,6 +5,7 @@ import {
   fpResolveTopFloorResidentialShellUnitFilter,
   fpResolveTopFloorResidentialShellVisible,
   fpResolveUnitInteriorMeshVisible,
+  fpKeepCorridorShellVisibleInsideExtractionBandUnit,
   fpShouldExpandContainingResidentialShellFrustumBounds,
 } from "./fpSessionFloorPlateVisibility";
 
@@ -207,7 +208,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
     ).toBe(false);
   });
 
-  it("hides anonymous corridor shells only once feet are strictly inside a unit hull", () => {
+  it("hides anonymous corridor shells inside a residential-band unit hull", () => {
     expect(
       fpResolveUnitInteriorMeshVisible({
         entry: {
@@ -217,13 +218,70 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
           genericInteriorVisibleInResidentialUnit: false,
           apartmentSwingDoor: false,
           isResidentialShellPlaster: false,
+          corridorHallwayShell: true,
+          plateLevelIndex: 20,
         },
         unitInteriorVisible: true,
         apartmentDecorInteriorVisible: true,
         insideResidentialUnit: true,
         insideApartmentInteriorLightingZone: true,
         containingResidentialUnitId: "unit_e_003",
-        containingResidentialUnitKey: "floor|2|unit_e_003",
+        containingResidentialUnitKey: "floor|20|unit_e_003",
+        containingStoryLevelIndex: 20,
+        exteriorShellPlasterVisible: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps same-storey corridor shells visible inside extraction-band units", () => {
+    const extractionLevel = 17;
+    expect(
+      fpKeepCorridorShellVisibleInsideExtractionBandUnit({
+        containingStoryLevelIndex: extractionLevel,
+        entry: { corridorHallwayShell: true, plateLevelIndex: extractionLevel },
+      }),
+    ).toBe(true);
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: {
+          apartmentUnitKey: null,
+          residentialUnitId: null,
+          residentialExteriorGlass: false,
+          genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
+          isResidentialShellPlaster: false,
+          corridorHallwayShell: true,
+          plateLevelIndex: extractionLevel,
+        },
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        insideResidentialUnit: true,
+        insideApartmentInteriorLightingZone: true,
+        containingResidentialUnitId: "unit_e_004",
+        containingResidentialUnitKey: "floor|17|unit_e_004",
+        containingStoryLevelIndex: extractionLevel,
+        exteriorShellPlasterVisible: false,
+      }),
+    ).toBe(true);
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: {
+          apartmentUnitKey: null,
+          residentialUnitId: null,
+          residentialExteriorGlass: false,
+          genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
+          isResidentialShellPlaster: false,
+          corridorHallwayShell: true,
+          plateLevelIndex: extractionLevel - 1,
+        },
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        insideResidentialUnit: true,
+        insideApartmentInteriorLightingZone: true,
+        containingResidentialUnitId: "unit_e_004",
+        containingResidentialUnitKey: "floor|17|unit_e_004",
+        containingStoryLevelIndex: extractionLevel,
         exteriorShellPlasterVisible: false,
       }),
     ).toBe(false);

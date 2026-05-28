@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { CardinalFace } from "./wallWithDoorCutout.js";
+import { MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD } from "./mammothMeshUserData.js";
 
 /** Corridor wall quad (m) — large landing label, similar width to Končar bay signage. */
 const KAT_CORRIDOR_PLANE_W = 1.34;
@@ -120,6 +121,7 @@ export function addOppositeCorridorKatSignMeshes(
     mesh.name = `elevator_sign_kat_corridor_${i++}`;
     /** Corridor-only signage — hide together with other interior shells from the exterior view. */
     mesh.userData.mammothUnitInterior = true;
+    mesh.userData[MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD] = true;
 
     if (wall === "e") {
       const x = hx - wt - inset;

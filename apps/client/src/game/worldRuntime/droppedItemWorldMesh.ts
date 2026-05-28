@@ -10,6 +10,31 @@ export type DropMeshLayer = {
   localMatrix: THREE.Matrix4;
 };
 
+/** Unlit instancing materials — readable in dark apartment rigs; avoids WebGPU PBR/env edge cases. */
+export function droppedWorldInstancingMaterialFrom(source: THREE.Material): THREE.MeshBasicMaterial {
+  if (source instanceof THREE.MeshBasicMaterial) {
+    return source.clone();
+  }
+  if (source instanceof THREE.MeshStandardMaterial) {
+    return new THREE.MeshBasicMaterial({
+      color: source.color,
+      map: source.map,
+      transparent: source.transparent,
+      opacity: source.opacity,
+      side: source.side,
+    });
+  }
+  return new THREE.MeshBasicMaterial({ color: 0xc9a227 });
+}
+
+export function normalizeDropMeshLayersForInstancing(layers: DropMeshLayer[]): DropMeshLayer[] {
+  return layers.map((layer) => ({
+    geometry: layer.geometry,
+    material: droppedWorldInstancingMaterialFrom(layer.material),
+    localMatrix: layer.localMatrix,
+  }));
+}
+
 const _identity = new THREE.Matrix4();
 
 function cloneGeometryForMerge(
@@ -152,7 +177,7 @@ export function buildDropMeshLayersFromObject(root: THREE.Object3D, defId: strin
     }
     layers.push({
       geometry: merged,
-      material: bucket.material,
+      material: droppedWorldInstancingMaterialFrom(bucket.material),
       localMatrix: _identity.clone(),
     });
   }

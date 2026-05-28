@@ -1,7 +1,11 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { getMammothDroppedWorldTargetMaxDimM } from "@the-mammoth/assets";
-import { buildDropMeshLayersFromObject, buildProceduralDropMeshLayers } from "./droppedItemWorldMesh.js";
+import {
+  buildDropMeshLayersFromObject,
+  buildProceduralDropMeshLayers,
+  droppedWorldInstancingMaterialFrom,
+} from "./droppedItemWorldMesh.js";
 
 function maxLayerBoundsDim(layers: ReturnType<typeof buildDropMeshLayersFromObject>): number {
   const g = new THREE.Group();
@@ -36,6 +40,16 @@ describe("buildDropMeshLayersFromObject", () => {
     root.add(new THREE.Mesh(new THREE.BoxGeometry(1.906, 0.38, 0.415), mat));
     const layers = buildDropMeshLayersFromObject(root, "screwdriver");
     expect(maxLayerBoundsDim(layers)).toBeCloseTo(getMammothDroppedWorldTargetMaxDimM("screwdriver"), 2);
+  });
+});
+
+describe("droppedWorldInstancingMaterialFrom", () => {
+  it("converts standard GLB materials to unlit basic for floor instancing", () => {
+    const mat = droppedWorldInstancingMaterialFrom(
+      new THREE.MeshStandardMaterial({ color: 0xff8800, metalness: 0.9, roughness: 0.2 }),
+    );
+    expect(mat).toBeInstanceOf(THREE.MeshBasicMaterial);
+    expect((mat as THREE.MeshBasicMaterial).color.getHex()).toBe(0xff8800);
   });
 });
 

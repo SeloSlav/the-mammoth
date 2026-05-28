@@ -18,7 +18,7 @@ export type FpSessionUnitInteriorMeshEntry = {
   isResidentialShellPlaster: boolean;
   /** Owning floor plate level when this tagged mesh lives under a plate segment. */
   plateLevelIndex: number | null;
-  /** Corridor floor/ceiling slabs on double-loaded plates (`floorPlaceholderMeshes`). */
+  /** Corridor hollow shell + corridor-only signage on double-loaded plates. */
   corridorHallwayShell: boolean;
 };
 

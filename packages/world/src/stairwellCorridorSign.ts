@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { CardinalFace } from "./wallWithDoorCutout.js";
+import { MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD } from "./mammothMeshUserData.js";
 import { entryDoorYRangeForShell } from "./unitEntryAdjacency.js";
 
 /** Room-local placement for a stairwell door sign cantilevered into the corridor. */
@@ -384,6 +385,7 @@ export function addStairwellCorridorSignMeshes(
      * stairwell × 19 storeys) is an always-rendered extra draw + blended board face.
      */
     shell.userData.mammothUnitInterior = true;
+    shell.userData[MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD] = true;
     decomposeToObject3D(_mRoot, shell);
     group.add(shell);
 
@@ -396,6 +398,7 @@ export function addStairwellCorridorSignMeshes(
       facePosX.userData.mammothNoCollision = true;
       facePosX.userData.mammothSkipFloorGeometryMerge = true;
       facePosX.userData.mammothUnitInterior = true;
+      facePosX.userData[MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD] = true;
       faceLocalMatrix(halfP + bump, Math.PI * 0.5, _mFace);
       _mWorld.multiplyMatrices(_mRoot, _mFace);
       decomposeToObject3D(_mWorld, facePosX);
@@ -406,6 +409,7 @@ export function addStairwellCorridorSignMeshes(
       faceNegX.userData.mammothNoCollision = true;
       faceNegX.userData.mammothSkipFloorGeometryMerge = true;
       faceNegX.userData.mammothUnitInterior = true;
+      faceNegX.userData[MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD] = true;
       faceLocalMatrix(-halfP - bump, -Math.PI * 0.5, _mFace);
       _mWorld.multiplyMatrices(_mRoot, _mFace);
       decomposeToObject3D(_mWorld, faceNegX);

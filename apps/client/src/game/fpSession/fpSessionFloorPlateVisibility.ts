@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { estimateStoreyFromFeetY, type BuildingStairShaftSpec } from "@the-mammoth/world";
+import { apartmentStoryLevelIsExtractionBand } from "@the-mammoth/schemas";
 import {
   fpBuildingExteriorViewShouldRevealFullStack,
   fpCameraInsideBuildingFootprintXZ,
@@ -191,6 +192,25 @@ export function fpApplyResidentialInteriorPlateBandOverride(input: {
   return { lo: clampedStorey, hi: clampedStorey };
 }
 
+/**
+ * Abandoned extraction storeys share the corridor lighting rig inside units — keep same-storey
+ * corridor shells/signage visible through open thresholds; residential floors still cull them.
+ */
+export function fpKeepCorridorShellVisibleInsideExtractionBandUnit(input: {
+  containingStoryLevelIndex: number | null;
+  entry: {
+    corridorHallwayShell?: boolean;
+    plateLevelIndex?: number | null;
+  };
+}): boolean {
+  const { containingStoryLevelIndex, entry } = input;
+  if (containingStoryLevelIndex === null) return false;
+  if (!apartmentStoryLevelIsExtractionBand(containingStoryLevelIndex)) return false;
+  if (entry.corridorHallwayShell !== true) return false;
+  if (entry.plateLevelIndex == null) return false;
+  return entry.plateLevelIndex === containingStoryLevelIndex;
+}
+
 export function fpResolveUnitInteriorMeshVisible(input: {
   entry: Pick<
     FpSessionUnitInteriorMeshEntry,
@@ -215,6 +235,8 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   /** Same pass as {@link corridorPvsVisibleUnitIds} — keys for `apartmentUnitKey` decor groups. */
   corridorPvsVisibleUnitKeys?: ReadonlySet<string>;
   retainedResidentialUnitKey?: string | null;
+  /** Building `levelIndex` for the unit hull feet occupy (when indoors). */
+  containingStoryLevelIndex?: number | null;
 }): boolean {
   const { entry } = input;
   if (entry.apartmentSwingDoor) {
@@ -277,11 +299,21 @@ export function fpResolveUnitInteriorMeshVisible(input: {
     }
   }
   if (input.insideResidentialUnit) {
+    if (
+      fpKeepCorridorShellVisibleInsideExtractionBandUnit({
+        containingStoryLevelIndex: input.containingStoryLevelIndex ?? null,
+        entry,
+      })
+    ) {
+      return input.unitInteriorVisible;
+    }
     /**
      * Once the player is inside a specific apartment, anonymous `mammothUnitInterior` meshes must not
      * stay visible just because they are "generic residential interior". That broad allowance leaks
      * neighboring unit/corridor shells into the active apartment render set. In-unit views only keep
      * meshes with explicit ownership tags (`apartmentUnitKey` / `residentialUnitId`).
+     *
+     * Extraction-band units are the exception — corridor shells stay live on the same storey (see above).
      */
     return false;
   }
@@ -786,6 +818,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
             corridorPvsVisibleUnitIds: corridorPvs.unitIds,
             corridorPvsVisibleUnitKeys: corridorPvs.unitKeys,
             retainedResidentialUnitKey,
+            containingStoryLevelIndex: containingResidentialUnit?.level ?? null,
           });
         entry.mesh.frustumCulled = true;
         if (

@@ -14,6 +14,7 @@ import {
   type PlaceholderKind,
 } from "./floorPlaceholderMeshTypes.js";
 import { classifyPrefab } from "./floorPlaceholderPrefabKind.js";
+import { MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD } from "./mammothMeshUserData.js";
 import { collectCorridorOrLobbyFootprintsFromFloor } from "./shaftCorridorFlush.js";
 import {
   entryDoorShellCarveYRangeForShell,
@@ -655,6 +656,7 @@ export function addKoncarElevatorSignMeshes(
      * with other corridor-only geometry (STEP signs, apartment doors, etc.).
      */
     mesh.userData.mammothUnitInterior = true;
+    mesh.userData[MAMMOTH_CORRIDOR_HALLWAY_SHELL_UD] = true;
     if (pl.corridorWall === "e") {
       const x = hx - wt - inset;
       mesh.position.set(x, y, pl.zMid);
