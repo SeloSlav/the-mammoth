@@ -163,72 +163,48 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
     ).toBe(true);
   });
 
-  it("hides neighbor unit shells and furnished props on extraction-band corridors", () => {
-    const base = {
-      unitInteriorVisible: true,
-      apartmentDecorInteriorVisible: true,
-      exteriorShellPlasterVisible: false,
-      insideResidentialUnit: false,
-      insideApartmentInteriorLightingZone: true,
-      containingResidentialUnitId: null,
-      containingResidentialUnitKey: null,
-      extractionBandCorridorOnly: true,
-      corridorHallwayShell: false,
-    };
+  it("shows furnished props for corridor PVS unit keys while walking the hallway", () => {
+    const unitKey = "floor_mamutica_16|17|unit_e_003";
     expect(
       fpResolveUnitInteriorMeshVisible({
         entry: {
-          apartmentUnitKey: null,
-          residentialUnitId: "unit_e_003",
-          residentialExteriorGlass: false,
-          genericInteriorVisibleInResidentialUnit: false,
-          apartmentSwingDoor: false,
-          isResidentialShellPlaster: true,
-        },
-        ...base,
-      }),
-    ).toBe(false);
-    expect(
-      fpResolveUnitInteriorMeshVisible({
-        entry: {
-          apartmentUnitKey: "floor_mamutica_16|17|unit_e_003",
+          apartmentUnitKey: unitKey,
           residentialUnitId: null,
           residentialExteriorGlass: false,
           genericInteriorVisibleInResidentialUnit: false,
           apartmentSwingDoor: false,
           isResidentialShellPlaster: false,
         },
-        ...base,
-      }),
-    ).toBe(false);
-    expect(
-      fpResolveUnitInteriorMeshVisible({
-        entry: {
-          apartmentUnitKey: null,
-          residentialUnitId: null,
-          residentialExteriorGlass: false,
-          genericInteriorVisibleInResidentialUnit: false,
-          apartmentSwingDoor: false,
-          isResidentialShellPlaster: false,
-          corridorHallwayShell: false,
-        },
-        ...base,
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        exteriorShellPlasterVisible: false,
+        insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: true,
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
+        corridorPvsVisibleUnitKeys: new Set([unitKey]),
       }),
     ).toBe(true);
     expect(
       fpResolveUnitInteriorMeshVisible({
         entry: {
-          apartmentUnitKey: null,
+          apartmentUnitKey: unitKey,
           residentialUnitId: null,
           residentialExteriorGlass: false,
           genericInteriorVisibleInResidentialUnit: false,
           apartmentSwingDoor: false,
           isResidentialShellPlaster: false,
-          corridorHallwayShell: true,
         },
-        ...base,
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        exteriorShellPlasterVisible: false,
+        insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: true,
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
+        corridorPvsVisibleUnitKeys: new Set<string>(),
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("hides anonymous corridor shells only once feet are strictly inside a unit hull", () => {

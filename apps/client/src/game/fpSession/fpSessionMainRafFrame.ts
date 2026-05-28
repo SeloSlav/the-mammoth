@@ -117,7 +117,6 @@ import {
   STAIRWELL_INTERIOR_DARK_HALF_LIFE_SEC,
 } from "./fpSessionStairwellInteriorDark.js";
 import { fpResolveApartmentInteriorDarkTarget01, fpResolveApartmentInteriorBounceScale } from "./fpApartmentInteriorLightingZone.js";
-import { apartmentStoryLevelIsExtractionBand } from "@the-mammoth/schemas";
 import {
   hotbarDefIdSupportsMeleeAttack,
   hotbarDefIdSupportsRangedAttack,
@@ -766,14 +765,9 @@ export function createFpSessionMainRafFrame(
     const visibleDecorUnitKeys = deps.getCorridorPvsVisibleUnitKeys();
     const practicalLightsUnitKey =
       deps.getActiveApartmentDecorUnitKey(containingResidentialUnitKey);
-    const storyLevelIndexForDecor = deps.getStoryLevelIndexForLighting();
-    const extractionBandCorridorWalk =
-      apartmentStoryLevelIsExtractionBand(storyLevelIndexForDecor) &&
-      deps.isInsideApartmentInteriorLightingZone() &&
-      !deps.isInsideResidentialUnit();
     deps.fpApartmentDecorMeshes.syncVisibility(
       deps.camera,
-      deps.isApartmentDecorInteriorVisible() && !extractionBandCorridorWalk,
+      deps.isApartmentDecorInteriorVisible(),
       visibleDecorUnitKeys.size > 0 ? visibleDecorUnitKeys : null,
       practicalLightsUnitKey,
       deps.isExteriorFacadeDecorVisible(),

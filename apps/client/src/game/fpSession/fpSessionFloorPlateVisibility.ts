@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { apartmentStoryLevelIsExtractionBand } from "@the-mammoth/schemas";
 import { estimateStoreyFromFeetY, type BuildingStairShaftSpec } from "@the-mammoth/world";
 import {
   fpBuildingExteriorViewShouldRevealFullStack,
@@ -213,21 +212,11 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   containingResidentialUnitKey: string | null;
   /** Door-aware corridor PVS — unit ids eligible for interior peek from hallway. */
   corridorPvsVisibleUnitIds?: ReadonlySet<string>;
-  /**
-   * Extraction-band hallway (display ≤ 16): only corridor shell / anon geo — no neighbor unit
-   * plaster or furnished props through rotted doorways.
-   */
-  extractionBandCorridorOnly?: boolean;
+  /** Same pass as {@link corridorPvsVisibleUnitIds} — keys for `apartmentUnitKey` decor groups. */
+  corridorPvsVisibleUnitKeys?: ReadonlySet<string>;
+  retainedResidentialUnitKey?: string | null;
 }): boolean {
   const { entry } = input;
-  if (input.extractionBandCorridorOnly) {
-    if (entry.apartmentSwingDoor) return input.unitInteriorVisible;
-    if (entry.corridorHallwayShell === true) return input.unitInteriorVisible;
-    if (entry.residentialUnitId === null && entry.apartmentUnitKey === null) {
-      return input.unitInteriorVisible;
-    }
-    return false;
-  }
   if (entry.apartmentSwingDoor) {
     /**
      * Instanced corridor doors are not tied to a single `residentialUnitId` mesh. They must stay
@@ -237,11 +226,19 @@ export function fpResolveUnitInteriorMeshVisible(input: {
     return input.unitInteriorVisible;
   }
   if (entry.apartmentUnitKey !== null) {
-    return (
-      input.apartmentDecorInteriorVisible &&
-      (!input.insideResidentialUnit ||
-        entry.apartmentUnitKey === input.containingResidentialUnitKey)
-    );
+    if (!input.apartmentDecorInteriorVisible) return false;
+    if (input.insideResidentialUnit) {
+      return entry.apartmentUnitKey === input.containingResidentialUnitKey;
+    }
+    if (input.insideApartmentInteriorLightingZone) {
+      const pvsKeys = input.corridorPvsVisibleUnitKeys;
+      if (pvsKeys && pvsKeys.has(entry.apartmentUnitKey)) return true;
+      return (
+        input.retainedResidentialUnitKey != null &&
+        entry.apartmentUnitKey === input.retainedResidentialUnitKey
+      );
+    }
+    return false;
   }
   if (entry.residentialUnitId !== null) {
     if (input.insideResidentialUnit) {
@@ -412,7 +409,6 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastInsideResidentialUnit = false;
   let _lastInsideStairwellShaft = false;
   let _lastInsideApartmentInteriorLightingZone = false;
-  let _lastExtractionBandCorridorOnly = false;
   let _lastStoryLevelIndexForLighting = 1;
   let _lastExteriorShellPlasterVisible = false;
   let _lastTrueExteriorView = false;
@@ -598,10 +594,6 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       insideStairShaft,
     });
     _lastStoryLevelIndexForLighting = storeyPlateAnchor;
-    const extractionBandCorridorOnly =
-      apartmentStoryLevelIsExtractionBand(storeyPlateAnchor) &&
-      insideApartmentInteriorLightingZone &&
-      !insideResidentialUnit;
     if (containingResidentialUnitKey !== null) {
       _lastVisitedResidentialUnitKey = containingResidentialUnitKey;
     } else if (!insideApartmentInteriorLightingZone) {
@@ -765,7 +757,6 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       containingResidentialUnitKey !== _lastContainingResidentialUnitKey ||
       retainedResidentialUnitId !== _lastRetainedResidentialUnitId ||
       insideApartmentInteriorLightingZone !== _lastInsideApartmentInteriorLightingZone ||
-      extractionBandCorridorOnly !== _lastExtractionBandCorridorOnly ||
       corridorPvsChanged;
     if (unitInteriorVisibilityChanged || insideResidentialUnit) {
       _lastUnitInteriorVisible = unitInteriorVisible;
@@ -777,7 +768,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       _lastContainingResidentialUnitKey = containingResidentialUnitKey;
       _lastRetainedResidentialUnitId = retainedResidentialUnitId;
       _lastInsideApartmentInteriorLightingZone = insideApartmentInteriorLightingZone;
-      _lastExtractionBandCorridorOnly = extractionBandCorridorOnly;
+      const retainedResidentialUnitKey = getRetainedResidentialUnitKey();
       for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
         const entry = unitInteriorMeshEntries[i]!;
         entry.mesh.visible =
@@ -793,7 +784,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
             containingResidentialUnitId,
             containingResidentialUnitKey,
             corridorPvsVisibleUnitIds: corridorPvs.unitIds,
-            extractionBandCorridorOnly,
+            corridorPvsVisibleUnitKeys: corridorPvs.unitKeys,
+            retainedResidentialUnitKey,
           });
         entry.mesh.frustumCulled = true;
         if (

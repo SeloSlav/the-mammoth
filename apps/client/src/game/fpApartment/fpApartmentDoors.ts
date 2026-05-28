@@ -594,6 +594,8 @@ export function mountFpApartmentDoors(
   const slotsByKey = new Map<string, DoorSlot>();
   const levelMeshes: LevelMesh[] = [];
   const allSlots: DoorSlot[] = [];
+  /** Rotten extraction-band entries: no door mesh, but hallway PVS treats every unit threshold as open. */
+  const extractionBandPvsDoors: BuildingCorridorPvsDoorEntry[] = [];
 
   const scratchMatrix = new THREE.Matrix4();
   const applyMatrix = (slot: DoorSlot, open01: number): void => {
@@ -661,6 +663,27 @@ export function mountFpApartmentDoors(
     if (!templates || templates.length === 0) continue;
 
     const doorsEnabledForLevel = apartmentUnitEntryDoorsEnabledForStoryLevel(ref.levelIndex);
+    if (!doorsEnabledForLevel) {
+      for (let ti = 0; ti < templates.length; ti++) {
+        const t = templates[ti]!;
+        if (!isResidentialCorridorUnitDoorTemplate(t.templateId)) continue;
+        const unitId = t.templateId.split("|")[0] ?? "";
+        if (!unitId.startsWith("unit_")) continue;
+        const tangent = swingDoorTangentRest(t.face as SwingDoorFace);
+        extractionBandPvsDoors.push({
+          unitKey: residentUnitKeyFromParts(ref.floorDocId, ref.levelIndex, t.templateId),
+          unitId,
+          level: ref.levelIndex,
+          open01: 1,
+          isResidentialUnitDoor: true,
+          hingeX: t.hingeX,
+          hingeZ: t.hingeZ,
+          tangentX: tangent.x,
+          tangentZ: tangent.z,
+          panelWidthM: t.panelWidthM,
+        });
+      }
+    }
     const mountTemplates = templates.filter(
       (t) =>
         !isResidentialCorridorUnitDoorTemplate(t.templateId) || doorsEnabledForLevel,
@@ -1097,10 +1120,9 @@ export function mountFpApartmentDoors(
     getInteractPrompt,
     debugSnapshot,
     collectCorridorPvsDoorEntries: (): readonly BuildingCorridorPvsDoorEntry[] => {
-      const out: BuildingCorridorPvsDoorEntry[] = [];
+      const out: BuildingCorridorPvsDoorEntry[] = extractionBandPvsDoors.slice();
       for (let i = 0; i < allSlots.length; i++) {
         const slot = allSlots[i]!;
-        if (!apartmentUnitEntryDoorsEnabledForStoryLevel(slot.level)) continue;
         if (!slot.templateId.includes("unit_")) continue;
         const unitId = slot.templateId.split("|")[0] ?? "";
         if (!unitId.startsWith("unit_")) continue;

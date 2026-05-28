@@ -47,8 +47,9 @@ export function apartmentStoryLevelIsExtractionBand(storyLevelIndex: number): bo
 }
 
 /**
- * Residential `unit_e_*` / `unit_w_*` corridor swing doors — omitted on extraction-band storeys
- * (fungus-rotted entries). PR podium and lived-in band (display 17+) keep doors.
+ * Residential `unit_e_*` / `unit_w_*` corridor swing door **meshes** — omitted on extraction-band
+ * storeys (fungus-rotted entries). Client hallway PVS still treats those thresholds as open.
+ * PR podium and lived-in band (display 17+) keep doors.
  */
 export function apartmentUnitEntryDoorsEnabledForStoryLevel(storyLevelIndex: number): boolean {
   if (storyLevelIndex === APARTMENT_PR_STORY_LEVEL_INDEX) return true;
