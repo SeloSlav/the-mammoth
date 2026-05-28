@@ -237,8 +237,11 @@ export function fpResolveUnitInteriorMeshVisible(input: {
     | "genericInteriorVisibleInResidentialUnit"
     | "apartmentSwingDoor"
     | "isResidentialShellPlaster"
-    | "underStairColumnRoot"
-  > & { plateLevelIndex?: number | null; corridorHallwayShell?: boolean };
+  > & {
+    plateLevelIndex?: number | null;
+    corridorHallwayShell?: boolean;
+    underStairColumnRoot?: boolean;
+  };
   unitInteriorVisible: boolean;
   apartmentDecorInteriorVisible: boolean;
   exteriorShellPlasterVisible: boolean;
@@ -268,7 +271,7 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   if (!inPlateBand) {
     return false;
   }
-  if (entry.underStairColumnRoot) {
+  if (entry.underStairColumnRoot === true) {
     /**
      * Stair column segments toggle `.visible` on their storey groups; merged shaft interiors are
      * also tagged `mammothUnitInterior` and must not be forced off by the hallway filler rule.
