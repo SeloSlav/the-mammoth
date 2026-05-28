@@ -30,6 +30,11 @@ import type { DbConnection } from "../../../module_bindings";
 
 export type CreateFpElevatorExteriorDoorInteractOpts = {
   conn: DbConnection;
+  /** When an active landing hail target is aimed, corridor door prompts / E are suppressed. */
+  landingHailBlocksCorridorDoor?: (
+    camera: THREE.PerspectiveCamera,
+    playerPos: THREE.Vector3,
+  ) => boolean;
   buildingWorldOriginX: number;
   buildingWorldOriginZ: number;
   maxLevel: number;
@@ -58,6 +63,7 @@ export function createFpElevatorExteriorDoorInteract(
 ) {
   const {
     conn,
+    landingHailBlocksCorridorDoor = () => false,
     buildingWorldOriginX: ox,
     buildingWorldOriginZ: oz,
     maxLevel,
@@ -74,6 +80,7 @@ export function createFpElevatorExteriorDoorInteract(
   } = opts;
 
   const _cameraWorldPos = new THREE.Vector3();
+  const _playerPosScratch = new THREE.Vector3();
   const _hailPickRoots: THREE.Object3D[] = [];
   const pendingExteriorDoorToggle = {
     shaftKey: "",
@@ -96,11 +103,14 @@ export function createFpElevatorExteriorDoorInteract(
     _hailPickRoots.length = 0;
     const [levelLo, levelHi] = candidateLandingLevelRangeForFeetY(playerPos.y);
     for (const [key, vis] of visuals) {
-      const row = latest.get(key);
+      const layout = layoutByKey.get(key);
       const spatial = shaftSpatialByKey.get(key);
-      if (!row || !spatial) continue;
-      const dx = playerPos.x - (ox + row.plateX);
-      const dz = playerPos.z - (oz + row.plateZ);
+      const row = latest.get(key);
+      if (!layout || !spatial) continue;
+      const plateX = row?.plateX ?? layout.plateX;
+      const plateZ = row?.plateZ ?? layout.plateZ;
+      const dx = playerPos.x - (ox + plateX);
+      const dz = playerPos.z - (oz + plateZ);
       if (dx * dx + dz * dz > spatial.hailPickMaxCenterDistSq) continue;
       for (let level = levelLo; level <= levelHi; level++) {
         const pick = vis.getLandingHailPickForLevel(level);
@@ -110,6 +120,7 @@ export function createFpElevatorExteriorDoorInteract(
     return _hailPickRoots;
   };
 
+  /** Broad pose gate for corridor toggles, in-cab docked use, and pending retries. */
   const resolveExteriorDoorInteractByPose = (
     px: number,
     py: number,
@@ -225,12 +236,33 @@ export function createFpElevatorExteriorDoorInteract(
     px: number,
     py: number,
     pz: number,
-  ): { shaftKey: string; level: number } | null =>
-    resolveExteriorDoorInteractByPose(
-      px,
-      exteriorDoorInteractHintY({ y: py }, camera),
-      pz,
-    );
+  ): { shaftKey: string; level: number } | null => {
+    const poseHit = resolveExteriorDoorInteractByPose(px, py, pz);
+    if (!poseHit) return null;
+    _playerPosScratch.set(px, py, pz);
+    const inCabDocked =
+      Number.isFinite(getCabY(poseHit.shaftKey)) &&
+      fpElevLandingExteriorDoorInCabDockedInteract({
+        plateWorldX: ox + (latest.get(poseHit.shaftKey)?.plateX ?? 0),
+        plateWorldZ: oz + (latest.get(poseHit.shaftKey)?.plateZ ?? 0),
+        px,
+        py,
+        pz,
+        landingFeetWorldY: feetYForLayout(
+          layoutByKey.get(poseHit.shaftKey)!,
+          poseHit.level,
+        ),
+        cabFeetWorldY: getCabY(poseHit.shaftKey),
+        inner: visuals.get(poseHit.shaftKey)!.inner,
+        phaseMoving:
+          latest.get(poseHit.shaftKey)?.phase === ELEVATOR_PHASE_MOVING,
+        dockYTolM: LANDING_PASSAGE_DOCK_Y_TOL_M,
+      });
+    if (!inCabDocked && landingHailBlocksCorridorDoor(camera, _playerPosScratch)) {
+      return null;
+    }
+    return poseHit;
+  };
 
   const landingDoorPendingSatisfied = (
     row: ElevatorLandingDoor | undefined,

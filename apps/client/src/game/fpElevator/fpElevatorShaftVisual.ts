@@ -177,6 +177,7 @@ export class FpElevatorShaftVisual {
   readonly landingDoorPickRoot: THREE.Group;
   readonly landingHailPickRoot: THREE.Group;
   private readonly landingHailPickByLevel = new Map<number, THREE.Object3D>();
+  private readonly landingDoorPickByLevel = new Map<number, THREE.Object3D>();
   /** Per-storey `swing.matrixWorld` at open01=0 — multiplied each tick by landing swing. */
   private readonly landingDoorSwingBase: THREE.Matrix4[] = [];
   private landingDoorSwingSign = 1;
@@ -470,9 +471,10 @@ export class FpElevatorShaftVisual {
       const doorPickWrap = new THREE.Group();
       doorPickWrap.position.set(0, feetY, 0);
       const doorPick = this.createLandingDoorPickMesh(face, hx, hz, level, pick.shaftKey);
-      doorPick.visible = false;
+      /** Opacity-0 pick slab must stay `visible` so crosshair raycasts can hit it. */
       doorPickWrap.add(doorPick);
       this.landingDoorPickRoot.add(doorPickWrap);
+      this.landingDoorPickByLevel.set(level, doorPick);
 
       const hailWrap = new THREE.Group();
       hailWrap.position.set(0, feetY, 0);
@@ -541,8 +543,8 @@ export class FpElevatorShaftVisual {
       }
     });
     tagInterior(this.landingRoot, true);
-    tagInterior(this.landingHailPickRoot, false);
-    tagInterior(this.landingDoorPickRoot, false);
+    tagInterior(this.landingHailPickRoot, true);
+    tagInterior(this.landingDoorPickRoot, true);
 
     if (this.mergedCabFloorButtons) {
       this.lastMatSig = "";
@@ -558,7 +560,7 @@ export class FpElevatorShaftVisual {
     shaftKey: string,
   ): THREE.Mesh {
     const pick = new THREE.Mesh(
-      new THREE.BoxGeometry(0.16, DOOR_H, DOOR_W),
+      new THREE.BoxGeometry(0.22, DOOR_H, DOOR_W + 0.12),
       new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 }),
     );
     pick.name = `elev_exterior_door_pick_${level}`;
@@ -598,14 +600,18 @@ export class FpElevatorShaftVisual {
       this.hailBtnMatTemplate,
     );
     button.name = `elev_landing_hail_btn_${level}`;
-    (button.userData as FpElevLandingHailPickUserData)[FP_ELEV_LANDING_HAIL_PICK_UD] = {
+    const hailPickUserData: FpElevLandingHailPickUserData[typeof FP_ELEV_LANDING_HAIL_PICK_UD] = {
       shaftKey,
       level,
     };
+    (button.userData as FpElevLandingHailPickUserData)[FP_ELEV_LANDING_HAIL_PICK_UD] =
+      hailPickUserData;
     const icon = new THREE.Mesh(
       new THREE.PlaneGeometry(iconPlane, iconPlane),
       this.hailBtnIconMat,
     );
+    (icon.userData as FpElevLandingHailPickUserData)[FP_ELEV_LANDING_HAIL_PICK_UD] =
+      hailPickUserData;
     const y = 1.34;
     const faceOut = level === 1 ? LANDING_HAIL_FACE_OUT_GROUND_M : LANDING_HAIL_FACE_OUT_M;
     const doorSideOffset = DOOR_W * 0.5 + 0.32;
@@ -662,6 +668,10 @@ export class FpElevatorShaftVisual {
 
   getLandingHailPickForLevel(level: number): THREE.Object3D | undefined {
     return this.landingHailPickByLevel.get(level);
+  }
+
+  getLandingExteriorDoorPickForLevel(level: number): THREE.Object3D | undefined {
+    return this.landingDoorPickByLevel.get(level);
   }
 
   /**
@@ -862,6 +872,7 @@ export class FpElevatorShaftVisual {
     this.landingDoorPickRoot.clear();
     this.landingHailPickRoot.clear();
     this.landingHailPickByLevel.clear();
+    this.landingDoorPickByLevel.clear();
     this.root.clear();
   }
 }

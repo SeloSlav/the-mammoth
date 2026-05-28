@@ -2087,7 +2087,9 @@ export async function mountFpSession(
         return;
       }
       if (fpElevators.consumeInteractKey(feet, camera)) return;
-      const suppressElevPickup = fpElevators.shouldSuppressEpickup(feet, camera);
+      const suppressElevPickup =
+        fpElevators.getLandingHailInteractPrompt(feet, camera) !== null ||
+        fpElevators.getExteriorDoorInteractPrompt(feet, camera) !== null;
       const lookedAtStash = conn.identity
         ? fpApartmentDecorMeshes.getStashPrompt(feet, camera)
         : null;

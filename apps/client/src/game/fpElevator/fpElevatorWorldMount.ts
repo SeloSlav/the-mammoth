@@ -393,14 +393,20 @@ export function mountFpElevatorWorld(
       1,
     );
   };
+  const landingHailBlocksCorridorDoorRef: {
+    fn: (camera: THREE.PerspectiveCamera, playerPos: THREE.Vector3) => boolean;
+  } = {
+    fn: () => false,
+  };
   const {
     collectNearbyLandingHailPickRoots,
     flushPendingExteriorDoorToggle,
     consumeInteractKey: consumeExteriorDoorInteractKey,
-    shouldSuppressEpickup: shouldSuppressExteriorDoorEpickup,
     getExteriorDoorInteractPrompt,
   } = createFpElevatorExteriorDoorInteract({
     conn: opts.conn,
+    landingHailBlocksCorridorDoor: (camera, playerPos) =>
+      landingHailBlocksCorridorDoorRef.fn(camera, playerPos),
     buildingWorldOriginX: ox,
     buildingWorldOriginZ: oz,
     maxLevel,
@@ -467,6 +473,7 @@ export function mountFpElevatorWorld(
     tryRaycastFloorPick,
     getLandingHailInteractPrompt,
     consumeLandingHailInteractKey,
+    isLandingHailTargetActive,
   } =
     createFpElevatorHailAndFloorPickRaycasts({
       raycaster,
@@ -478,6 +485,9 @@ export function mountFpElevatorWorld(
       floorLabelByLevel,
       ox,
       oz,
+      buildingWorldOriginY: oy,
+      floorSpacingM,
+      maxLevel,
       collectNearbyLandingHailPickRoots,
       feetYForLayout,
       getCabY,
@@ -485,6 +495,7 @@ export function mountFpElevatorWorld(
       hailPickFlash,
       pickFlash,
     });
+  landingHailBlocksCorridorDoorRef.fn = isLandingHailTargetActive;
   let getFloorPlateBand: () => FpActiveFloorPlateBand = _noopFloorBand;
 
   const getCabMotionAudioEmitters = (
@@ -616,7 +627,7 @@ export function mountFpElevatorWorld(
       consumeExteriorDoorInteractKey(playerPos, camera),
     shouldSuppressEpickup: (playerPos, camera) =>
       getLandingHailInteractPrompt(camera, playerPos) !== null ||
-      shouldSuppressExteriorDoorEpickup(playerPos, camera),
+      getExteriorDoorInteractPrompt(playerPos, camera) !== null,
     getLandingHailInteractPrompt: (playerPos, camera) =>
       getLandingHailInteractPrompt(camera, playerPos),
     getExteriorDoorInteractPrompt,

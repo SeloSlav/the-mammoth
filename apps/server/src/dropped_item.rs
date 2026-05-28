@@ -1,8 +1,9 @@
 //! World pickups: drag-out from inventory/hotbar → `drop_item`, `E` / reducer → `pickup_dropped_item`.
 //! Static world loot uses the **same** `dropped_item` rows with [`DroppedItem.world_spawn_slot`], filled on
 //! `init`, refreshed on a timer with weighted RNG. Corridor anchors roll **ammo, rations, and chemical-stock**
-//! (custodial/service-cache proxy until janitor closets are anchored). A **subset** of **unclaimed** apartment
-//! units get weapon-biased loot (sorted by floor); many stay empty each refresh. Scrap metal is common but
+//! (custodial/service-cache proxy until janitor closets are anchored). Unclaimed apartment loot is gated by
+//! [`crate::feature_flags::ENABLE_UNCLAIMED_APARTMENT_WORLD_LOOT`] (off by default). When enabled, a **subset**
+//! of units get weapon-biased loot (sorted by floor); many stay empty each refresh. Scrap metal is common but
 //! not guaranteed on every looted unit — fewer rows, clearer scavenging, less subscription/render load.
 //! Anchored apartment XZ omits bbox centroids and the bed footprint projection so pickups land in clear living/entry lanes.
 //! Player drops stay `world_spawn_slot = None`; cleanup ages those rows on a per-item schedule
@@ -18,6 +19,7 @@ use crate::apartments::{
 };
 use crate::auth;
 use crate::crafting;
+use crate::feature_flags;
 use crate::elevator_layout::{BUILDING_ORIGIN_Y, STOREY_SPACING_M};
 use crate::inventory::{
     get_player_item, inventory_item, remove_player_item_quantity, try_grant_stack_to_player,
@@ -647,57 +649,61 @@ fn refresh_world_loot_spawns_inner(ctx: &ReducerContext) {
         insert_world_loot_at_anchor(ctx, slot, x, y, z, WORLD_LOOT_TIERS);
     }
 
-    let apartment_base = WORLD_LOOT_ANCHORS.len();
-    let refresh_salt = ctx.timestamp.to_micros_since_unix_epoch() as u64;
-    let mut unclaimed: Vec<_> = ctx
-        .db
-        .apartment_unit()
-        .iter()
-        .filter(|u| u.state == UNIT_STATE_UNCLAIMED && !is_vacant_home_pool_unit_row(u))
-        .collect();
-    unclaimed.sort_by(|a, b| {
-        a.level
-            .cmp(&b.level)
-            .then_with(|| a.unit_key.cmp(&b.unit_key))
-    });
+    if feature_flags::ENABLE_UNCLAIMED_APARTMENT_WORLD_LOOT {
+        let apartment_base = WORLD_LOOT_ANCHORS.len();
+        let refresh_salt = ctx.timestamp.to_micros_since_unix_epoch() as u64;
+        let mut unclaimed: Vec<_> = ctx
+            .db
+            .apartment_unit()
+            .iter()
+            .filter(|u| u.state == UNIT_STATE_UNCLAIMED && !is_vacant_home_pool_unit_row(u))
+            .collect();
+        unclaimed.sort_by(|a, b| {
+            a.level
+                .cmp(&b.level)
+                .then_with(|| a.unit_key.cmp(&b.unit_key))
+        });
 
-    let mut main_loot_rows = 0usize;
-    let mut scrap_rows = 0usize;
+        let mut main_loot_rows = 0usize;
+        let mut scrap_rows = 0usize;
 
-    for u in unclaimed {
-        if main_loot_rows >= MAX_APARTMENT_MAIN_LOOT_ROWS {
-            break;
+        for u in unclaimed {
+            if main_loot_rows >= MAX_APARTMENT_MAIN_LOOT_ROWS {
+                break;
+            }
+            let unit_seed = apartment_unit_loot_seed(&u, refresh_salt);
+            if splitmix64(unit_seed) % 100 >= APARTMENT_LOOT_UNIT_PASS_PERCENT {
+                continue;
+            }
+
+            let idx = apartment_base + main_loot_rows;
+            let Ok(slot) = u16::try_from(idx) else {
+                log::warn!(
+                    "world loot: unclaimed apartment slot index {idx} exceeds u16::MAX; stopping apartment loot"
+                );
+                break;
+            };
+            let loot_seed = refresh_salt ^ ((slot as u64) << 48) ^ splitmix64(unit_seed);
+            let (lx, lz) = apartment_clear_pickup_anchor_xz(&u, loot_seed);
+            let ly = apartment_world_loot_floor_y(&u);
+            insert_world_loot_at_anchor(ctx, slot, lx, ly, lz, UNCLAIMED_APARTMENT_LOOT_TIERS);
+            main_loot_rows += 1;
+
+            if splitmix64(unit_seed ^ 0x5CA2_A9B8_01D0_11D5) % 100
+                >= APARTMENT_SCRAP_SPAWN_PERCENT
+            {
+                continue;
+            }
+            let scrap_idx = UNCLAIMED_APARTMENT_SCRAP_SLOT_BASE + scrap_rows;
+            let Ok(scrap_slot) = u16::try_from(scrap_idx) else {
+                log::warn!(
+                    "world loot: unclaimed apartment scrap slot index {scrap_idx} exceeds u16::MAX; stopping apartment scrap"
+                );
+                break;
+            };
+            insert_apartment_scrap_metal(ctx, scrap_slot, &u);
+            scrap_rows += 1;
         }
-        let unit_seed = apartment_unit_loot_seed(&u, refresh_salt);
-        if splitmix64(unit_seed) % 100 >= APARTMENT_LOOT_UNIT_PASS_PERCENT {
-            continue;
-        }
-
-        let idx = apartment_base + main_loot_rows;
-        let Ok(slot) = u16::try_from(idx) else {
-            log::warn!(
-                "world loot: unclaimed apartment slot index {idx} exceeds u16::MAX; stopping apartment loot"
-            );
-            break;
-        };
-        let loot_seed = refresh_salt ^ ((slot as u64) << 48) ^ splitmix64(unit_seed);
-        let (lx, lz) = apartment_clear_pickup_anchor_xz(&u, loot_seed);
-        let ly = apartment_world_loot_floor_y(&u);
-        insert_world_loot_at_anchor(ctx, slot, lx, ly, lz, UNCLAIMED_APARTMENT_LOOT_TIERS);
-        main_loot_rows += 1;
-
-        if splitmix64(unit_seed ^ 0x5CA2_A9B8_01D0_11D5) % 100 >= APARTMENT_SCRAP_SPAWN_PERCENT {
-            continue;
-        }
-        let scrap_idx = UNCLAIMED_APARTMENT_SCRAP_SLOT_BASE + scrap_rows;
-        let Ok(scrap_slot) = u16::try_from(scrap_idx) else {
-            log::warn!(
-                "world loot: unclaimed apartment scrap slot index {scrap_idx} exceeds u16::MAX; stopping apartment scrap"
-            );
-            break;
-        };
-        insert_apartment_scrap_metal(ctx, scrap_slot, &u);
-        scrap_rows += 1;
     }
 }
 
