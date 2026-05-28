@@ -201,8 +201,7 @@ export function fpResolveUnitInteriorMeshVisible(input: {
     | "genericInteriorVisibleInResidentialUnit"
     | "apartmentSwingDoor"
     | "isResidentialShellPlaster"
-    | "corridorHallwayShell"
-  > & { plateLevelIndex?: number | null };
+  > & { plateLevelIndex?: number | null; corridorHallwayShell?: boolean };
   unitInteriorVisible: boolean;
   apartmentDecorInteriorVisible: boolean;
   exteriorShellPlasterVisible: boolean;
@@ -223,7 +222,7 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   const { entry } = input;
   if (input.extractionBandCorridorOnly) {
     if (entry.apartmentSwingDoor) return input.unitInteriorVisible;
-    if (entry.corridorHallwayShell) return input.unitInteriorVisible;
+    if (entry.corridorHallwayShell === true) return input.unitInteriorVisible;
     if (entry.residentialUnitId === null && entry.apartmentUnitKey === null) {
       return input.unitInteriorVisible;
     }
