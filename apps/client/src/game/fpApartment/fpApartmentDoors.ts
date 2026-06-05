@@ -37,6 +37,7 @@ import {
 } from "@the-mammoth/schemas";
 import {
   APARTMENT_DOOR_TEMPLATES,
+  apartmentDoorAdmitsCorridorInteriorPeek,
   apartmentDoorInteractPromptKindFromTemplateId,
   apartmentDoorSwingInwardForTemplateId,
   buildApartmentSwingLeafGeometries,
@@ -197,6 +198,8 @@ export type MountFpApartmentDoorsResult = {
   debugSnapshot(x: number, z: number, radiusM: number): ApartmentDoorDebugSlot[];
   /** Replicated door open state for corridor render PVS. */
   collectCorridorPvsDoorEntries(): readonly BuildingCorridorPvsDoorEntry[];
+  /** Changes only when corridor PVS eligibility or door geometry changes. */
+  getCorridorPvsRevision(): number;
 };
 
 /**
@@ -596,6 +599,7 @@ export function mountFpApartmentDoors(
   const allSlots: DoorSlot[] = [];
   /** Rotten extraction-band entries: no door mesh, but hallway PVS treats every unit threshold as open. */
   const extractionBandPvsDoors: BuildingCorridorPvsDoorEntry[] = [];
+  let corridorPvsRevision = 1;
 
   const scratchMatrix = new THREE.Matrix4();
   const applyMatrix = (slot: DoorSlot, open01: number): void => {
@@ -778,6 +782,16 @@ export function mountFpApartmentDoors(
 
   const ingestRow = (row: ApartmentDoor) => {
     const slot = slotsByKey.get(row.rowKey);
+    const wasSeeded = slot?.seeded ?? false;
+    const previousFloorDocId = slot?.floorDocId;
+    const previousTemplateId = slot?.templateId;
+    const previousLevel = slot?.level;
+    const previousPvsRelevant =
+      slot !== undefined && isResidentialCorridorUnitDoorTemplate(slot.templateId);
+    const previousPvsOpen =
+      slot !== undefined &&
+      previousPvsRelevant &&
+      apartmentDoorAdmitsCorridorInteriorPeek(slot.swingOpen01);
     if (!slot) return; // orphan row (floor/template removed from codegen) — ignore.
     slot.floorDocId = row.floorDocId;
     slot.templateId = row.templateId;
@@ -790,11 +804,24 @@ export function mountFpApartmentDoors(
     if (swingChanged || geomChanged) {
       applyMatrix(slot, slot.visualOpen01);
     }
-    const wasSeeded = slot.seeded;
     slot.desiredOpen = row.desiredOpen;
     const nextOpen = row.swingOpen01;
     slot.swingOpen01 = nextOpen;
     slot.seeded = true;
+    const nextPvsRelevant = isResidentialCorridorUnitDoorTemplate(row.templateId);
+    const nextPvsOpen =
+      nextPvsRelevant && apartmentDoorAdmitsCorridorInteriorPeek(nextOpen);
+    if (
+      (previousPvsRelevant || nextPvsRelevant) &&
+      (!wasSeeded ||
+        previousFloorDocId !== row.floorDocId ||
+        previousTemplateId !== row.templateId ||
+        previousLevel !== row.level ||
+        geomChanged ||
+        previousPvsOpen !== nextPvsOpen)
+    ) {
+      corridorPvsRevision += 1;
+    }
     if (!wasSeeded) {
       slot.visualOpen01 = nextOpen;
       applyMatrix(slot, nextOpen);
@@ -811,10 +838,15 @@ export function mountFpApartmentDoors(
   const onDelete = (_ctx: unknown, row: ApartmentDoor) => {
     const slot = slotsByKey.get(row.rowKey);
     if (!slot) return;
+    const pvsWasOpen =
+      slot.seeded &&
+      isResidentialCorridorUnitDoorTemplate(slot.templateId) &&
+      apartmentDoorAdmitsCorridorInteriorPeek(slot.swingOpen01);
     slot.desiredOpen = 0;
     slot.swingOpen01 = 0;
     slot.visualOpen01 = 0;
     slot.seeded = false;
+    if (pvsWasOpen) corridorPvsRevision += 1;
     applyMatrix(slot, 0);
   };
   opts.conn.db.apartment_door.onInsert(onInsert);
@@ -1119,6 +1151,7 @@ export function mountFpApartmentDoors(
     shouldSuppressEpickup,
     getInteractPrompt,
     debugSnapshot,
+    getCorridorPvsRevision: () => corridorPvsRevision,
     collectCorridorPvsDoorEntries: (): readonly BuildingCorridorPvsDoorEntry[] => {
       const out: BuildingCorridorPvsDoorEntry[] = extractionBandPvsDoors.slice();
       for (let i = 0; i < allSlots.length; i++) {

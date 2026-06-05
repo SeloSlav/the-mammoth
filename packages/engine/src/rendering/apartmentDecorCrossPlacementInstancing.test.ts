@@ -4,6 +4,7 @@ import {
   applyApartmentDecorCrossPlacementInstancing,
   getLastApartmentDecorInstancingSummary,
   summarizeApartmentDecorCrossPlacementInstancingInScene,
+  syncApartmentDecorCrossPlacementBatchVisibility,
 } from "./apartmentDecorCrossPlacementInstancing.js";
 
 function decorPropGroup(
@@ -73,6 +74,104 @@ describe("applyApartmentDecorCrossPlacementInstancing", () => {
       buildingRoot.children.some((c) => c instanceof THREE.InstancedMesh),
     ).toBe(true);
     expect(getLastApartmentDecorInstancingSummary()?.instances).toBe(4);
+  });
+
+  it("partitions apartment decor batches by unit and activates only PVS-visible sectors", () => {
+    const decorRoot = new THREE.Group();
+    const path = "static/models/objects/cigarette.glb";
+    for (const [unitKey, level, x] of [
+      ["floor|18|unit_a", 18, 0],
+      ["floor|19|unit_b", 19, 20],
+    ] as const) {
+      for (let i = 0; i < 3; i++) {
+        const g = decorPropGroup(path);
+        g.userData.mammothApartmentUnitKey = unitKey;
+        g.userData.mammothPlateLevelIndex = level;
+        g.position.set(x + i, level * 3, 0);
+        decorRoot.add(g);
+      }
+    }
+
+    applyApartmentDecorCrossPlacementInstancing(decorRoot);
+
+    const batches = decorRoot.children.filter(
+      (c) => c instanceof THREE.InstancedMesh,
+    ) as THREE.InstancedMesh[];
+    expect(batches).toHaveLength(2);
+    expect(batches.map((batch) => batch.userData.mammothApartmentUnitKey).sort()).toEqual([
+      "floor|18|unit_a",
+      "floor|19|unit_b",
+    ]);
+    expect(batches.map((batch) => batch.userData.mammothPlateLevelIndex).sort()).toEqual([18, 19]);
+
+    syncApartmentDecorCrossPlacementBatchVisibility(decorRoot, {
+      allowDemand: true,
+      visibleUnitKeys: new Set(["floor|19|unit_b"]),
+    });
+    expect(
+      batches.find((batch) => batch.userData.mammothApartmentUnitKey === "floor|18|unit_a")
+        ?.visible,
+    ).toBe(false);
+    expect(
+      batches.find((batch) => batch.userData.mammothApartmentUnitKey === "floor|19|unit_b")
+        ?.visible,
+    ).toBe(true);
+  });
+
+  it("does not cross-batch identical props between authored apartment units", () => {
+    const decorRoot = new THREE.Group();
+    const path = "static/models/objects/cigarette.glb";
+    for (const unitKey of ["floor|18|unit_a", "floor|18|unit_b"]) {
+      for (let i = 0; i < 2; i++) {
+        const g = decorPropGroup(path);
+        g.userData.mammothApartmentUnitKey = unitKey;
+        decorRoot.add(g);
+      }
+    }
+
+    applyApartmentDecorCrossPlacementInstancing(decorRoot);
+
+    expect(decorRoot.children.some((c) => c instanceof THREE.InstancedMesh)).toBe(false);
+    expect(decorRoot.children.every((c) => c.visible)).toBe(true);
+  });
+
+  it("inherits the nearest floor tag for non-unit fixture batches", () => {
+    const buildingRoot = new THREE.Group();
+    const path = "static/models/objects/light-ceiling-2.glb";
+    const placementRoots: THREE.Object3D[] = [];
+    for (const level of [18, 19]) {
+      const floor = new THREE.Group();
+      floor.userData.mammothPlateLevelIndex = level;
+      buildingRoot.add(floor);
+      for (let i = 0; i < 3; i++) {
+        const g = decorPropGroup(path);
+        floor.add(g);
+        placementRoots.push(g);
+      }
+    }
+
+    applyApartmentDecorCrossPlacementInstancing(buildingRoot, { placementRoots });
+
+    const batches = buildingRoot.children.filter(
+      (c) => c instanceof THREE.InstancedMesh,
+    ) as THREE.InstancedMesh[];
+    expect(batches).toHaveLength(2);
+    expect(batches.map((batch) => batch.userData.mammothPlateLevelIndex).sort()).toEqual([18, 19]);
+  });
+
+  it("leaves exterior facade decor on its per-placement visibility path", () => {
+    const decorRoot = new THREE.Group();
+    const path = "static/models/objects/window-shutter.glb";
+    for (let i = 0; i < 3; i++) {
+      const g = decorPropGroup(path);
+      g.userData.mammothExteriorFacadeDecor = true;
+      decorRoot.add(g);
+    }
+
+    applyApartmentDecorCrossPlacementInstancing(decorRoot);
+
+    expect(decorRoot.children.some((c) => c instanceof THREE.InstancedMesh)).toBe(false);
+    expect(decorRoot.children.every((c) => c.visible)).toBe(true);
   });
 
   it("summarizeApartmentDecorCrossPlacementInstancingInScene counts batches and hidden roots", () => {

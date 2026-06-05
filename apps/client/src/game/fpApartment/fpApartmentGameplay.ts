@@ -838,7 +838,7 @@ export function apartmentStashPromptOccludedFromCamera(
 ): boolean {
   const target = resolveApartmentStashWorldTarget(conn, prompt.stashKey);
   if (!target) return false;
-  return stashRayOcclusion.targetOccludedFromCamera(camera, target);
+  return stashRayOcclusion.targetOccludedFromCamera(camera, target, prompt.unitKey);
 }
 
 function finalizeApartmentStashPrompt(

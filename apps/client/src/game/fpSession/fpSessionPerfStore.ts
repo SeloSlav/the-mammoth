@@ -36,6 +36,16 @@ const _physics = new Float32Array(RING);
 const _elevator = new Float32Array(RING);
 /** Presentation update section (PlayerPresentationManager.update). */
 const _present = new Float32Array(RING);
+/** Floor/PVS/decor/drop visibility traversal nested inside presentation. */
+const _presentVisibility = new Float32Array(RING);
+/** Building floor/volume/PVS visibility nested inside presentation visibility. */
+const _presentFloorVisibility = new Float32Array(RING);
+/** Apartment decor group visibility traversal nested inside presentation visibility. */
+const _presentDecorVisibility = new Float32Array(RING);
+/** Dropped-item visibility traversal nested inside presentation visibility. */
+const _presentDroppedItemVisibility = new Float32Array(RING);
+/** PlayerPresentationManager update + held-item sync nested inside presentation. */
+const _presentPlayerPresentation = new Float32Array(RING);
 /** Render section wall time: floor visibility + fp environment + render setup + `renderer.render`. */
 const _render = new Float32Array(RING);
 /** Stairwell dark sample + elevator shaft visual culling (see {@link fpSessionMainRafFrame}). */
@@ -139,6 +149,11 @@ export type FpPerfSections = {
    * (counted in {@link renderMs}).
    */
   presentMs: number;
+  presentVisibilityMs?: number;
+  presentFloorVisibilityMs?: number;
+  presentDecorVisibilityMs?: number;
+  presentDroppedItemVisibilityMs?: number;
+  presentPlayerPresentationMs?: number;
   renderMs: number;
   /**
    * Split of {@link renderMs}. `renderFloorPlateVisMs` + `renderFpEnvironmentMs` + `renderSetupMs` +
@@ -417,6 +432,11 @@ export function pushFpPerfFrame(
   _physics[i] = sections.physicsMs;
   _elevator[i] = sections.elevatorMs;
   _present[i] = sections.presentMs;
+  _presentVisibility[i] = sections.presentVisibilityMs ?? 0;
+  _presentFloorVisibility[i] = sections.presentFloorVisibilityMs ?? 0;
+  _presentDecorVisibility[i] = sections.presentDecorVisibilityMs ?? 0;
+  _presentDroppedItemVisibility[i] = sections.presentDroppedItemVisibilityMs ?? 0;
+  _presentPlayerPresentation[i] = sections.presentPlayerPresentationMs ?? 0;
   _render[i] = sections.renderMs;
   _renderFloorVis[i] = sections.renderFloorPlateVisMs;
   _renderFpEnv[i] = sections.renderFpEnvironmentMs;
@@ -534,6 +554,11 @@ export function resetFpPerfStore(): void {
   _physics.fill(0);
   _elevator.fill(0);
   _present.fill(0);
+  _presentVisibility.fill(0);
+  _presentFloorVisibility.fill(0);
+  _presentDecorVisibility.fill(0);
+  _presentDroppedItemVisibility.fill(0);
+  _presentPlayerPresentation.fill(0);
   _render.fill(0);
   _renderFloorVis.fill(0);
   _renderFpEnv.fill(0);
@@ -679,6 +704,11 @@ export type FpPerfStats = {
     physicsMs: number;
     elevatorMs: number;
     presentMs: number;
+    presentVisibilityMs: number;
+    presentFloorVisibilityMs: number;
+    presentDecorVisibilityMs: number;
+    presentDroppedItemVisibilityMs: number;
+    presentPlayerPresentationMs: number;
     renderMs: number;
     otherMs: number;
     renderFloorPlateVisMs: number;
@@ -760,6 +790,11 @@ export function computeFpPerfStats(
   let sumPhysics = 0;
   let sumElev = 0;
   let sumPresent = 0;
+  let sumPresentVisibility = 0;
+  let sumPresentFloorVisibility = 0;
+  let sumPresentDecorVisibility = 0;
+  let sumPresentDroppedItemVisibility = 0;
+  let sumPresentPlayerPresentation = 0;
   let sumRender = 0;
   let sumRenderFloorVis = 0;
   let sumRenderFpEnv = 0;
@@ -810,6 +845,11 @@ export function computeFpPerfStats(
     sumPhysics += _physics[i]!;
     sumElev += _elevator[i]!;
     sumPresent += _present[i]!;
+    sumPresentVisibility += _presentVisibility[i]!;
+    sumPresentFloorVisibility += _presentFloorVisibility[i]!;
+    sumPresentDecorVisibility += _presentDecorVisibility[i]!;
+    sumPresentDroppedItemVisibility += _presentDroppedItemVisibility[i]!;
+    sumPresentPlayerPresentation += _presentPlayerPresentation[i]!;
     sumRender += _render[i]!;
     sumRenderFloorVis += _renderFloorVis[i]!;
     sumRenderFpEnv += _renderFpEnv[i]!;
@@ -890,6 +930,11 @@ export function computeFpPerfStats(
   const avgPhysics = sumPhysics / n;
   const avgElev = sumElev / n;
   const avgPresent = sumPresent / n;
+  const avgPresentVisibility = sumPresentVisibility / n;
+  const avgPresentFloorVisibility = sumPresentFloorVisibility / n;
+  const avgPresentDecorVisibility = sumPresentDecorVisibility / n;
+  const avgPresentDroppedItemVisibility = sumPresentDroppedItemVisibility / n;
+  const avgPresentPlayerPresentation = sumPresentPlayerPresentation / n;
   const avgRender = sumRender / n;
   const avgRenderFloorVis = sumRenderFloorVis / n;
   const avgRenderFpEnv = sumRenderFpEnv / n;
@@ -952,6 +997,13 @@ export function computeFpPerfStats(
       physicsMs: Math.round(avgPhysics * 100) / 100,
       elevatorMs: Math.round(avgElev * 100) / 100,
       presentMs: Math.round(avgPresent * 100) / 100,
+      presentVisibilityMs: Math.round(avgPresentVisibility * 100) / 100,
+      presentFloorVisibilityMs: Math.round(avgPresentFloorVisibility * 100) / 100,
+      presentDecorVisibilityMs: Math.round(avgPresentDecorVisibility * 100) / 100,
+      presentDroppedItemVisibilityMs:
+        Math.round(avgPresentDroppedItemVisibility * 100) / 100,
+      presentPlayerPresentationMs:
+        Math.round(avgPresentPlayerPresentation * 100) / 100,
       renderMs: Math.round(avgRender * 100) / 100,
       otherMs: Math.round(avgOther * 100) / 100,
       renderFloorPlateVisMs: Math.round(avgRenderFloorVis * 100) / 100,
@@ -1012,6 +1064,11 @@ export type FpPerfTimelineSample = {
   physicsMs: number;
   elevatorMs: number;
   presentMs: number;
+  presentVisibilityMs?: number;
+  presentFloorVisibilityMs?: number;
+  presentDecorVisibilityMs?: number;
+  presentDroppedItemVisibilityMs?: number;
+  presentPlayerPresentationMs?: number;
   renderMs: number;
   renderFloorPlateVisMs: number;
   renderFpEnvironmentMs: number;
@@ -1078,6 +1135,11 @@ function timelineSampleFromRingIndex(i: number): FpPerfTimelineSample {
     physicsMs: _physics[i]!,
     elevatorMs: _elevator[i]!,
     presentMs: _present[i]!,
+    presentVisibilityMs: _presentVisibility[i]!,
+    presentFloorVisibilityMs: _presentFloorVisibility[i]!,
+    presentDecorVisibilityMs: _presentDecorVisibility[i]!,
+    presentDroppedItemVisibilityMs: _presentDroppedItemVisibility[i]!,
+    presentPlayerPresentationMs: _presentPlayerPresentation[i]!,
     renderMs: _render[i]!,
     renderFloorPlateVisMs: _renderFloorVis[i]!,
     renderFpEnvironmentMs: _renderFpEnv[i]!,
@@ -1150,6 +1212,11 @@ export function computeFpPerfStatsFromTimeline(
   let sumPhysics = 0;
   let sumElev = 0;
   let sumPresent = 0;
+  let sumPresentVisibility = 0;
+  let sumPresentFloorVisibility = 0;
+  let sumPresentDecorVisibility = 0;
+  let sumPresentDroppedItemVisibility = 0;
+  let sumPresentPlayerPresentation = 0;
   let sumRender = 0;
   let sumRenderFloorVis = 0;
   let sumRenderFpEnv = 0;
@@ -1200,6 +1267,11 @@ export function computeFpPerfStatsFromTimeline(
     sumPhysics += row.physicsMs;
     sumElev += row.elevatorMs;
     sumPresent += row.presentMs;
+    sumPresentVisibility += row.presentVisibilityMs ?? 0;
+    sumPresentFloorVisibility += row.presentFloorVisibilityMs ?? 0;
+    sumPresentDecorVisibility += row.presentDecorVisibilityMs ?? 0;
+    sumPresentDroppedItemVisibility += row.presentDroppedItemVisibilityMs ?? 0;
+    sumPresentPlayerPresentation += row.presentPlayerPresentationMs ?? 0;
     sumRender += row.renderMs;
     sumRenderFloorVis += row.renderFloorPlateVisMs;
     sumRenderFpEnv += row.renderFpEnvironmentMs;
@@ -1272,6 +1344,11 @@ export function computeFpPerfStatsFromTimeline(
   const avgPhysics = sumPhysics / n;
   const avgElev = sumElev / n;
   const avgPresent = sumPresent / n;
+  const avgPresentVisibility = sumPresentVisibility / n;
+  const avgPresentFloorVisibility = sumPresentFloorVisibility / n;
+  const avgPresentDecorVisibility = sumPresentDecorVisibility / n;
+  const avgPresentDroppedItemVisibility = sumPresentDroppedItemVisibility / n;
+  const avgPresentPlayerPresentation = sumPresentPlayerPresentation / n;
   const avgRender = sumRender / n;
   const avgRenderFloorVis = sumRenderFloorVis / n;
   const avgRenderFpEnv = sumRenderFpEnv / n;
@@ -1334,6 +1411,13 @@ export function computeFpPerfStatsFromTimeline(
       physicsMs: Math.round(avgPhysics * 100) / 100,
       elevatorMs: Math.round(avgElev * 100) / 100,
       presentMs: Math.round(avgPresent * 100) / 100,
+      presentVisibilityMs: Math.round(avgPresentVisibility * 100) / 100,
+      presentFloorVisibilityMs: Math.round(avgPresentFloorVisibility * 100) / 100,
+      presentDecorVisibilityMs: Math.round(avgPresentDecorVisibility * 100) / 100,
+      presentDroppedItemVisibilityMs:
+        Math.round(avgPresentDroppedItemVisibility * 100) / 100,
+      presentPlayerPresentationMs:
+        Math.round(avgPresentPlayerPresentation * 100) / 100,
       renderMs: Math.round(avgRender * 100) / 100,
       otherMs: Math.round(avgOther * 100) / 100,
       renderFloorPlateVisMs: Math.round(avgRenderFloorVis * 100) / 100,
@@ -1675,6 +1759,11 @@ function formatFpPerfReportMarkdown(
     sections.physicsMs,
     sections.elevatorMs,
     sections.presentMs,
+    sections.presentVisibilityMs,
+    sections.presentFloorVisibilityMs,
+    sections.presentDecorVisibilityMs,
+    sections.presentDroppedItemVisibilityMs,
+    sections.presentPlayerPresentationMs,
     sections.renderMs,
     sections.otherMs,
     sections.renderFloorPlateVisMs,
@@ -1716,6 +1805,12 @@ function formatFpPerfReportMarkdown(
     `  physics   ${sections.physicsMs.toFixed(2).padStart(6)}ms  ${secBar(sections.physicsMs, secMax)}`,
     `  elevator  ${sections.elevatorMs.toFixed(2).padStart(6)}ms  ${secBar(sections.elevatorMs, secMax)}`,
     `  present   ${sections.presentMs.toFixed(2).padStart(6)}ms  ${secBar(sections.presentMs, secMax)}`,
+    `    visibility ${sections.presentVisibilityMs.toFixed(2).padStart(6)}ms  ${secBar(sections.presentVisibilityMs, secMax)}`,
+    `      floor/PVS ${sections.presentFloorVisibilityMs.toFixed(2).padStart(6)}ms  ${secBar(sections.presentFloorVisibilityMs, secMax)}`,
+    `      decor     ${sections.presentDecorVisibilityMs.toFixed(2).padStart(6)}ms  ${secBar(sections.presentDecorVisibilityMs, secMax)}`,
+    `      drops     ${sections.presentDroppedItemVisibilityMs.toFixed(2).padStart(6)}ms  ${secBar(sections.presentDroppedItemVisibilityMs, secMax)}`,
+    `    playerPres ${sections.presentPlayerPresentationMs.toFixed(2).padStart(6)}ms  ${secBar(sections.presentPlayerPresentationMs, secMax)}`,
+    `    residual   ${Math.max(0, sections.presentMs - sections.presentVisibilityMs - sections.presentPlayerPresentationMs).toFixed(2).padStart(6)}ms  ${secBar(Math.max(0, sections.presentMs - sections.presentVisibilityMs - sections.presentPlayerPresentationMs), secMax)}`,
     `  render    ${sections.renderMs.toFixed(2).padStart(6)}ms  ${secBar(sections.renderMs, secMax)}`,
     `    preEnv   ${sections.renderFloorPlateVisMs.toFixed(2).padStart(6)}ms  ${secBar(sections.renderFloorPlateVisMs, secMax)}`,
     `    fpEnv    ${sections.renderFpEnvironmentMs.toFixed(2).padStart(6)}ms  ${secBar(sections.renderFpEnvironmentMs, secMax)}`,

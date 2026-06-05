@@ -766,12 +766,15 @@ export function createFpSessionMainRafFrame(
      * Fills {@link FpSessionMainRafFrameDeps._floorVisCamWorld} / `_floorVisCamDir` and applies
      * floor/decor visibility before presentation work (single camera sample for the frame).
      */
+    const _t_presentVisibilityStart = performance.now();
     deps.syncBuildingFloorPlateVisibility(nowMs);
+    const _t_presentFloorVisibilityEnd = performance.now();
     publishFpSessionCompassHeadingFromForwardXZ(deps._floorVisCamDir.x, deps._floorVisCamDir.z);
     const containingResidentialUnitKey = deps.getContainingResidentialUnitKey();
     const visibleDecorUnitKeys = deps.getCorridorPvsVisibleUnitKeys();
     const practicalLightsUnitKey =
       deps.getActiveApartmentDecorUnitKey(containingResidentialUnitKey);
+    const _t_presentDecorVisibilityStart = performance.now();
     deps.fpApartmentDecorMeshes.syncVisibility(
       deps.camera,
       deps.isApartmentDecorInteriorVisible(),
@@ -779,6 +782,7 @@ export function createFpSessionMainRafFrame(
       practicalLightsUnitKey,
       deps.isExteriorFacadeDecorVisible(),
     );
+    const _t_presentDecorVisibilityEnd = performance.now();
     deps.fpApartmentDecorMeshes.updateFishTankFish(dt);
     deps.fpBalconyGrowSession?.updateFrame(
       deps.camera,
@@ -795,12 +799,14 @@ export function createFpSessionMainRafFrame(
         getApartmentNotebookPrompt: deps.getApartmentNotebookPrompt,
       });
     }
+    const _t_presentDroppedVisibilityStart = performance.now();
     deps.syncDroppedItemVisualVisibility(
       deps.pos.x,
       deps.pos.y,
       deps.pos.z,
       containingResidentialUnitKey,
     );
+    const _t_presentVisibilityEnd = performance.now();
 
     const localId = deps.conn.identity?.toHexString() ?? "local-unknown";
     const hotbarHeld = hotbarRow
@@ -832,6 +838,7 @@ export function createFpSessionMainRafFrame(
       equippedPrimaryFromHotbar: hotbarHeld,
     });
     // --- Presentation section timing ---
+    const _t_playerPresentationStart = performance.now();
     deps.presentation.update(dt, localState, nowMs);
     deps.hotbarConsumableVisual.syncSelected(
       hotbarConsumableDefId,
@@ -1368,6 +1375,14 @@ export function createFpSessionMainRafFrame(
     const physicsMs = _t_physicsEnd - nowMs;
     const elevatorMs = _t_elevEnd - _t_physicsEnd;
     const presentMs = _t_presentEnd - _t_elevEnd;
+    const presentFloorVisibilityMs = _t_presentFloorVisibilityEnd - _t_presentVisibilityStart;
+    const presentDecorVisibilityMs =
+      _t_presentDecorVisibilityEnd - _t_presentDecorVisibilityStart;
+    const presentDroppedItemVisibilityMs =
+      _t_presentVisibilityEnd - _t_presentDroppedVisibilityStart;
+    const presentVisibilityMs =
+      presentFloorVisibilityMs + presentDecorVisibilityMs + presentDroppedItemVisibilityMs;
+    const presentPlayerPresentationMs = _t_presentEnd - _t_playerPresentationStart;
     const renderMs = _t_renderEnd - _t_presentEnd;
     const totalFrameMs = _t_renderEnd - nowMs;
 
@@ -1403,6 +1418,11 @@ export function createFpSessionMainRafFrame(
         physicsMs,
         elevatorMs,
         presentMs,
+        presentVisibilityMs,
+        presentFloorVisibilityMs,
+        presentDecorVisibilityMs,
+        presentDroppedItemVisibilityMs,
+        presentPlayerPresentationMs,
         renderMs,
         renderFloorPlateVisMs,
         renderFpEnvironmentMs,

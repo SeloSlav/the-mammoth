@@ -358,6 +358,7 @@ export {
   collectApartmentDecorPlacementRoots,
   getLastApartmentDecorInstancingSummary,
   summarizeApartmentDecorCrossPlacementInstancingInScene,
+  syncApartmentDecorCrossPlacementBatchVisibility,
   type ApartmentDecorInstancingBatchSummary,
   type ApartmentDecorInstancingSceneSnapshot,
   type ApplyApartmentDecorCrossPlacementInstancingOptions,

@@ -15,7 +15,6 @@ import type { FpResidentialUnitShellMesh } from "./fpSessionUnitInteriorShellMes
 import type { FpSessionUnitInteriorMeshEntry } from "./fpSessionUnitInteriorShellMeshes.js";
 import { fpObjectUnderFpElevatorShaftVisual } from "./fpSessionUnitInteriorShellMeshes.js";
 import { expandObjectFrustumBoundsOnce } from "./fpMeshFrustumBounds.js";
-import { apartmentUnitLevelFromUnitKey } from "../fpApartment/fpApartmentGameplay.js";
 import { fpResolveApartmentInteriorLightingZone } from "./fpApartmentInteriorLightingZone.js";
 import { fpResolveInsideElevatorHoistwayVoid } from "./fpElevatorHoistwayVoidView.js";
 import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
@@ -142,6 +141,8 @@ export type FpSessionFloorPlateVisibilityOpts = {
     maxLevel: number;
   };
   unitInteriorMeshEntries: readonly FpSessionUnitInteriorMeshEntry[];
+  /** Existing apartment-interior rebuild revision; invalidates equal-sized mesh collection swaps. */
+  getUnitInteriorMeshEntriesRevision?: () => number;
   topFloorResidentialUnitShellMeshes: readonly FpResidentialUnitShellMesh[];
   apartmentDecorInteriorMeshes: readonly THREE.Mesh[];
   fpElevators: Pick<
@@ -215,35 +216,6 @@ export function fpUnitInteriorMeshInActivePlateBand(input: {
   );
 }
 
-/** Residential / decor meshes on the viewer's active storey slab (plate band anchor). */
-export function fpUnitInteriorMeshOnViewerStoreySlab(input: {
-  plateLevelIndex: number | null;
-  viewerStorey: number;
-  activePlateBandLo: number;
-  activePlateBandHi: number;
-}): boolean {
-  if (input.plateLevelIndex == null) return false;
-  if (
-    input.plateLevelIndex < input.activePlateBandLo ||
-    input.plateLevelIndex > input.activePlateBandHi
-  ) {
-    return false;
-  }
-  return input.plateLevelIndex === input.viewerStorey;
-}
-
-export function fpApartmentDecorGroupOnViewerStoreySlab(input: {
-  apartmentUnitKey: string;
-  viewerStorey: number;
-  activePlateBandLo: number;
-  activePlateBandHi: number;
-}): boolean {
-  const level = apartmentUnitLevelFromUnitKey(input.apartmentUnitKey);
-  if (level === null) return false;
-  if (level < input.activePlateBandLo || level > input.activePlateBandHi) return false;
-  return level === input.viewerStorey;
-}
-
 /** Same-storey corridor geo while inside a unit hull (doorway / window sightlines into the hall). */
 export function fpKeepSameStoreyCorridorShellVisibleInsideUnit(input: {
   containingStoryLevelIndex: number | null;
@@ -304,7 +276,6 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   const { entry } = input;
   const activePlateBandLo = input.activePlateBandLo ?? 1;
   const activePlateBandHi = input.activePlateBandHi ?? 999;
-  const viewerStorey = input.anchorStorey ?? 1;
   if (entry.hoistwayShaftShell === true) {
     return false;
   }
@@ -316,14 +287,6 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   if (!inPlateBand) {
     return false;
   }
-  const onViewerStoreySlab = fpUnitInteriorMeshOnViewerStoreySlab({
-    plateLevelIndex: entry.plateLevelIndex ?? null,
-    viewerStorey,
-    activePlateBandLo,
-    activePlateBandHi,
-  });
-  const inHoistwayColumnPeek =
-    input.insideElevatorHoistwayColumn === true && !input.insideResidentialUnit;
   if (entry.underStairColumnRoot === true) {
     /**
      * Stair column segments toggle `.visible` on their storey groups; merged shaft interiors are
@@ -346,32 +309,10 @@ export function fpResolveUnitInteriorMeshVisible(input: {
       if (entry.apartmentUnitKey === input.containingResidentialUnitKey) {
         return true;
       }
-      const containingLevel = input.containingStoryLevelIndex ?? viewerStorey;
-      if (
-        fpApartmentDecorGroupOnViewerStoreySlab({
-          apartmentUnitKey: entry.apartmentUnitKey,
-          viewerStorey: containingLevel,
-          activePlateBandLo,
-          activePlateBandHi,
-        })
-      ) {
-        return true;
-      }
       const peekKeys = input.corridorPvsVisibleUnitKeys;
       return peekKeys !== undefined && peekKeys.has(entry.apartmentUnitKey);
     }
     if (input.insideApartmentInteriorLightingZone) {
-      if (
-        !inHoistwayColumnPeek &&
-        fpApartmentDecorGroupOnViewerStoreySlab({
-          apartmentUnitKey: entry.apartmentUnitKey,
-          viewerStorey,
-          activePlateBandLo,
-          activePlateBandHi,
-        })
-      ) {
-        return true;
-      }
       const pvsKeys = input.corridorPvsVisibleUnitKeys;
       if (pvsKeys && pvsKeys.has(entry.apartmentUnitKey)) return true;
       return (
@@ -392,14 +333,6 @@ export function fpResolveUnitInteriorMeshVisible(input: {
       if (entry.residentialUnitId === input.containingResidentialUnitId) {
         return true;
       }
-      const containingLevel = input.containingStoryLevelIndex ?? viewerStorey;
-      if (
-        onViewerStoreySlab &&
-        entry.plateLevelIndex === containingLevel &&
-        (entry.isResidentialShellPlaster || entry.residentialExteriorGlass)
-      ) {
-        return true;
-      }
       const peekIds = input.corridorPvsVisibleUnitIds;
       if (
         peekIds &&
@@ -412,18 +345,8 @@ export function fpResolveUnitInteriorMeshVisible(input: {
       }
       return false;
     }
-    /**
-     * Corridor / in-unit: submit every residential shell on the active storey slab (plate-tagged).
-     * Hoistway column keeps the tight peek budget so open shafts do not flash the whole floor.
-     */
+    /** Corridor/lobby views submit only residential shells admitted by the current PVS volume. */
     if (input.insideApartmentInteriorLightingZone) {
-      if (
-        !inHoistwayColumnPeek &&
-        onViewerStoreySlab &&
-        (entry.isResidentialShellPlaster || entry.residentialExteriorGlass)
-      ) {
-        return input.unitInteriorVisible;
-      }
       const pvsIds = input.corridorPvsVisibleUnitIds;
       if (
         pvsIds &&
@@ -531,6 +454,15 @@ export function fpResolveTopFloorResidentialShellVisible(input: {
   return input.shellUnitId === input.onlyUnitId;
 }
 
+function fpReadonlySetsHaveSameValues<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const value of a) {
+    if (!b.has(value)) return false;
+  }
+  return true;
+}
+
 export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVisibilityOpts): {
   syncBuildingFloorPlateVisibility: (nowMs: number) => void;
   isInsideElevatorCabHudForJump: () => boolean;
@@ -561,6 +493,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     maxBuildingLevel,
     storeyOpts,
     unitInteriorMeshEntries,
+    getUnitInteriorMeshEntriesRevision = () => 0,
     topFloorResidentialUnitShellMeshes,
     apartmentDecorInteriorMeshes,
     fpElevators,
@@ -596,13 +529,21 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastUnitInteriorVisible = true;
   let _lastApartmentDecorInteriorVisible = true;
   let _lastUnitInteriorMeshCount = -1;
+  let _lastUnitInteriorMeshEntriesRevision = -1;
   let _lastApartmentDecorInteriorMeshCount = -1;
   let _lastTopFloorResidentialShellOnlyUnitId: string | null = null;
   let _lastTopFloorResidentialShellMeshCount = -1;
+  let _lastTopFloorResidentialShellUnitInteriorVisible = true;
+  let _lastTopFloorResidentialShellRenderIsolationEnabled = true;
   let _lastContainingResidentialUnitId: string | null = null;
   let _lastContainingResidentialUnitKey: string | null = null;
   let _lastVisitedResidentialUnitKey: string | null = null;
   let _lastRetainedResidentialUnitId: string | null = null;
+  let _lastRetainedResidentialUnitKey: string | null = null;
+  let _lastUnitVisInsideResidentialUnit = false;
+  let _lastUnitVisInsideElevatorHoistwayColumn = false;
+  let _lastUnitVisAnchorStorey = -999;
+  let _lastUnitInteriorRenderIsolationEnabled = true;
   let _lastInsideResidentialUnit = false;
   let _lastInsideStairwellShaft = false;
   let _lastHoistwayPlateBoost = false;
@@ -954,6 +895,15 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
           boundsMinZ: buildingWorldBounds.min.z,
           boundsMaxZ: buildingWorldBounds.max.z,
         });
+    const retainedResidentialUnitKey = getRetainedResidentialUnitKey();
+    const unitInteriorHoistwayColumn =
+      _lastHoistwayPlateBoost &&
+      !insideElevatorCabChamber &&
+      !trueExteriorView &&
+      !cabOccludesWorld;
+    const unitInteriorRenderIsolationEnabled =
+      isFpDebugRenderIsolationEnabled("unitInteriorShells");
+    const unitInteriorMeshEntriesRevision = getUnitInteriorMeshEntriesRevision();
     const corridorPvs = resolveCorridorPvsSnapshot?.({
       feetY: feetPos.y,
       cameraX: floorVisCamWorld.x,
@@ -963,14 +913,14 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       insideResidentialUnit,
       insideApartmentInteriorLightingZone,
       containingUnitKey: containingResidentialUnitKey,
-      retainedUnitKey: getRetainedResidentialUnitKey(),
+      retainedUnitKey: retainedResidentialUnitKey,
     }) ?? {
       unitKeys: new Set<string>(),
       unitIds: new Set<string>(),
     };
     const corridorPvsChanged =
-      corridorPvs.unitIds.size !== _lastCorridorPvsUnitIds.size ||
-      [...corridorPvs.unitIds].some((id) => !_lastCorridorPvsUnitIds.has(id));
+      !fpReadonlySetsHaveSameValues(corridorPvs.unitIds, _lastCorridorPvsUnitIds) ||
+      !fpReadonlySetsHaveSameValues(corridorPvs.unitKeys, _lastCorridorPvsUnitKeys);
     _lastCorridorPvsUnitKeys = corridorPvs.unitKeys;
     _lastCorridorPvsUnitIds = corridorPvs.unitIds;
     const unitInteriorVisibilityChanged =
@@ -978,19 +928,21 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       exteriorShellPlasterVisible !== _lastExteriorShellPlasterVisible ||
       trueExteriorView !== _lastTrueExteriorView ||
       unitInteriorMeshEntries.length !== _lastUnitInteriorMeshCount ||
+      unitInteriorMeshEntriesRevision !== _lastUnitInteriorMeshEntriesRevision ||
       apartmentDecorInteriorVisible !== _lastApartmentDecorInteriorVisible ||
       containingResidentialUnitId !== _lastContainingResidentialUnitId ||
       containingResidentialUnitKey !== _lastContainingResidentialUnitKey ||
       retainedResidentialUnitId !== _lastRetainedResidentialUnitId ||
+      retainedResidentialUnitKey !== _lastRetainedResidentialUnitKey ||
+      insideResidentialUnit !== _lastUnitVisInsideResidentialUnit ||
       insideApartmentInteriorLightingZone !== _lastInsideApartmentInteriorLightingZone ||
+      unitInteriorHoistwayColumn !== _lastUnitVisInsideElevatorHoistwayColumn ||
+      storeyPlateAnchor !== _lastUnitVisAnchorStorey ||
+      unitInteriorRenderIsolationEnabled !== _lastUnitInteriorRenderIsolationEnabled ||
       corridorPvsChanged ||
       _visBandSmoothLo !== _lastUnitVisPlateBandLo ||
       _visBandSmoothHi !== _lastUnitVisPlateBandHi;
-    if (
-      unitInteriorVisibilityChanged ||
-      insideResidentialUnit ||
-      insideApartmentInteriorLightingZone
-    ) {
+    if (unitInteriorVisibilityChanged) {
       _lastUnitVisPlateBandLo = _visBandSmoothLo;
       _lastUnitVisPlateBandHi = _visBandSmoothHi;
       _lastUnitInteriorVisible = unitInteriorVisible;
@@ -998,18 +950,23 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       _lastTrueExteriorView = trueExteriorView;
       _lastApartmentDecorInteriorVisible = apartmentDecorInteriorVisible;
       _lastUnitInteriorMeshCount = unitInteriorMeshEntries.length;
+      _lastUnitInteriorMeshEntriesRevision = unitInteriorMeshEntriesRevision;
       _lastContainingResidentialUnitId = containingResidentialUnitId;
       _lastContainingResidentialUnitKey = containingResidentialUnitKey;
       _lastRetainedResidentialUnitId = retainedResidentialUnitId;
+      _lastRetainedResidentialUnitKey = retainedResidentialUnitKey;
+      _lastUnitVisInsideResidentialUnit = insideResidentialUnit;
       _lastInsideApartmentInteriorLightingZone = insideApartmentInteriorLightingZone;
-      const retainedResidentialUnitKey = getRetainedResidentialUnitKey();
+      _lastUnitVisInsideElevatorHoistwayColumn = unitInteriorHoistwayColumn;
+      _lastUnitVisAnchorStorey = storeyPlateAnchor;
+      _lastUnitInteriorRenderIsolationEnabled = unitInteriorRenderIsolationEnabled;
       for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
         const entry = unitInteriorMeshEntries[i]!;
         if (fpObjectUnderFpElevatorShaftVisual(entry.mesh)) {
           continue;
         }
         entry.mesh.visible =
-          isFpDebugRenderIsolationEnabled("unitInteriorShells") &&
+          unitInteriorRenderIsolationEnabled &&
           fpResolveUnitInteriorMeshVisible({
             entry,
             unitInteriorVisible,
@@ -1026,11 +983,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
             containingStoryLevelIndex: containingResidentialUnit?.level ?? null,
             activePlateBandLo: _visBandSmoothLo,
             activePlateBandHi: _visBandSmoothHi,
-            insideElevatorHoistwayColumn:
-              _lastHoistwayPlateBoost &&
-              !insideElevatorCabChamber &&
-              !trueExteriorView &&
-              !cabOccludesWorld,
+            insideElevatorHoistwayColumn: unitInteriorHoistwayColumn,
             anchorStorey: storeyPlateAnchor,
           });
         entry.mesh.frustumCulled = true;
@@ -1062,14 +1015,19 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     const topFloorResidentialShellVisibilityChanged =
       topFloorResidentialShellOnlyUnitId !== _lastTopFloorResidentialShellOnlyUnitId ||
       topFloorResidentialUnitShellMeshes.length !== _lastTopFloorResidentialShellMeshCount ||
-      unitInteriorVisible !== _lastUnitInteriorVisible;
-    if (topFloorResidentialShellVisibilityChanged || insideResidentialUnit) {
+      unitInteriorVisible !== _lastTopFloorResidentialShellUnitInteriorVisible ||
+      unitInteriorRenderIsolationEnabled !==
+        _lastTopFloorResidentialShellRenderIsolationEnabled;
+    if (topFloorResidentialShellVisibilityChanged) {
       _lastTopFloorResidentialShellOnlyUnitId = topFloorResidentialShellOnlyUnitId;
       _lastTopFloorResidentialShellMeshCount = topFloorResidentialUnitShellMeshes.length;
+      _lastTopFloorResidentialShellUnitInteriorVisible = unitInteriorVisible;
+      _lastTopFloorResidentialShellRenderIsolationEnabled =
+        unitInteriorRenderIsolationEnabled;
       for (let i = 0; i < topFloorResidentialUnitShellMeshes.length; i++) {
         const entry = topFloorResidentialUnitShellMeshes[i]!;
         entry.mesh.visible =
-          isFpDebugRenderIsolationEnabled("unitInteriorShells") &&
+          unitInteriorRenderIsolationEnabled &&
           fpResolveTopFloorResidentialShellVisible({
             shellUnitId: entry.unitId,
             onlyUnitId: topFloorResidentialShellOnlyUnitId,

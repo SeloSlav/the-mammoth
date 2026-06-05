@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { MAMMOTH_RESIDENTIAL_UNIT_INTERIOR_LAYER } from "@the-mammoth/engine";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createFpApartmentStashRayOcclusion,
   isApartmentStashRayOccluderMesh,
@@ -55,5 +55,47 @@ describe("createFpApartmentStashRayOcclusion", () => {
     const nearestWall = occlusion.nearestOccluderDistanceAlongViewRay(camera, 8);
     expect(nearestWall).not.toBeNull();
     expect(nearestWall!).toBeLessThan(camera.position.distanceTo(target));
+  });
+
+  it("traverses only blockers in the requested apartment volume", () => {
+    const buildingRoot = new THREE.Group();
+    const targetUnit = new THREE.Group();
+    targetUnit.userData.mammothApartmentUnitKey = "floor|20|unit_target";
+    const targetWall = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.5, 4));
+    targetWall.position.set(0, 1.25, 0);
+    targetWall.userData.mammothUnitInterior = true;
+    targetWall.layers.set(MAMMOTH_RESIDENTIAL_UNIT_INTERIOR_LAYER);
+    targetUnit.add(targetWall);
+    buildingRoot.add(targetUnit);
+
+    const offVolumeUnit = new THREE.Group();
+    offVolumeUnit.userData.mammothApartmentUnitKey = "floor|20|unit_off_volume";
+    const offVolumeWall = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.5, 4));
+    offVolumeWall.position.set(20, 1.25, 0);
+    offVolumeWall.userData.mammothUnitInterior = true;
+    offVolumeWall.layers.set(MAMMOTH_RESIDENTIAL_UNIT_INTERIOR_LAYER);
+    offVolumeUnit.add(offVolumeWall);
+    buildingRoot.add(offVolumeUnit);
+    buildingRoot.updateMatrixWorld(true);
+
+    const targetRaycast = vi.spyOn(targetWall, "raycast");
+    const offVolumeRaycast = vi.spyOn(offVolumeWall, "raycast");
+    const occlusion = createFpApartmentStashRayOcclusion();
+    occlusion.rebuildFromBuildingRoot(buildingRoot);
+
+    const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 100);
+    camera.position.set(0, 1.6, -2);
+    camera.lookAt(0, 1.4, 3);
+    camera.updateMatrixWorld(true);
+
+    expect(
+      occlusion.targetOccludedFromCamera(
+        camera,
+        new THREE.Vector3(0, 1, 3),
+        "floor|20|unit_target",
+      ),
+    ).toBe(true);
+    expect(targetRaycast).toHaveBeenCalled();
+    expect(offVolumeRaycast).not.toHaveBeenCalled();
   });
 });

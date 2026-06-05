@@ -214,10 +214,8 @@ export function balconyGrowTrayAimFallbackPrompt(
     const unitKey = mesh.userData.mammothGrowTrayUnitKey;
     const trayId = mesh.userData.mammothGrowTrayId;
     if (typeof unitKey !== "string" || typeof trayId !== "string") return;
-    if (!clientOwnsClaimedApartmentUnit(conn, identity, unitKey)) return;
 
     mesh.getWorldPosition(_trayCenterScratch);
-    if (stashRayOcclusion?.targetOccludedFromCamera(camera, _trayCenterScratch)) return;
     const dx = feet.x - _trayCenterScratch.x;
     const dz = feet.z - _trayCenterScratch.z;
     if (dx * dx + dz * dz > radiusSq) return;
@@ -231,12 +229,13 @@ export function balconyGrowTrayAimFallbackPrompt(
 
     const centerBonus = isBalconyGrowTrayCenterPick(mesh) ? 0.12 : 0;
     const score = dot - dist * 0.04 + centerBonus;
-    if (score > bestScore) {
-      bestScore = score;
-      bestUnitKey = unitKey;
-      bestTrayId = trayId;
-      bestSlotIndex = slotIndex;
-    }
+    if (score <= bestScore) return;
+    if (!clientOwnsClaimedApartmentUnit(conn, identity, unitKey)) return;
+    if (stashRayOcclusion?.targetOccludedFromCamera(camera, _trayCenterScratch, unitKey)) return;
+    bestScore = score;
+    bestUnitKey = unitKey;
+    bestTrayId = trayId;
+    bestSlotIndex = slotIndex;
   };
 
   for (const mesh of centerPickMeshes) {

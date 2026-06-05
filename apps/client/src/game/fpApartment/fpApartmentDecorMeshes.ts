@@ -13,6 +13,7 @@ import {
   apartmentDecorEmitterKindFromModelPath,
   APARTMENT_INTERIOR_VISUAL_PROFILE,
   getConfiguredGltfLoader,
+  syncApartmentDecorCrossPlacementBatchVisibility,
   syncApartmentDecorShadowRig,
   syncApartmentDecorBakedFloorShadowOverlay,
   syncApartmentInteriorPracticalLighting,
@@ -821,6 +822,10 @@ export function mountFpApartmentDecorMeshes(opts: {
       const useInUnitVisibility = visibleUnitKeys !== null && visibleUnitKeys.size > 0;
       const budgetItems: ApartmentInteriorPropVisibilityApplyItem[] = [];
       for (const [renderKey, g] of groupByRenderKey.entries()) {
+        if (g.userData.mammothApartmentDecorInstanced === true) {
+          g.visible = false;
+          continue;
+        }
         const bb = g.userData.mammothApartmentDecorWorldBounds;
         const bounds = bb instanceof THREE.Box3 ? bb : undefined;
         const skipInteriorForwardCone =
@@ -882,6 +887,10 @@ export function mountFpApartmentDecorMeshes(opts: {
         /** Keep per-unit decor warm-up cache — hallway hops should not replay GLB pipeline bursts. */
         syncApartmentInteriorPropVisibilityUnit(propVisibilityState, null);
       }
+      syncApartmentDecorCrossPlacementBatchVisibility(root, {
+        allowDemand,
+        visibleUnitKeys,
+      });
       const prevPracticalLightsContextUnitKey = practicalLightsContextUnitKey;
       practicalLightsContextUnitKey = retainPracticalLightsUnitKey ?? primaryUnitKey;
       if (practicalLightsContextUnitKey !== prevPracticalLightsContextUnitKey) {
@@ -907,25 +916,30 @@ export function mountFpApartmentDecorMeshes(opts: {
       const hits = sortBalconyGrowRaycastHits(
         _stashRaycaster.intersectObjects(visibleStashPickMeshes, false),
       );
-      const nearestWallDistance =
-        hits.length > 0
-          ? stashRayOcclusion.nearestOccluderDistanceAlongViewRay(
-              camera,
-              maxRaycastHitDistance(hits),
-            )
-          : null;
+      const maxHitDistance = maxRaycastHitDistance(hits);
+      const nearestWallDistanceByUnitKey = new Map<string, number | null>();
       const seen = new Set<string>();
       for (const hit of hits) {
+        const unitKey = hit.object.userData.mammothApartmentStashPickUnitKey;
+        if (typeof unitKey !== "string") continue;
+        let nearestWallDistance = nearestWallDistanceByUnitKey.get(unitKey);
+        if (nearestWallDistance === undefined) {
+          nearestWallDistance = stashRayOcclusion.nearestOccluderDistanceAlongViewRay(
+            camera,
+            maxHitDistance,
+            unitKey,
+          );
+          nearestWallDistanceByUnitKey.set(unitKey, nearestWallDistance);
+        }
         if (stashRayOcclusion.hitOccluded(hit, nearestWallDistance)) continue;
         hit.object.getWorldPosition(_stashPickWorldScratch);
-        let stashKey = resolveApartmentStashKeyFromPickUserData(
+        const stashKey = resolveApartmentStashKeyFromPickUserData(
           opts.conn,
           hit.object.userData,
           _stashPickWorldScratch,
         );
-        const unitKey = hit.object.userData.mammothApartmentStashPickUnitKey;
         const stashKind = hit.object.userData.mammothApartmentStashKind;
-        if (typeof unitKey !== "string" || typeof stashKind !== "string") continue;
+        if (typeof stashKind !== "string") continue;
         if (typeof stashKey !== "string") {
           if (hit.object.userData.mammothDecorStashResolveFromDb === true) {
             requestOwnedApartmentStashDecorSync(opts.conn);

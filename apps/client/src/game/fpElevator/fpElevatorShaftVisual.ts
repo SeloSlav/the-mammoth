@@ -144,6 +144,17 @@ type FloorPickButtonVisual = {
   bodyFlashMat: THREE.Material;
 };
 
+export function syncElevatorLandingLevelObjectVisibility(
+  objectsByLevel: ReadonlyMap<number, THREE.Object3D>,
+  band: FpActiveFloorPlateBand,
+  landingsVisible: boolean,
+): void {
+  for (const [level, object] of objectsByLevel) {
+    object.visible =
+      landingsVisible && isLevelInActiveFloorVisBand(level, band);
+  }
+}
+
 function cloneFloorPickBodyMaterial(
   base: THREE.Material,
   opts: { emissiveHex: number; emissiveIntensity: number; brighten: number },
@@ -183,6 +194,7 @@ export class FpElevatorShaftVisual {
   readonly landingHailPickRoot: THREE.Group;
   private readonly landingHailPickByLevel = new Map<number, THREE.Object3D>();
   private readonly landingDoorPickByLevel = new Map<number, THREE.Object3D>();
+  private readonly landingDoorPickWrapByLevel = new Map<number, THREE.Object3D>();
   /** Per-storey `swing.matrixWorld` at open01=0 — multiplied each tick by landing swing. */
   private readonly landingDoorSwingBase: THREE.Matrix4[] = [];
   private landingDoorSwingSign = 1;
@@ -483,6 +495,7 @@ export class FpElevatorShaftVisual {
       doorPickWrap.add(doorPick);
       this.landingDoorPickRoot.add(doorPickWrap);
       this.landingDoorPickByLevel.set(level, doorPick);
+      this.landingDoorPickWrapByLevel.set(level, doorPickWrap);
 
       const hailWrap = new THREE.Group();
       hailWrap.position.set(0, feetY, 0);
@@ -551,8 +564,8 @@ export class FpElevatorShaftVisual {
       }
     });
     tagInterior(this.landingRoot, true);
-    tagInterior(this.landingHailPickRoot, true);
-    tagInterior(this.landingDoorPickRoot, true);
+    tagInterior(this.landingHailPickRoot, false);
+    tagInterior(this.landingDoorPickRoot, false);
 
     if (this.mergedCabFloorButtons) {
       this.lastMatSig = "";
@@ -692,10 +705,16 @@ export class FpElevatorShaftVisual {
    * {@link updateLandingExteriorDoorSwings} matrix hide for the same band).
    */
   syncLandingPlateBand(band: FpActiveFloorPlateBand, landingsVisible: boolean): void {
-    for (const [level, wrap] of this.landingHailPickByLevel) {
-      wrap.visible =
-        landingsVisible && isLevelInActiveFloorVisBand(level, band);
-    }
+    syncElevatorLandingLevelObjectVisibility(
+      this.landingHailPickByLevel,
+      band,
+      landingsVisible,
+    );
+    syncElevatorLandingLevelObjectVisibility(
+      this.landingDoorPickWrapByLevel,
+      band,
+      landingsVisible,
+    );
   }
 
   getLandingHailPickForLevel(level: number): THREE.Object3D | undefined {
@@ -925,6 +944,7 @@ export class FpElevatorShaftVisual {
     this.landingHailPickRoot.clear();
     this.landingHailPickByLevel.clear();
     this.landingDoorPickByLevel.clear();
+    this.landingDoorPickWrapByLevel.clear();
     this.root.clear();
   }
 }

@@ -34,6 +34,7 @@ export type FpMegablockSpatialContextOpts = {
 export type FpMegablockSpatialContext = {
   readonly units: ApartmentUnitSpatialIndex;
   readonly drops: DroppedItemHudSpatialIndex;
+  getUnitsRevision: () => number;
   syncUnitsFromDb: () => void;
   syncDropsFromDb: () => void;
   unitAtFeet: (x: number, y: number, z: number) => ApartmentUnit | null;
@@ -80,6 +81,7 @@ export function createFpMegablockSpatialContext(
 ): FpMegablockSpatialContext {
   const units = createApartmentUnitSpatialIndex();
   const drops = createDroppedItemHudSpatialIndex();
+  let unitsRevision = 0;
 
   const fullWalkIndex = buildWalkSurfaceSpatialIndex(opts.walkAabbsFull);
   let bandLo = WALK_SURFACE_STOREY_BAND_DISABLED;
@@ -113,6 +115,7 @@ export function createFpMegablockSpatialContext(
       list.push(row as ApartmentUnit);
     }
     units.rebuild(list);
+    unitsRevision += 1;
   };
 
   const syncDropsFromDb = (): void => {
@@ -146,6 +149,7 @@ export function createFpMegablockSpatialContext(
   return {
     units,
     drops,
+    getUnitsRevision: () => unitsRevision,
     syncUnitsFromDb,
     syncDropsFromDb,
     unitAtFeet: (x, y, z) => units.unitAtFeet(x, y, z),

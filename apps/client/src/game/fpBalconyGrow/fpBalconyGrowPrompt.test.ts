@@ -1,7 +1,11 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import type { BalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
-import { getBalconyGrowTrayPromptFromHit, resolveBalconyGrowTrayPrompt } from "./fpBalconyGrowPrompt.js";
+import {
+  balconyGrowTrayAimFallbackPrompt,
+  getBalconyGrowTrayPromptFromHit,
+  resolveBalconyGrowTrayPrompt,
+} from "./fpBalconyGrowPrompt.js";
 import { growTrayIdForPlacement } from "./fpBalconyGrowTrayDecor.js";
 
 vi.mock("../fpApartment/fpApartmentGameplay.js", () => ({
@@ -193,5 +197,58 @@ describe("resolveBalconyGrowTrayPrompt", () => {
       stashKey: "u1#grow_tray:tray-a",
       stashLabel: "grow tray",
     });
+  });
+
+  it("rejects trays outside the interaction volume before ray occlusion", () => {
+    const farTray = new THREE.Mesh();
+    farTray.position.set(40, 0, 0);
+    farTray.userData.mammothGrowTrayId = "tray-far";
+    farTray.userData.mammothGrowTrayUnitKey = "floor|20|unit_far";
+    farTray.updateMatrixWorld(true);
+    const targetOccludedFromCamera = vi.fn(() => false);
+
+    expect(
+      balconyGrowTrayAimFallbackPrompt(
+        {} as never,
+        {} as never,
+        { x: 0, y: 0, z: 0 },
+        new THREE.PerspectiveCamera(),
+        [farTray],
+        [],
+        growStateWithPlants(),
+        { targetOccludedFromCamera } as never,
+      ),
+    ).toBeNull();
+    expect(targetOccludedFromCamera).not.toHaveBeenCalled();
+  });
+
+  it("scopes a nearby tray occlusion check to its authored apartment unit", () => {
+    const nearTray = new THREE.Mesh();
+    nearTray.position.set(0, 0, 2);
+    nearTray.userData.mammothGrowTrayId = "tray-near";
+    nearTray.userData.mammothGrowTrayUnitKey = "floor|20|unit_near";
+    nearTray.updateMatrixWorld(true);
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(0, 1.6, 0);
+    camera.lookAt(0, 0, 2);
+    camera.updateMatrixWorld(true);
+    const targetOccludedFromCamera = vi.fn(() => false);
+
+    balconyGrowTrayAimFallbackPrompt(
+      {} as never,
+      {} as never,
+      { x: 0, y: 0, z: 2 },
+      camera,
+      [nearTray],
+      [],
+      growStateWithPlants(),
+      { targetOccludedFromCamera } as never,
+    );
+
+    expect(targetOccludedFromCamera).toHaveBeenCalledWith(
+      camera,
+      expect.any(THREE.Vector3),
+      "floor|20|unit_near",
+    );
   });
 });

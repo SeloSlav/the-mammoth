@@ -1,6 +1,6 @@
 # FP session performance pipeline
 
-**Status:** Living contract (2026-05-26)  
+**Status:** Living contract (2026-06-05)
 **Profiler:** `?fpdebug=1` or `localStorage mammothFpDebug=1` — see [`fpSessionPerfDebug.ts`](../../apps/client/src/game/fpSession/fpSessionPerfDebug.ts)  
 **Ring buffer:** [`fpSessionPerfStore.ts`](../../apps/client/src/game/fpSession/fpSessionPerfStore.ts)
 
@@ -25,6 +25,11 @@ Chrome’s “`requestAnimationFrame` handler took N ms” attributes the **whol
 | `physicsMs` | `stepFpLocomotion` / prediction substeps |
 | `elevatorMs` | Elevator world + doors + hail UI |
 | `presentMs` | Player presentation, HUD scans, floor-vis sync |
+| `presentVisibilityMs` | Actual floor/PVS + decor + dropped-item visibility work inside `presentMs` |
+| `presentFloorVisibilityMs` | Floor plate, authored-volume, and corridor PVS traversal |
+| `presentDecorVisibilityMs` | Apartment decor visibility traversal |
+| `presentDroppedItemVisibilityMs` | Dropped-item visibility traversal |
+| `presentPlayerPresentationMs` | Player presenter and held-item sync |
 | `renderMs` | Floor-vis culling subset + environment + `renderer.render` |
 | `renderThreeMs` | GPU submit wall time |
 | `drawCalls` / `triangles` | `renderer.info.render` after frame |
@@ -65,7 +70,38 @@ Before merging GPU- or RAF-heavy work:
 | `?fpdebug=1` / `mammothFpDebug` | Extra **console** perf log once/sec (`[fpSessionPerf]`); the top-right FPS card works without this |
 | `?fpnpc=1` / `mammothFpWorldNpcs` | Mount `fpNpcSession` in Mamutica (dev only; see [fp-world-npc-readiness.md](fp-world-npc-readiness.md)) |
 
-**Decor cross-placement instancing** (`applyApartmentDecorCrossPlacementInstancing` in `@the-mammoth/engine`): apartment unit rebuilds, floor-19 corridor ceiling fixtures (`fp_floor_19_corridor_decor`), and stairwell ceiling lights (batched under `buildingRoot` when GLBs finish loading). ≥3 identical non-pick props; no visual change. Dev builds log `[apartmentDecorInstancing]`. The **top-right FPS card** (`MammothFpsHud`) shows `Ninst` + expanded **decor inst** lines when batching is active; `?fpdebug=1` is only for console logging.
+**Decor cross-placement instancing** (`applyApartmentDecorCrossPlacementInstancing` in `@the-mammoth/engine`): apartment unit rebuilds, corridor ceiling fixtures, and stairwell ceiling lights. Identical non-pick props are batched only within the same authored apartment unit or floor sector. Unit batches follow the corridor PVS, floor batches preserve floor tags, and every batch computes its own frustum bounds. Exterior facade decor stays on its existing per-placement visibility path. Dev builds log `[apartmentDecorInstancing]`. The **top-right FPS card** (`MammothFpsHud`) shows `Ninst` + expanded **decor inst** lines when batching is active; `?fpdebug=1` is only for console logging.
+
+The transient console helper exposes the existing profiler without adding another capture system:
+
+```js
+__fpDebug.perfReport(10)
+```
+
+---
+
+## Visibility benchmark routes
+
+The deterministic corridor benchmark covers the same authored-volume transitions used by live play:
+
+```powershell
+cd apps/client
+.\node_modules\.bin\vitest.CMD bench src/game/fpSession/fpSessionCorridorPvs.bench.ts --run
+.\node_modules\.bin\vitest.CMD bench src/game/fpApartment/fpApartmentStashRayOcclusion.bench.ts --run
+```
+
+Reference capture on the target development machine, 2026-06-05:
+
+| Route | Before mean | After mean | Improvement |
+|-------|-------------|------------|-------------|
+| Apartment -> hallway | 1.3409 ms | 0.0671 ms | ~20.0x |
+| Hallway -> stairwell | 1.8248 ms | 0.3053 ms | ~6.0x |
+| Hallway -> elevator | 1.6826 ms | 0.1987 ms | ~8.5x |
+| Elevator -> floor transition | 2.4068 ms | 0.0234 ms | ~102.9x |
+| Multi-floor traversal | 5.0744 ms | 0.1566 ms | ~32.4x |
+| Stash ray blockers: global -> apartment volume | 0.0474 ms | 0.0022 ms | ~21.2x |
+
+The corridor PVS snapshot is cached inside a conservative 0.75 m movement volume. Door queries and same-storey unit queries are padded by that same radius, so cached visibility cannot reveal geometry late.
 
 ---
 

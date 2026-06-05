@@ -452,7 +452,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
     ).toBe(false);
   });
 
-  it("keeps the containing unit shell visible and shows same-storey neighbor plaster indoors", () => {
+  it("keeps the containing unit shell and PVS-visible neighbor plaster indoors", () => {
     const storey = 2;
     expect(
       fpResolveUnitInteriorMeshVisible({
@@ -496,6 +496,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         insideApartmentInteriorLightingZone: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
+        corridorPvsVisibleUnitIds: new Set(["unit_e_004"]),
         containingStoryLevelIndex: storey,
         activePlateBandLo: storey,
         activePlateBandHi: storey,
@@ -572,7 +573,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
     ).toBe(false);
   });
 
-  it("shows neighbor unit plaster and glass on the active storey slab from the corridor", () => {
+  it("shows PVS-visible neighbor unit plaster and glass from the corridor", () => {
     const storey = 17;
     const glassEntry = {
       apartmentUnitKey: null,
@@ -603,6 +604,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         insideApartmentInteriorLightingZone: true,
         containingResidentialUnitId: null,
         containingResidentialUnitKey: null,
+        corridorPvsVisibleUnitIds: new Set(["unit_e_004"]),
         activePlateBandLo: storey,
         activePlateBandHi: storey,
         anchorStorey: storey,
@@ -619,6 +621,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         insideApartmentInteriorLightingZone: true,
         containingResidentialUnitId: null,
         containingResidentialUnitKey: null,
+        corridorPvsVisibleUnitIds: new Set(["unit_e_004"]),
         activePlateBandLo: storey,
         activePlateBandHi: storey,
         anchorStorey: storey,

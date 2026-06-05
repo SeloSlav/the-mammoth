@@ -2,13 +2,41 @@
 
 ## Floor plates
 
-`syncBuildingFloorPlateVisibility` toggles `buildingRoot` children with `mammothPlateLevelIndex` using a storey band from the elevator world helper. When `fpBuildingExteriorViewShouldRevealFullStack` is true (camera XZ outside the **6 m inset** “core” of the building AABB), the band widens to the **full vertical stack** so façades do not pop.
+`syncBuildingFloorPlateVisibility` toggles `buildingRoot` children with `mammothPlateLevelIndex` using a storey band from the elevator world helper.
+
+- Ordinary apartments, hallways, and perimeter corridors use the current storey band.
+- Pitch lookahead is suppressed while camera or feet remain inside the raw building footprint.
+- Stairwells retain their authored local multi-floor band.
+- Elevator cabs and hoistways retain the local landing/shaft context required by open sightlines.
+- The full vertical stack is reserved for a true exterior view: the camera is outside the inset core **and** feet are outside the raw building footprint.
 
 ---
 
 ## Tagged interiors (`mammothUnitInterior`)
 
-`mammothUnitInterior` is still set on unit hollow shells and corridor `shell_*` meshes in `floorPlaceholderMeshes.ts` for tooling and consistency. **FP no longer toggles** those meshes off by building footprint (that path hid plaster incorrectly and fought pose / bounds edge cases).
+`mammothUnitInterior` is still set on unit hollow shells and corridor `shell_*` meshes in `floorPlaceholderMeshes.ts` for tooling and consistency. FP visibility is driven by the active floor band and authored corridor PVS, not by a broad building-footprint toggle.
+
+Residential unit shells, glass, decor, and sector batches are eligible only when their unit is:
+
+- the containing or retained unit;
+- inside the conservative same-storey camera volume; or
+- admitted by an open apartment-door portal on the active storey.
+
+This keeps distant apartment sectors out of scene traversal while preserving doorway and nearby corridor sightlines.
+
+---
+
+## Corridor PVS volumes
+
+`fpSessionCorridorPvs.ts` resolves unit keys and ids from the existing authored unit bounds and apartment-door portals.
+
+- Snapshots are reused while the camera stays inside a 0.75 m XZ volume.
+- Door and same-storey queries are padded by the cache radius, preventing late reveals.
+- Door entries are recollected only when PVS eligibility or authored door geometry changes.
+- Unit bounds are recollected when the existing apartment-unit spatial index rebuilds.
+- Event-driven mesh visibility is reapplied when apartment interiors rebuild, even if mesh count is unchanged.
+- The same PVS drives unit hollow shells, apartment decor placement roots, and sector-aware instanced batches.
+- Stash/grow interaction occlusion traverses blockers in the target apartment volume plus same-floor shared swing doors, with a global fallback when authored scope is unavailable.
 
 ---
 
@@ -32,8 +60,8 @@ For `kind === "unit"`, `addExteriorWallCladding` is called with a small **`outwa
 
 | Function | Role |
 |----------|------|
-| `fpBuildingExteriorViewShouldRevealFullStack` | Inset test → widen floor plate band |
-| `fpCameraOrFeetInsideBuildingFootprintXZ` | Strict raw footprint (tests / strict checks) |
+| `fpBuildingExteriorViewShouldRevealFullStack` | Inset test used as one half of the true-exterior gate |
+| `fpCameraOrFeetInsideBuildingFootprintXZ` | Raw footprint gate for perimeter corridors and pitch lookahead |
 | `fpCameraOrFeetNearBuildingFootprintXZ` | Expanded footprint (still used by helpers / tests; not used for interior shell visibility toggling in FP mount) |
 
 Tests: `apps/client/src/game/fpBuildingFloorPlateVisibilityBand.test.ts`.

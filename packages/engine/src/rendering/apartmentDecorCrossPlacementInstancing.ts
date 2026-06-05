@@ -12,6 +12,8 @@ const GROW_TRAY_MODEL_PATHS = [
   "static/models/objects/grow-tray.glb",
 ] as const;
 
+const MAMMOTH_EXTERIOR_FACADE_DECOR_UD = "mammothExteriorFacadeDecor";
+
 /** Minimum identical placements before batching. */
 const MIN_INSTANCES_PER_PATH = 3;
 
@@ -27,6 +29,12 @@ export type ApplyApartmentDecorCrossPlacementInstancingOptions = {
    * children of `batchParent` tagged as decor props.
    */
   placementRoots?: readonly THREE.Object3D[];
+};
+
+type ApartmentDecorInstancingSector = {
+  key: string;
+  apartmentUnitKey: string | null;
+  plateLevelIndex: number | null;
 };
 
 /** Last rebuild stats — dev console / optional HUD hook. */
@@ -157,6 +165,28 @@ export function clearApartmentDecorCrossPlacementBatches(batchParent: THREE.Obje
   });
 }
 
+/**
+ * Activates apartment-unit batches from the same authored PVS used by placement roots.
+ * Non-unit batches keep their existing visibility owner (for example floor-band culling).
+ */
+export function syncApartmentDecorCrossPlacementBatchVisibility(
+  batchParent: THREE.Object3D,
+  options: {
+    allowDemand: boolean;
+    visibleUnitKeys: ReadonlySet<string> | null;
+  },
+): void {
+  for (const child of batchParent.children) {
+    if (typeof child.userData.mammothApartmentDecorInstancedBatch !== "string") continue;
+    const unitKey = child.userData.mammothApartmentUnitKey;
+    if (typeof unitKey !== "string") continue;
+    child.visible =
+      options.allowDemand &&
+      options.visibleUnitKeys !== null &&
+      options.visibleUnitKeys.has(unitKey);
+  }
+}
+
 function decorRootHasDedicatedPick(root: THREE.Object3D): boolean {
   let found = false;
   root.traverse((obj) => {
@@ -178,6 +208,47 @@ function collectInstancingMeshes(root: THREE.Object3D): THREE.Mesh[] {
     meshes.push(obj);
   });
   return meshes;
+}
+
+function nearestApartmentDecorInstancingSector(root: THREE.Object3D): ApartmentDecorInstancingSector {
+  let apartmentUnitKey: string | null = null;
+  let plateLevelIndex: number | null = null;
+
+  for (let cur: THREE.Object3D | null = root; cur; cur = cur.parent) {
+    if (apartmentUnitKey === null) {
+      const rawUnitKey = cur.userData.mammothApartmentUnitKey;
+      if (typeof rawUnitKey === "string" && rawUnitKey.length > 0) {
+        apartmentUnitKey = rawUnitKey;
+      }
+    }
+    if (plateLevelIndex === null) {
+      const rawLevel = cur.userData.mammothPlateLevelIndex;
+      if (typeof rawLevel === "number" && Number.isFinite(rawLevel)) {
+        plateLevelIndex = rawLevel;
+      }
+    }
+    if (apartmentUnitKey !== null && plateLevelIndex !== null) break;
+  }
+
+  if (apartmentUnitKey !== null) {
+    return {
+      key: `unit:${apartmentUnitKey}`,
+      apartmentUnitKey,
+      plateLevelIndex,
+    };
+  }
+  if (plateLevelIndex !== null) {
+    return {
+      key: `level:${plateLevelIndex}`,
+      apartmentUnitKey,
+      plateLevelIndex,
+    };
+  }
+  return {
+    key: "global",
+    apartmentUnitKey,
+    plateLevelIndex,
+  };
 }
 
 function isDevLog(): boolean {
@@ -202,17 +273,32 @@ export function applyApartmentDecorCrossPlacementInstancing(
   lastInstancingSummary = null;
 
   const placementRoots = collectApartmentDecorPlacementRoots(batchParent, options);
-  const byPath = new Map<string, THREE.Object3D[]>();
+  const bySectorAndPath = new Map<
+    string,
+    {
+      path: string;
+      roots: THREE.Object3D[];
+      sector: ApartmentDecorInstancingSector;
+    }
+  >();
 
   for (const root of placementRoots) {
     const path = root.userData.mammothApartmentDecorModelRelPath as string;
     if (!decorPathEligible(path, root.userData.mammothApartmentDecorPlacedKind)) continue;
+    // Facade shutters use a separate exterior visibility path independent of apartment PVS.
+    if (root.userData[MAMMOTH_EXTERIOR_FACADE_DECOR_UD] === true) continue;
     if (decorRootHasDedicatedPick(root)) continue;
     if (collectInstancingMeshes(root).length === 0) continue;
-    const key = normalizeApartmentDecorModelRelPath(path) ?? path;
-    const list = byPath.get(key) ?? [];
-    list.push(root);
-    byPath.set(key, list);
+    const normalizedPath = normalizeApartmentDecorModelRelPath(path) ?? path;
+    const sector = nearestApartmentDecorInstancingSector(root);
+    const key = `${sector.key}\n${normalizedPath}`;
+    const entry = bySectorAndPath.get(key) ?? {
+      path: normalizedPath,
+      roots: [],
+      sector,
+    };
+    entry.roots.push(root);
+    bySectorAndPath.set(key, entry);
   }
 
   const scratchMatrix = new THREE.Matrix4();
@@ -221,7 +307,7 @@ export function applyApartmentDecorCrossPlacementInstancing(
   let batchCount = 0;
   let instanceCount = 0;
 
-  for (const [path, roots] of byPath) {
+  for (const { path, roots, sector } of bySectorAndPath.values()) {
     if (roots.length < MIN_INSTANCES_PER_PATH) continue;
     const templateMeshes = collectInstancingMeshes(roots[0]!);
     if (templateMeshes.length === 0) continue;
@@ -240,7 +326,14 @@ export function applyApartmentDecorCrossPlacementInstancing(
       instanced.name = `decor_inst:${path.split("/").pop() ?? path}:${templateMesh.name || meshIndex}`;
       instanced.frustumCulled = true;
       instanced.userData.mammothApartmentDecorInstancedBatch = path;
+      instanced.userData.mammothApartmentDecorInstancedSectorKey = sector.key;
       instanced.userData.mammothSkipFloorGeometryMerge = true;
+      if (sector.apartmentUnitKey !== null) {
+        instanced.userData.mammothApartmentUnitKey = sector.apartmentUnitKey;
+      }
+      if (sector.plateLevelIndex !== null) {
+        instanced.userData.mammothPlateLevelIndex = sector.plateLevelIndex;
+      }
       instanced.layers.mask = templateMesh.layers.mask;
 
       for (let i = 0; i < roots.length; i++) {
@@ -258,6 +351,8 @@ export function applyApartmentDecorCrossPlacementInstancing(
         }
       }
       instanced.instanceMatrix.needsUpdate = true;
+      instanced.computeBoundingBox();
+      instanced.computeBoundingSphere();
       batchParent.add(instanced);
       pathBatched = true;
     }
@@ -266,7 +361,7 @@ export function applyApartmentDecorCrossPlacementInstancing(
 
     batchCount += 1;
     instanceCount += roots.length;
-    batchedPaths.push(`${path}×${roots.length}`);
+    batchedPaths.push(`${sector.key}:${path}×${roots.length}`);
   }
 
   if (batchCount > 0) {

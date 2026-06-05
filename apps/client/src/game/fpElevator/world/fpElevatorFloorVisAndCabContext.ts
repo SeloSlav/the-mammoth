@@ -1,8 +1,8 @@
 import { estimateStoreyFromFeetY, type ElevatorShaftLayout } from "@the-mammoth/world";
 import type { ElevatorCar } from "../../../module_bindings/types";
 import {
-  fpBuildingExteriorViewShouldRevealFullStack,
   fpBuildingFloorPlateVisibilityBand,
+  fpCameraOrFeetInsideBuildingFootprintXZ,
   fpHoistwayColumnPlateBand,
 } from "../../fpFloor/fpBuildingFloorPlateVisibilityBand.js";
 import { ELEVATOR_PHASE_MOVING } from "../fpElevatorConstants.js";
@@ -153,9 +153,11 @@ export function createFpElevatorFloorVisAndCabContext(
     bandViewDirY?: number,
     bandEyeWorldX?: number,
     bandEyeWorldZ?: number,
-    bandViewDirX?: number,
-    bandViewDirZ?: number,
+    _bandViewDirX?: number,
+    _bandViewDirZ?: number,
   ): FpElevatorFloorVisibilityBand => {
+    void _bandViewDirX;
+    void _bandViewDirZ;
     const sFeet = estimateStoreyFromFeetY(py, storeyOpts);
     const sEye =
       bandEyeWorldY === undefined
@@ -167,9 +169,11 @@ export function createFpElevatorFloorVisAndCabContext(
     const b = floorVisPitchLookaheadWorldBoundsXz;
     const suppressPitchLookahead =
       b != null &&
-      !fpBuildingExteriorViewShouldRevealFullStack({
+      fpCameraOrFeetInsideBuildingFootprintXZ({
         cameraX: gatingCamX,
         cameraZ: gatingCamZ,
+        feetX: px,
+        feetZ: pz,
         boundsMinX: b.minX,
         boundsMaxX: b.maxX,
         boundsMinZ: b.minZ,

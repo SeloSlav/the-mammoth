@@ -2,7 +2,7 @@
  * Potentially-visible-set for corridor / hallway and in-unit views on one storey.
  *
  * Every residential unit on the player's storey within {@link APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M}
- * of the camera is eligible (same-time slab rendering). Open entry doors add units whose doors are
+ * of the camera is eligible (same-storey slab rendering). Open entry doors add units whose doors are
  * farther than that radius but still admit a peek.
  */
 
@@ -10,7 +10,7 @@
 export const APARTMENT_DOOR_PVS_INTERIOR_PEEK_OPEN_01 = 0.15;
 /**
  * Horizontal radius (m) around the camera for **open doorway** PVS (door hinge must admit peek).
- * Same-storey slab rendering uses a wider client constant (`DROPPED_ITEM_RENDER_MAX_HORIZONTAL_M`).
+ * Cached client queries may conservatively pad this radius by their local visibility-volume radius.
  */
 export const APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M = 9.5;
 
@@ -32,6 +32,8 @@ export type BuildingCorridorPvsDoorEntry = {
 export type BuildOpenDoorUnitKeysByLevelOpts = {
   cameraX?: number;
   cameraZ?: number;
+  /** Override the default camera-distance budget, for conservative cached visibility queries. */
+  maxDistM?: number;
   /** Ignored — kept so callers can pass view direction without churn. */
   viewDirX?: number;
   viewDirZ?: number;
@@ -60,7 +62,8 @@ function apartmentDoorPassesCorridorCameraPvs(
   const cz = door.hingeZ + door.tangentZ * door.panelWidthM * 0.5;
   const dx = cx - opts.cameraX;
   const dz = cz - opts.cameraZ;
-  return dx * dx + dz * dz <= APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M ** 2;
+  const maxDistM = opts.maxDistM ?? APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M;
+  return dx * dx + dz * dz <= maxDistM ** 2;
 }
 
 export function buildOpenDoorUnitKeysByLevel(

@@ -42,6 +42,7 @@ import {
   ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS,
   ENABLE_STAIRWELL_GRAFFITI_DECALS,
   collectStairwellCeilingLightGroups,
+  estimateStoreyFromFeetY,
   ensureStairwellCigaretteMeshReady,
   subscribeStairwellCeilingPropReady,
   maxBuildingLevelIndex,
@@ -127,6 +128,7 @@ import {
   apartmentClaimInteriorsPreferOverUnitDoor,
   apartmentUnitContainingFeet,
   apartmentUnitContainingFeetSlack,
+  apartmentUnitLevelFromUnitKey,
   clientOwnsClaimedApartmentUnit,
   getApartmentSystemPrompt,
 } from "./fpApartment/fpApartmentGameplay.js";
@@ -611,6 +613,7 @@ export async function mountFpSession(
   );
 
   const unitInteriorMeshEntries = collectFpSessionUnitInteriorMeshEntries(buildingRoot);
+  let unitInteriorMeshEntriesRevision = 0;
   const unitInteriorMeshes = unitInteriorMeshEntries.map((entry) => entry.mesh);
   const topFloorResidentialUnitShellMeshes =
     collectFpSessionTopFloorResidentialUnitShellMeshes(buildingRoot);
@@ -779,6 +782,7 @@ export async function mountFpSession(
     syncFpViewmodelReadableEnv();
     unitInteriorMeshEntries.length = 0;
     unitInteriorMeshEntries.push(...collectFpSessionUnitInteriorMeshEntries(buildingRoot));
+    unitInteriorMeshEntriesRevision += 1;
     unitInteriorMeshes.length = 0;
     for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
       unitInteriorMeshes.push(unitInteriorMeshEntries[i]!.mesh);
@@ -1188,6 +1192,20 @@ export async function mountFpSession(
   const apartmentUnitIdForKey = (unitKey: string | null): string | null =>
     apartmentUnitSummaryForKey(unitKey)?.unitId ?? null;
 
+  const activeOwnedApartmentDecorUnitKeyOnViewerStorey = (): string | null => {
+    if (!activeOwnedApartmentDecorUnitKey || !feetOnBuildingSlabForApartmentVisuals()) {
+      return null;
+    }
+    const activeLevel = apartmentUnitLevelFromUnitKey(activeOwnedApartmentDecorUnitKey);
+    if (activeLevel === null) return null;
+    const viewerLevel = estimateStoreyFromFeetY(pos.y, {
+      buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
+      floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
+      maxLevel: maxBuildingLevel,
+    });
+    return activeLevel === viewerLevel ? activeOwnedApartmentDecorUnitKey : null;
+  };
+
   const apartmentUnitBoundsForKey = (
     unitKey: string | null,
   ): {
@@ -1243,6 +1261,8 @@ export async function mountFpSession(
     floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
     maxLevel: maxBuildingLevel,
     unitIdForKey: apartmentUnitIdForKey,
+    getDoorEntriesRevision: () => fpApartmentDoors.getCorridorPvsRevision(),
+    getStoreyUnitBoundsRevision: () => megablockSpatial?.getUnitsRevision() ?? 0,
     collectDoorEntries: () => fpApartmentDoors.collectCorridorPvsDoorEntries(),
     collectStoreyUnitBounds: () => {
       const out: {
@@ -1291,6 +1311,7 @@ export async function mountFpSession(
         maxLevel: maxBuildingLevel,
       },
       unitInteriorMeshEntries,
+      getUnitInteriorMeshEntriesRevision: () => unitInteriorMeshEntriesRevision,
       topFloorResidentialUnitShellMeshes,
       apartmentDecorInteriorMeshes,
       fpElevators,
@@ -1334,13 +1355,8 @@ export async function mountFpSession(
         return null;
       },
       getRetainedResidentialUnitId: () =>
-        activeOwnedApartmentDecorUnitKey && feetOnBuildingSlabForApartmentVisuals()
-          ? apartmentUnitIdForKey(activeOwnedApartmentDecorUnitKey)
-          : null,
-      getRetainedResidentialUnitKey: () =>
-        activeOwnedApartmentDecorUnitKey && feetOnBuildingSlabForApartmentVisuals()
-          ? activeOwnedApartmentDecorUnitKey
-          : null,
+        apartmentUnitIdForKey(activeOwnedApartmentDecorUnitKeyOnViewerStorey()),
+      getRetainedResidentialUnitKey: activeOwnedApartmentDecorUnitKeyOnViewerStorey,
       resolveCorridorPvsSnapshot: (input) =>
         corridorPvsContext.resolveSnapshot(input).visible,
       floorVisCamWorld: _floorVisCamWorld,
@@ -1393,8 +1409,9 @@ export async function mountFpSession(
   };
   const getContainingResidentialUnitBounds = () => {
     if (isCombatSim) return null;
-    if (activeOwnedApartmentDecorUnitKey && feetOnBuildingSlabForApartmentVisuals()) {
-      const activeBounds = apartmentUnitBoundsForKey(activeOwnedApartmentDecorUnitKey);
+    const activeOwnedUnitOnViewerStorey = activeOwnedApartmentDecorUnitKeyOnViewerStorey();
+    if (activeOwnedUnitOnViewerStorey) {
+      const activeBounds = apartmentUnitBoundsForKey(activeOwnedUnitOnViewerStorey);
       if (activeBounds) return activeBounds;
     }
     const unit = apartmentUnitContainingFeetSlack(
@@ -1464,7 +1481,7 @@ export async function mountFpSession(
     if (!isInsideApartmentInteriorLightingZoneForFrame()) {
       return null;
     }
-    return activeOwnedApartmentDecorUnitKey;
+    return activeOwnedApartmentDecorUnitKeyOnViewerStorey();
   };
 
   const visibleSittablePickScratch: THREE.Mesh[] = [];

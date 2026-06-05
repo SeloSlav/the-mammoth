@@ -3,6 +3,7 @@ import {
   meshTriangleCount,
   summarizeFpSessionSceneTriangles,
 } from "./fpSessionSceneTriangleCount.js";
+import { exportFpPerfReport } from "./fpSessionPerfStore.js";
 
 export type InstallFpSessionTransientDebugConsoleArgs = {
   scene: THREE.Scene;
@@ -22,6 +23,7 @@ export type InstallFpSessionTransientDebugConsoleArgs = {
  *   __fpDebug.onlyShow("ground")               // hide everything except this one
  *   __fpDebug.showAll()                        // restore all visibility
  *   __fpDebug.info()                           // renderer.info.render counters for the last frame
+ *   __fpDebug.perfReport(10)                   // existing profiler report for the last 10 seconds
  */
 export function installFpSessionTransientDebugConsole(
   args: InstallFpSessionTransientDebugConsoleArgs,
@@ -96,5 +98,6 @@ export function installFpSessionTransientDebugConsole(
       renderPasses: renderer.info.render.calls,
       triangles: renderer.info.render.triangles,
     }),
+    perfReport: (windowSec = 10) => exportFpPerfReport(performance.now(), windowSec),
   };
 }

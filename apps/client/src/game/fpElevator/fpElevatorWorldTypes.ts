@@ -15,7 +15,7 @@ export type MountFpElevatorWorldOpts = {
   /**
    * World XZ bounds of the building mesh (e.g. `Box3` from `buildingRoot`). When set, pitch-based
    * floor-band widening (looking up/down toward distant storeys) is **only** applied when the camera
-   * is outside the footprint core (see {@link fpBuildingExteriorViewShouldRevealFullStack}). While
+   * is outside the raw footprint. Interior perimeter corridors must not widen into neighboring floors.
    * in the core — typical apartments, corridors, hoistway not at edge — upward pitch no longer
    * expands the band to the roof (which was ~2M submitted triangles in multi-storey shells).
    */
