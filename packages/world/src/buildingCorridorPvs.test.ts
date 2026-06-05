@@ -134,7 +134,7 @@ describe("buildingCorridorPvs", () => {
     );
   });
 
-  it("builds storey-radius unit keys from hull centers", () => {
+  it("builds storey-radius unit keys from hull bounds with center fallback", () => {
     const keys = buildStoreyRadiusVisibleUnitKeys(
       [
         {
@@ -152,6 +152,17 @@ describe("buildingCorridorPvs", () => {
           centerZ: 0,
         },
         {
+          unitKey: "floor|2|unit_across_hall",
+          unitId: "unit_across_hall",
+          level: 2,
+          centerX: 24,
+          centerZ: 0,
+          minX: 7,
+          maxX: 41,
+          minZ: -4,
+          maxZ: 4,
+        },
+        {
           unitKey: "floor|3|unit_other_storey",
           unitId: "unit_other_storey",
           level: 3,
@@ -161,7 +172,7 @@ describe("buildingCorridorPvs", () => {
       ],
       { storeyLevel: 2, cameraX: 0, cameraZ: 0 },
     );
-    expect([...keys]).toEqual(["floor|2|unit_near"]);
+    expect([...keys]).toEqual(["floor|2|unit_near", "floor|2|unit_across_hall"]);
     expect(APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M).toBeGreaterThan(2);
   });
 

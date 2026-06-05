@@ -14,7 +14,14 @@ export function fpResolveApartmentInteriorLightingZone(input: {
   insideElevatorCab: boolean;
   insideStairShaft: boolean;
 }): boolean {
-  if (input.trueExteriorView) return input.insideResidentialUnit;
+  if (
+    input.trueExteriorView &&
+    !input.insideResidentialUnit &&
+    !input.insideElevatorCab &&
+    !input.insideStairShaft
+  ) {
+    return false;
+  }
   return (
     input.insideResidentialUnit ||
     input.feetOnBuildingSlab ||

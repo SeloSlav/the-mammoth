@@ -2,7 +2,6 @@ import * as THREE from "three";
 import { estimateStoreyFromFeetY, type BuildingStairShaftSpec } from "@the-mammoth/world";
 import {
   fpBuildingExteriorViewShouldRevealFullStack,
-  fpCameraInsideBuildingFootprintXZ,
   fpCameraOrFeetInsideBuildingFootprintXZ,
   fpCameraOrFeetNearBuildingFootprintXZ,
   fpStairShaftLocalVisibilityBand,
@@ -42,6 +41,12 @@ type FpStairShaftVisibilityBounds = {
 const FP_INTERIOR_SHELL_NEAR_MARGIN_M = 4;
 
 /**
+ * Keep exterior views close to entries, windows, and stair thresholds on the local storey band.
+ * The full tower is only needed once the player has moved far enough away to see its silhouette.
+ */
+const FP_NEAR_BUILDING_EXTERIOR_LOCAL_BAND_MARGIN_M = 14;
+
+/**
  * Plaster hollow shells stay visible farther out than decor props so exterior brick/concrete cladding
  * does not read through window lines when tagged interiors are culled for fill-rate.
  */
@@ -54,8 +59,8 @@ const FP_RESIDENTIAL_SHELL_PLASTER_EXTERIOR_MARGIN_M = 36;
  * Narrowing hides plates — keep slow to avoid shader/GC spikes when dropping full-stack reveals.
  */
 const VIS_BAND_NARROW_STOREYS_PER_FRAME = 1;
-/** Widening shows plates — slightly faster so shaft views fill in promptly. */
-const VIS_BAND_EXPAND_STOREYS_PER_FRAME = 3;
+// Doorway/shaft sightlines widen one storey at a time to avoid multi-plate activation spikes.
+const VIS_BAND_EXPAND_STOREYS_PER_FRAME = 1;
 
 /**
  * Hard snap the smoothed storey band when feet jump (respawn, long vertical move) so we do not keep
@@ -86,21 +91,25 @@ export function fpPointNearStairShaftForPlateBand(
   y: number,
   z: number,
   specs: readonly BuildingStairShaftSpec[],
+  buildingWorldOrigin: readonly [number, number, number] = [0, 0, 0],
 ): boolean {
   for (let i = 0; i < specs.length; i++) {
     const s = specs[i]!;
     const hw = Math.max(0.05, s.sx * 0.5 + STAIR_SHAFT_PLATE_PROBE_XZ_PAD_M);
     const hd = Math.max(0.05, s.sz * 0.5 + STAIR_SHAFT_PLATE_PROBE_XZ_PAD_M);
-    const minY = s.bottomY - STAIR_SHAFT_PLATE_PROBE_Y_PAD_BOTTOM_M;
+    const px = s.px + buildingWorldOrigin[0];
+    const bottomY = s.bottomY + buildingWorldOrigin[1];
+    const pz = s.pz + buildingWorldOrigin[2];
+    const minY = bottomY - STAIR_SHAFT_PLATE_PROBE_Y_PAD_BOTTOM_M;
     const maxY =
-      s.bottomY + s.storeyCount * s.storeySpacing + STAIR_SHAFT_PLATE_PROBE_Y_PAD_TOP_M;
+      bottomY + s.storeyCount * s.storeySpacing + STAIR_SHAFT_PLATE_PROBE_Y_PAD_TOP_M;
     if (
-      x >= s.px - hw &&
-      x <= s.px + hw &&
+      x >= px - hw &&
+      x <= px + hw &&
       y >= minY &&
       y <= maxY &&
-      z >= s.pz - hd &&
-      z <= s.pz + hd
+      z >= pz - hd &&
+      z <= pz + hd
     ) {
       return true;
     }
@@ -154,6 +163,8 @@ export type FpSessionFloorPlateVisibilityOpts = {
   >;
   stairShaftInteriorLightBounds: readonly FpStairShaftVisibilityBounds[];
   stairShaftSpecs: readonly BuildingStairShaftSpec[];
+  /** Applied to authored stair specs for world-space volume checks. */
+  buildingWorldOrigin?: readonly [number, number, number];
   /** Predicted feet position — same reference as session `pos`. */
   feetPos: THREE.Vector3;
   /**
@@ -499,6 +510,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     fpElevators,
     stairShaftInteriorLightBounds,
     stairShaftSpecs,
+    buildingWorldOrigin = [0, 0, 0],
     feetPos,
     getContainingResidentialUnit,
     getRetainedResidentialUnitId = () => null,
@@ -667,6 +679,23 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       insideResidentialUnit && containingResidentialUnit !== null
         ? containingResidentialUnit.level
         : playerStorey;
+    const insideStairShaft =
+      pointInsideStairShaft(feetPos.x, feetPos.y, feetPos.z) ||
+      pointInsideStairShaft(floorVisCamWorld.x, floorVisCamWorld.y, floorVisCamWorld.z) ||
+      fpPointNearStairShaftForPlateBand(
+        feetPos.x,
+        feetPos.y,
+        feetPos.z,
+        stairShaftSpecs,
+        buildingWorldOrigin,
+      ) ||
+      fpPointNearStairShaftForPlateBand(
+        floorVisCamWorld.x,
+        floorVisCamWorld.y,
+        floorVisCamWorld.z,
+        stairShaftSpecs,
+        buildingWorldOrigin,
+      );
     const cameraOutsideBuilding = fpBuildingExteriorViewShouldRevealFullStack({
       cameraX: floorVisCamWorld.x,
       cameraZ: floorVisCamWorld.z,
@@ -675,13 +704,27 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       boundsMinZ: buildingWorldBounds.min.z,
       boundsMaxZ: buildingWorldBounds.max.z,
     });
-    const trueExteriorView = cameraOutsideBuilding && !feetOnBuildingSlab;
+    const trueExteriorView =
+      cameraOutsideBuilding && !feetOnBuildingSlab && !insideStairShaft;
+    const nearBuildingExterior =
+      trueExteriorView &&
+      fpCameraOrFeetNearBuildingFootprintXZ({
+        cameraX: floorVisCamWorld.x,
+        cameraZ: floorVisCamWorld.z,
+        feetX: feetPos.x,
+        feetZ: feetPos.z,
+        boundsMinX: buildingWorldBounds.min.x,
+        boundsMaxX: buildingWorldBounds.max.x,
+        boundsMinZ: buildingWorldBounds.min.z,
+        boundsMaxZ: buildingWorldBounds.max.z,
+        nearMarginM: FP_NEAR_BUILDING_EXTERIOR_LOCAL_BAND_MARGIN_M,
+      });
     /**
      * Full-stack reveal only for true exteriors (feet off the raw slab): the old
      * `|| playerStorey <= 1` arm forced the entire merged tower for essentially every ground-floor
      * respawn whenever the camera sat just outside the 6 m footprint inset — thousands of draws.
      */
-    if (cameraOutsideBuilding && !feetOnBuildingSlab) {
+    if (trueExteriorView && !nearBuildingExterior) {
       band = { lo: 1, hi: maxBuildingLevel };
     }
     if (cabOccludesWorld) {
@@ -701,16 +744,6 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       };
     }
 
-    const insideStairShaft =
-      pointInsideStairShaft(feetPos.x, feetPos.y, feetPos.z) ||
-      pointInsideStairShaft(floorVisCamWorld.x, floorVisCamWorld.y, floorVisCamWorld.z) ||
-      fpPointNearStairShaftForPlateBand(feetPos.x, feetPos.y, feetPos.z, stairShaftSpecs) ||
-      fpPointNearStairShaftForPlateBand(
-        floorVisCamWorld.x,
-        floorVisCamWorld.y,
-        floorVisCamWorld.z,
-        stairShaftSpecs,
-      );
     if (insideStairShaft) {
       band = fpMergeStairShaftPlateBandWithElevator(
         { lo: band.lo, hi: band.hi, hoistwayPlateBoost },
@@ -841,6 +874,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
  * cladding does not read through window lines when decor props stay culled.
  */
     const unitInteriorVisible =
+      insideApartmentInteriorLightingZone ||
       fpElevators.isInsideAnyCabHud(
         feetPos.x,
         feetPos.y,
@@ -878,23 +912,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
      * sidewalk/doorway peeks; furnished props only mount once the camera is inside the building
      * footprint, and `fpApartmentDecorMeshes.syncVisibility` only shows them inside a unit hull.
      */
-    const apartmentDecorInteriorVisible =
-      fpElevators.isInsideAnyCabHud(
-        feetPos.x,
-        feetPos.y,
-        feetPos.z,
-        floorVisCamWorld.x,
-        floorVisCamWorld.y,
-        floorVisCamWorld.z,
-      ) ||
-        fpCameraInsideBuildingFootprintXZ({
-          cameraX: floorVisCamWorld.x,
-          cameraZ: floorVisCamWorld.z,
-          boundsMinX: buildingWorldBounds.min.x,
-          boundsMaxX: buildingWorldBounds.max.x,
-          boundsMinZ: buildingWorldBounds.min.z,
-          boundsMaxZ: buildingWorldBounds.max.z,
-        });
+    const apartmentDecorInteriorVisible = insideApartmentInteriorLightingZone;
     const retainedResidentialUnitKey = getRetainedResidentialUnitKey();
     const unitInteriorHoistwayColumn =
       _lastHoistwayPlateBoost &&

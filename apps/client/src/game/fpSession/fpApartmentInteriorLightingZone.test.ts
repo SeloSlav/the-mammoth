@@ -55,6 +55,25 @@ describe("fpResolveApartmentInteriorLightingZone", () => {
       }),
     ).toBe(true);
   });
+
+  it("keeps elevator cabs and stair shafts interior when the raw footprint reports exterior", () => {
+    expect(
+      fpResolveApartmentInteriorLightingZone({
+        ...hallway,
+        feetOnBuildingSlab: false,
+        trueExteriorView: true,
+        insideElevatorCab: true,
+      }),
+    ).toBe(true);
+    expect(
+      fpResolveApartmentInteriorLightingZone({
+        ...hallway,
+        feetOnBuildingSlab: false,
+        trueExteriorView: true,
+        insideStairShaft: true,
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("fpResolveApartmentInteriorDarkTarget01", () => {

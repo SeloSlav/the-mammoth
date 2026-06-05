@@ -200,6 +200,7 @@ export function syncFpFloor19CorridorCeilingLightVisibility(
 }
 
 export type FpSessionCorridorCeilingLightsMount = {
+  decorRoot: THREE.Object3D | null;
   ready: Promise<void>;
   dispose: () => void;
 };
@@ -209,6 +210,7 @@ export function mountFpFloor19CorridorCeilingLights(args: {
 }): FpSessionCorridorCeilingLightsMount {
   if (!ENABLE_CORRIDOR_CEILING_LIGHTS) {
     return {
+      decorRoot: null,
       ready: Promise.resolve(),
       dispose: () => {},
     };
@@ -240,6 +242,7 @@ export function mountFpFloor19CorridorCeilingLights(args: {
     });
 
   return {
+    decorRoot: root,
     ready,
     dispose: () => {
       disposed = true;

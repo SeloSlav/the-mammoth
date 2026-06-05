@@ -87,6 +87,7 @@ export function mountFpBalconyGrowSession(opts: {
   let cachedGrowTrayPrompt: BalconyGrowTrayPrompt | null = null;
   let cachedGrowTrayHits: THREE.Intersection[] = _emptyHits;
   let claimedUnitKey: string | null = null;
+  let ownedClaimedUnitKey = resolveClaimedUnitKey(opts.conn);
   let growStateCache: BalconyGrowOpUnitState | null = null;
   let growStateCacheUnitKey: string | null = null;
   let growStateRevision = 0;
@@ -96,6 +97,12 @@ export function mountFpBalconyGrowSession(opts: {
     growStateRevision += 1;
   };
   const unsubGrowTables = subscribeBalconyGrowOpTables(opts.conn, bumpGrowState);
+  const refreshOwnedClaimedUnitKey = (): void => {
+    ownedClaimedUnitKey = resolveClaimedUnitKey(opts.conn);
+  };
+  opts.conn.db.apartment_unit.onInsert(refreshOwnedClaimedUnitKey);
+  opts.conn.db.apartment_unit.onUpdate(refreshOwnedClaimedUnitKey);
+  opts.conn.db.apartment_unit.onDelete(refreshOwnedClaimedUnitKey);
 
   const readCachedGrowState = (unitKey: string | null): BalconyGrowOpUnitState => {
     if (
@@ -115,6 +122,9 @@ export function mountFpBalconyGrowSession(opts: {
   return {
     dispose() {
       unsubGrowTables();
+      opts.conn.db.apartment_unit.removeOnInsert(refreshOwnedClaimedUnitKey);
+      opts.conn.db.apartment_unit.removeOnUpdate(refreshOwnedClaimedUnitKey);
+      opts.conn.db.apartment_unit.removeOnDelete(refreshOwnedClaimedUnitKey);
       preview?.dispose();
       waterVisuals.dispose();
       setBalconyGrowInspectTarget(null);
@@ -124,13 +134,13 @@ export function mountFpBalconyGrowSession(opts: {
       return readBalconyGrowOpUnitState(opts.conn, unitKey);
     },
     getActiveGrowState() {
-      return readCachedGrowState(claimedUnitKey ?? resolveClaimedUnitKey(opts.conn));
+      return readCachedGrowState(claimedUnitKey ?? ownedClaimedUnitKey);
     },
     getCachedPlacement: () => cachedPlacement,
     getCachedGrowTrayHits: () => cachedGrowTrayHits,
     getCachedGrowTrayPrompt: () => cachedGrowTrayPrompt,
     updateFrame(camera, feet, decor, unitKey) {
-      claimedUnitKey = unitKey ?? resolveClaimedUnitKey(opts.conn);
+      claimedUnitKey = unitKey ?? ownedClaimedUnitKey;
       const growState = readCachedGrowState(claimedUnitKey);
       cachedGrowTrayPrompt = null;
 
@@ -150,7 +160,7 @@ export function mountFpBalconyGrowSession(opts: {
         growState.trays,
         growState.traysWithSubstrate,
       );
-      decor.collectBalconyGrowPickMeshesForPlayer(feet, _aimPickScratch);
+      decor.collectBalconyGrowPickMeshesForPlayer(feet, _aimPickScratch, ownedClaimedUnitKey);
       cachedGrowTrayHits = [
         ...decor.raycastBalconyGrowTrayHits(feet, camera, _aimPickScratch),
       ];

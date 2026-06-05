@@ -213,6 +213,7 @@ export type MountFpApartmentDecorMeshesResult = {
   collectBalconyGrowPickMeshesForPlayer: (
     playerPos: THREE.Vector3,
     dst: THREE.Mesh[],
+    ownedUnitKey?: string | null,
   ) => void;
   rebuildStashRayOcclusion: () => void;
   getStashRayOcclusion: () => FpApartmentStashRayOcclusion;
@@ -1000,8 +1001,8 @@ export function mountFpApartmentDecorMeshes(opts: {
     syncBalconyGrowTrayDecorVisibility: (feet, unitKey) => {
       growBridge.syncVisibility(feet, unitKey);
     },
-    collectBalconyGrowPickMeshesForPlayer: (playerPos, dst) => {
-      growBridge.collectPickMeshesForPlayer(playerPos, opts.conn.identity, dst);
+    collectBalconyGrowPickMeshesForPlayer: (playerPos, dst, ownedUnitKey) => {
+      growBridge.collectPickMeshesForPlayer(playerPos, opts.conn.identity, dst, ownedUnitKey);
     },
     updateFishTankFish: (dt) => {
       fishTankBridge.tick(dt);

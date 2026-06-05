@@ -1,6 +1,8 @@
+import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
 import {
+  addBuildingStairShaftColumnToRoot,
   getBuildingStairShaftSpecs,
   mergeShaftExteriorHints,
   readShaftFacadeHintFaces,
@@ -100,5 +102,40 @@ describe("getBuildingStairShaftSpecs", () => {
     );
     expect(specs).toHaveLength(1);
     expect(specs[0]!.exteriorShaftFaces).toContain("e");
+  });
+});
+
+describe("addBuildingStairShaftColumnToRoot", () => {
+  it("adds railing geometry to every traversable segment in the full-height column", () => {
+    const root = new THREE.Group();
+    addBuildingStairShaftColumnToRoot(root, {
+      planKey: "0,0-test",
+      id: "stairs_test",
+      px: 0,
+      pz: 0,
+      sx: 4,
+      sz: 4,
+      syPlate: 3,
+      bottomY: 0,
+      storeyCount: 4,
+      storeySpacing: 60 / 19,
+      minLevelIndex: 1,
+      entryDoorContexts: [],
+      exteriorShaftFaces: [],
+    });
+
+    const column = root.getObjectByName("stair_shaft:stairs_test") as THREE.Group;
+    expect(column.children).toHaveLength(4);
+    for (let i = 0; i < column.children.length; i++) {
+      let railingCount = 0;
+      column.children[i]!.traverse((obj) => {
+        if (obj.userData.mammothStairRailing === true) railingCount += 1;
+      });
+      if (i === column.children.length - 1) {
+        expect(railingCount).toBe(0);
+      } else {
+        expect(railingCount).toBeGreaterThan(0);
+      }
+    }
   });
 });

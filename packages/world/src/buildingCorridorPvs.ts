@@ -90,10 +90,45 @@ export type BuildingStoreyUnitBoundsEntry = {
   unitKey: string;
   unitId: string;
   level: number;
-  /** Hull center XZ — used for camera-distance culling on the active storey. */
+  /** Hull center XZ - fallback for old callers that do not provide bounds. */
   centerX: number;
   centerZ: number;
+  /** World-space hull bounds - used so large units are admitted when their near edge is visible. */
+  minX?: number;
+  maxX?: number;
+  minZ?: number;
+  maxZ?: number;
 };
+
+function distanceSqToStoreyUnitBoundsXZ(
+  unit: BuildingStoreyUnitBoundsEntry,
+  cameraX: number,
+  cameraZ: number,
+): number {
+  if (
+    unit.minX !== undefined &&
+    unit.maxX !== undefined &&
+    unit.minZ !== undefined &&
+    unit.maxZ !== undefined
+  ) {
+    const dx =
+      cameraX < unit.minX
+        ? unit.minX - cameraX
+        : cameraX > unit.maxX
+          ? cameraX - unit.maxX
+          : 0;
+    const dz =
+      cameraZ < unit.minZ
+        ? unit.minZ - cameraZ
+        : cameraZ > unit.maxZ
+          ? cameraZ - unit.maxZ
+          : 0;
+    return dx * dx + dz * dz;
+  }
+  const dx = unit.centerX - cameraX;
+  const dz = unit.centerZ - cameraZ;
+  return dx * dx + dz * dz;
+}
 
 export function buildStoreyRadiusVisibleUnitKeys(
   units: readonly BuildingStoreyUnitBoundsEntry[],
@@ -110,9 +145,7 @@ export function buildStoreyRadiusVisibleUnitKeys(
   for (let i = 0; i < units.length; i++) {
     const u = units[i]!;
     if (u.level !== input.storeyLevel) continue;
-    const dx = u.centerX - input.cameraX;
-    const dz = u.centerZ - input.cameraZ;
-    if (dx * dx + dz * dz <= maxDistSq) {
+    if (distanceSqToStoreyUnitBoundsXZ(u, input.cameraX, input.cameraZ) <= maxDistSq) {
       out.add(u.unitKey);
     }
   }

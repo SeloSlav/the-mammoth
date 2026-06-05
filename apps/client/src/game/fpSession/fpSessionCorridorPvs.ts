@@ -36,6 +36,22 @@ export type FpSessionCorridorPvsContext = {
   collectStoreyUnitBounds: () => readonly BuildingStoreyUnitBoundsEntry[];
 };
 
+function groupCorridorPvsEntriesByLevel<T extends { level: number }>(
+  entries: readonly T[],
+): Map<number, T[]> {
+  const byLevel = new Map<number, T[]>();
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]!;
+    let levelEntries = byLevel.get(entry.level);
+    if (!levelEntries) {
+      levelEntries = [];
+      byLevel.set(entry.level, levelEntries);
+    }
+    levelEntries.push(entry);
+  }
+  return byLevel;
+}
+
 export function createFpSessionCorridorPvsContext(
   ctx: FpSessionCorridorPvsContext,
 ): {
@@ -52,9 +68,9 @@ export function createFpSessionCorridorPvsContext(
   }) => FpSessionCorridorPvsSnapshot;
 } {
   let cachedDoorEntriesRevision = Number.NaN;
-  let cachedDoorEntries: readonly BuildingCorridorPvsDoorEntry[] = [];
+  let cachedDoorEntriesByLevel = new Map<number, BuildingCorridorPvsDoorEntry[]>();
   let cachedStoreyUnitBoundsRevision = Number.NaN;
-  let cachedStoreyUnitBounds: readonly BuildingStoreyUnitBoundsEntry[] = [];
+  let cachedStoreyUnitBoundsByLevel = new Map<number, BuildingStoreyUnitBoundsEntry[]>();
   let cachedSnapshot: FpSessionCorridorPvsSnapshot | null = null;
   let cachedSnapshotDoorRevision = Number.NaN;
   let cachedSnapshotStoreyUnitBoundsRevision = Number.NaN;
@@ -95,25 +111,30 @@ export function createFpSessionCorridorPvsContext(
       }
 
       if (doorRevision !== cachedDoorEntriesRevision) {
-        cachedDoorEntries = ctx.collectDoorEntries();
+        cachedDoorEntriesByLevel = groupCorridorPvsEntriesByLevel(ctx.collectDoorEntries());
         cachedDoorEntriesRevision = doorRevision;
       }
       if (storeyUnitBoundsRevision !== cachedStoreyUnitBoundsRevision) {
-        cachedStoreyUnitBounds = ctx.collectStoreyUnitBounds();
+        cachedStoreyUnitBoundsByLevel = groupCorridorPvsEntriesByLevel(
+          ctx.collectStoreyUnitBounds(),
+        );
         cachedStoreyUnitBoundsRevision = storeyUnitBoundsRevision;
       }
 
-      const openDoorUnitKeysByLevel = buildOpenDoorUnitKeysByLevel(cachedDoorEntries, {
-        cameraX: input.cameraX,
-        cameraZ: input.cameraZ,
-        viewDirX: input.viewDirX,
-        viewDirZ: input.viewDirZ,
-        maxDistM:
-          APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M +
-          FP_SESSION_CORRIDOR_PVS_CACHE_RADIUS_M,
-      });
+      const openDoorUnitKeysByLevel = buildOpenDoorUnitKeysByLevel(
+        cachedDoorEntriesByLevel.get(playerLevel) ?? [],
+        {
+          cameraX: input.cameraX,
+          cameraZ: input.cameraZ,
+          viewDirX: input.viewDirX,
+          viewDirZ: input.viewDirZ,
+          maxDistM:
+            APARTMENT_DOOR_PVS_INTERIOR_PEEK_MAX_DIST_M +
+            FP_SESSION_CORRIDOR_PVS_CACHE_RADIUS_M,
+        },
+      );
       const storeyRadiusVisibleUnitKeys = buildStoreyRadiusVisibleUnitKeys(
-        cachedStoreyUnitBounds,
+        cachedStoreyUnitBoundsByLevel.get(playerLevel) ?? [],
         {
           storeyLevel: playerLevel,
           cameraX: input.cameraX,

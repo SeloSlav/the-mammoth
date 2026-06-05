@@ -164,7 +164,11 @@ describe("applyStairWellPartTransforms", () => {
     const lowerFlight = root.getObjectByName("stair_flight_lower");
     const upperFlight = root.getObjectByName("stair_flight_upper");
 
-    expect(lowerFlight?.children.map((child) => child.name)).toEqual([
+    expect(
+      lowerFlight?.children
+        .map((child) => child.name)
+        .filter((name) => name.startsWith("stair_tread_")),
+    ).toEqual([
       "stair_tread_0",
       "stair_tread_1",
       "stair_tread_2",
@@ -176,7 +180,11 @@ describe("applyStairWellPartTransforms", () => {
       "stair_tread_8",
       "stair_tread_9",
     ]);
-    expect(upperFlight?.children.map((child) => child.name)).toEqual([
+    expect(
+      upperFlight?.children
+        .map((child) => child.name)
+        .filter((name) => name.startsWith("stair_tread_")),
+    ).toEqual([
       "stair_tread_10",
       "stair_tread_11",
       "stair_tread_12",
@@ -276,16 +284,43 @@ describe("applyStairWellPartTransforms", () => {
     expect(Math.max(...landingYs)).toBeLessThan(Math.max(...baselineLandingYs));
   });
 
-  it("does not generate stair rail posts anymore", () => {
+  it("generates flight handrails, posts, and landing guards", () => {
     const root = new THREE.Group();
     addStairWellPlaceholder(root, 4, STOREY_SPACING_M, 4);
 
-    let foundRailPost = false;
+    let railPostCount = 0;
+    let flightHandrailCount = 0;
+    let landingHandrailCount = 0;
     root.traverse((obj) => {
-      if (obj.name.startsWith("stair_rail_post")) foundRailPost = true;
+      if (obj.name.startsWith("stair_rail_post")) railPostCount += 1;
+      if (obj.name.startsWith("stair_handrail_flight")) flightHandrailCount += 1;
+      if (obj.name.startsWith("stair_handrail_landing")) landingHandrailCount += 1;
+      if (
+        obj.name.startsWith("stair_handrail") ||
+        obj.name.startsWith("stair_rail_post")
+      ) {
+        expect(obj.userData.mammothStairRailing).toBe(true);
+      }
     });
 
-    expect(foundRailPost).toBe(false);
+    expect(railPostCount).toBeGreaterThan(4);
+    expect(flightHandrailCount).toBeGreaterThan(1);
+    expect(landingHandrailCount).toBeGreaterThan(0);
+  });
+
+  it("omits railings with terminal top-storey treads", () => {
+    const root = new THREE.Group();
+    addStairWellPlaceholder(root, 4, STOREY_SPACING_M, 4, {
+      omitTreads: true,
+      omitTopLanding: true,
+    });
+
+    let railingCount = 0;
+    root.traverse((obj) => {
+      if (obj.userData.mammothStairRailing === true) railingCount += 1;
+    });
+
+    expect(railingCount).toBe(0);
   });
 
   it("keeps an upper landing handle on the ground stairwell scope", () => {

@@ -456,6 +456,17 @@ export function clientOwnsClaimedApartmentUnit(
   unitKey: string,
 ): boolean {
   if (!identity) return false;
+  const unitKeyIndex = (
+    conn.db.apartment_unit as typeof conn.db.apartment_unit & {
+      unitKey?: { find: (key: string) => ApartmentUnit | undefined };
+    }
+  ).unitKey;
+  if (unitKeyIndex) {
+    const u = unitKeyIndex.find(unitKey);
+    return !!u && u.state === UNIT_STATE_CLAIMED && sameIdentity(u.owner, identity);
+  }
+
+  // Some focused tests use a plain iterable instead of the generated indexed table.
   for (const row of conn.db.apartment_unit) {
     const u = row as ApartmentUnit;
     if (u.unitKey !== unitKey) continue;

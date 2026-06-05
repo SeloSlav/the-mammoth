@@ -118,9 +118,7 @@ export function isBalconyGrowPickMesh(mesh: THREE.Object3D): mesh is THREE.Mesh 
   );
 }
 
-function growTrayDecorVisibleInHierarchy(mesh: THREE.Mesh): boolean {
-  const root = mesh.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
-  const probe = root ?? mesh;
+function growTrayDecorVisibleInHierarchy(probe: THREE.Object3D): boolean {
   for (let cur: THREE.Object3D | null = probe; cur; cur = cur.parent) {
     if (!cur.visible) return false;
   }
@@ -134,13 +132,22 @@ const _trayInteractRadiusSq =
 function playerNearGrowTrayPick(
   mesh: THREE.Mesh,
   playerPos: { x: number; y: number; z: number },
+  reachableByRoot: Map<THREE.Object3D, boolean>,
 ): boolean {
-  if (growTrayDecorVisibleInHierarchy(mesh)) return true;
   const root = mesh.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
-  (root ?? mesh).getWorldPosition(_trayNearScratch);
-  const dx = playerPos.x - _trayNearScratch.x;
-  const dz = playerPos.z - _trayNearScratch.z;
-  return dx * dx + dz * dz <= _trayInteractRadiusSq;
+  const probe = root ?? mesh;
+  const cached = reachableByRoot.get(probe);
+  if (cached !== undefined) return cached;
+
+  let reachable = growTrayDecorVisibleInHierarchy(probe);
+  if (!reachable) {
+    probe.getWorldPosition(_trayNearScratch);
+    const dx = playerPos.x - _trayNearScratch.x;
+    const dz = playerPos.z - _trayNearScratch.z;
+    reachable = dx * dx + dz * dz <= _trayInteractRadiusSq;
+  }
+  reachableByRoot.set(probe, reachable);
+  return reachable;
 }
 
 /**
@@ -156,14 +163,26 @@ export function collectOwnedBalconyGrowPickMeshes(
   dst: THREE.Mesh[],
   plantPicks: readonly THREE.Mesh[] = [],
   centerPicks: readonly THREE.Mesh[] = [],
+  ownedUnitKey?: string | null,
 ): void {
   dst.length = 0;
   if (!identity) return;
 
+  const ownedByUnitKey = new Map<string, boolean>();
+  const reachableByRoot = new Map<THREE.Object3D, boolean>();
   const consider = (mesh: THREE.Mesh): void => {
     const unitKey = mesh.userData.mammothGrowTrayUnitKey as string;
-    if (!clientOwnsClaimedApartmentUnit(conn, identity, unitKey)) return;
-    if (!playerNearGrowTrayPick(mesh, playerPos)) return;
+    if (ownedUnitKey !== undefined) {
+      if (unitKey !== ownedUnitKey) return;
+    } else {
+      let owned = ownedByUnitKey.get(unitKey);
+      if (owned === undefined) {
+        owned = clientOwnsClaimedApartmentUnit(conn, identity, unitKey);
+        ownedByUnitKey.set(unitKey, owned);
+      }
+      if (!owned) return;
+    }
+    if (!playerNearGrowTrayPick(mesh, playerPos, reachableByRoot)) return;
     dst.push(mesh);
   };
 

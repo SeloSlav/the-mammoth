@@ -13,6 +13,29 @@ export const MAMMOTH_STATIC_FLOOR_MERGE_COMPLETE_UD = "mammothStaticFloorMergeCo
 /** Scratch for {@link mergeUnitPreservedShellsByPlacedObject} (avoid alloc per mesh). */
 const _mergeUnitShellScratch = new THREE.Matrix4();
 
+function prepareStairSegmentMeshesForMerge(segment: THREE.Object3D): void {
+  segment.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    const name = obj.name;
+    const isShaftShell =
+      name === "shaft_floor" ||
+      name === "shaft_ceiling" ||
+      name.startsWith("shaft_wall_") ||
+      name.startsWith("shaft_hoistway_lintel_");
+    if (isShaftShell) {
+      /**
+       * Shaft shells must stay separate from floor-plate facade batches, but a stair segment is
+       * already the visibility/frustum sector. Merge its static fragments locally; exterior skins
+       * remain in a separate material bucket because only inner shells are tagged as interiors.
+       */
+      delete obj.userData.mammothSkipFloorGeometryMerge;
+    }
+    if (!name.includes("_exterior")) {
+      obj.userData.mammothUnitInterior = true;
+    }
+  });
+}
+
 /**
  * For each static geometry group that is a direct child of `buildingRoot`,
  * collapse all descendant meshes that share the same material into a single merged `Mesh`.
@@ -36,11 +59,7 @@ function mergeStaticFloorDirectChild(child: THREE.Object3D): void {
   // Tag stair interior meshes as unit-interior before merge; `_exterior` skins stay visible from outside.
   if (isStairColumn) {
     for (const seg of (child as THREE.Group).children) {
-      seg.traverse((obj) => {
-        if (!(obj instanceof THREE.Mesh)) return;
-        if (obj.name.includes("_exterior")) return;
-        obj.userData.mammothUnitInterior = true;
-      });
+      prepareStairSegmentMeshesForMerge(seg);
       mergeGroupDescendantsByMaterial(seg as THREE.Group);
     }
     child.userData[MAMMOTH_STATIC_FLOOR_MERGE_COMPLETE_UD] = true;
@@ -65,11 +84,7 @@ async function mergeStaticFloorDirectChildYielding(
   if (isStairColumn) {
     let stairSegDone = 0;
     for (const seg of (child as THREE.Group).children) {
-      seg.traverse((obj) => {
-        if (!(obj instanceof THREE.Mesh)) return;
-        if (obj.name.includes("_exterior")) return;
-        obj.userData.mammothUnitInterior = true;
-      });
+      prepareStairSegmentMeshesForMerge(seg);
       await mergeGroupDescendantsByMaterialYielding(seg as THREE.Group, yieldToMain);
       stairSegDone++;
       /** Inner merge yields often; breathe between shaft segments ~every 5 storeys — avoid timer storms on ≥3 columns. */

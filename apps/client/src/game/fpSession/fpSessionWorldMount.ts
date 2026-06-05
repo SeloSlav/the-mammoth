@@ -46,19 +46,25 @@ const STAIR_SHAFT_LIGHT_XZ_INSET_M = 0.18;
 const STAIR_SHAFT_LIGHT_Y_PAD_BOTTOM_M = 0.55;
 const STAIR_SHAFT_LIGHT_Y_PAD_TOP_M = 3.5;
 
-function stairShaftInteriorLightBoundsFromSpec(s: BuildingStairShaftSpec): FpStairShaftInteriorLightBounds {
+function stairShaftInteriorLightBoundsFromSpec(
+  s: BuildingStairShaftSpec,
+  worldOrigin: readonly [number, number, number] = [0, 0, 0],
+): FpStairShaftInteriorLightBounds {
   const hw = Math.max(0.05, s.sx * 0.5 - STAIR_SHAFT_LIGHT_XZ_INSET_M);
   const hd = Math.max(0.05, s.sz * 0.5 - STAIR_SHAFT_LIGHT_XZ_INSET_M);
-  const minY = s.bottomY - STAIR_SHAFT_LIGHT_Y_PAD_BOTTOM_M;
+  const px = s.px + worldOrigin[0];
+  const bottomY = s.bottomY + worldOrigin[1];
+  const pz = s.pz + worldOrigin[2];
+  const minY = bottomY - STAIR_SHAFT_LIGHT_Y_PAD_BOTTOM_M;
   const maxY =
-    s.bottomY + s.storeyCount * s.storeySpacing + STAIR_SHAFT_LIGHT_Y_PAD_TOP_M;
+    bottomY + s.storeyCount * s.storeySpacing + STAIR_SHAFT_LIGHT_Y_PAD_TOP_M;
   return {
-    minX: s.px - hw,
-    maxX: s.px + hw,
+    minX: px - hw,
+    maxX: px + hw,
     minY,
     maxY,
-    minZ: s.pz - hd,
-    maxZ: s.pz + hd,
+    minZ: pz - hd,
+    maxZ: pz + hd,
   };
 }
 
@@ -206,7 +212,9 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
     sortedFloorRefs,
     DEFAULT_BUILDING_FLOOR_SPACING_M,
   );
-  const stairShaftInteriorLightBounds = stairSpecs.map(stairShaftInteriorLightBoundsFromSpec);
+  const stairShaftInteriorLightBounds = stairSpecs.map((spec) =>
+    stairShaftInteriorLightBoundsFromSpec(spec, building.worldOrigin ?? [0, 0, 0]),
+  );
 
   // Merge all static geometry within each floor plate into one mesh per material.
   // Reduces draw calls from ~100+/floor to ~13/floor — the single largest render perf win.
@@ -310,7 +318,9 @@ export async function createFpSessionStaticWorldAsync(
     sortedFloorRefs,
     DEFAULT_BUILDING_FLOOR_SPACING_M,
   );
-  const stairShaftInteriorLightBounds = stairSpecs.map(stairShaftInteriorLightBoundsFromSpec);
+  const stairShaftInteriorLightBounds = stairSpecs.map((spec) =>
+    stairShaftInteriorLightBoundsFromSpec(spec, building.worldOrigin ?? [0, 0, 0]),
+  );
 
   await yieldToMain();
   await mergeStaticFloorGeometriesYielding(buildingRoot, yieldToMain);

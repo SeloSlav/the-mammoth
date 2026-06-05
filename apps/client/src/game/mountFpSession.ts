@@ -54,7 +54,6 @@ import {
   collectFpSessionTopFloorResidentialUnitShellMeshes,
 } from "./fpSession/fpSessionUnitInteriorShellMeshes.js";
 import {
-  FP_FLOOR_19_CORRIDOR_DECOR_ROOT_NAME,
   mountFpFloor19CorridorCeilingLights,
   syncFpFloor19CorridorCeilingLightVisibility,
 } from "./fpSession/fpSessionCorridorCeilingLights.js";
@@ -669,13 +668,16 @@ export async function mountFpSession(
   let stairwellCeilingPracticalLightsActive = false;
   let stairwellCeilingPracticalLightsSignature = "";
   let getIsInsideStairwellShaft: () => boolean = () => false;
+  const stairwellCeilingLightGroups = isCombatSim
+    ? []
+    : collectStairwellCeilingLightGroups(buildingRoot);
 
   const MAMMOTH_STAIRWELL_FP_INTERIOR_PREPARED_UD = "mammothStairwellFpInteriorPrepared";
 
   const prepareStairwellCeilingGroupsOnce = (): void => {
     const tex = scene.userData.mammothFpMetallicReadableEnv;
     const envTexture = tex instanceof THREE.Texture ? tex : null;
-    for (const group of collectStairwellCeilingLightGroups(buildingRoot)) {
+    for (const group of stairwellCeilingLightGroups) {
       if (group.userData[MAMMOTH_STAIRWELL_FP_INTERIOR_PREPARED_UD] === true) continue;
       prepareMammothApartmentInteriorContentRoots({
         shellRoot: buildingRoot,
@@ -717,7 +719,7 @@ export async function mountFpSession(
       return;
     }
 
-    const decorGroups = collectStairwellCeilingLightGroups(buildingRoot).filter(
+    const decorGroups = stairwellCeilingLightGroups.filter(
       (group) =>
         group.children.length > 0 &&
         group.userData.mammothStairwellCeilingLightLoadFailed !== true,
@@ -750,7 +752,7 @@ export async function mountFpSession(
       ensureMammothStairwellCeilingFixtureVisuals(buildingRoot);
       prepareStairwellCeilingGroupsOnce();
       applyApartmentDecorCrossPlacementInstancing(buildingRoot, {
-        placementRoots: collectStairwellCeilingLightGroups(buildingRoot).filter(
+        placementRoots: stairwellCeilingLightGroups.filter(
           (group) =>
             group.children.length > 0 &&
             group.userData.mammothStairwellCeilingLightLoadFailed !== true,
@@ -1271,6 +1273,10 @@ export async function mountFpSession(
         level: number;
         centerX: number;
         centerZ: number;
+        minX: number;
+        maxX: number;
+        minZ: number;
+        maxZ: number;
       }[] = [];
       megablockSpatial?.units.forEachUnit((u) => {
         out.push({
@@ -1279,6 +1285,10 @@ export async function mountFpSession(
           level: u.level,
           centerX: (u.boundMinX + u.boundMaxX) * 0.5,
           centerZ: (u.boundMinZ + u.boundMaxZ) * 0.5,
+          minX: u.boundMinX,
+          maxX: u.boundMaxX,
+          minZ: u.boundMinZ,
+          maxZ: u.boundMaxZ,
         });
       });
       return out;
@@ -1317,6 +1327,7 @@ export async function mountFpSession(
       fpElevators,
       stairShaftInteriorLightBounds,
       stairShaftSpecs,
+      buildingWorldOrigin: building.worldOrigin ?? [0, 0, 0],
       feetPos: pos,
       getContainingResidentialUnit: () => {
         /**
@@ -1377,7 +1388,7 @@ export async function mountFpSession(
         megablockSpatial?.setWalkSampleStoreyBand(band.lo, band.hi);
         syncStairwellCeilingPracticalLights();
         syncFpFloor19CorridorCeilingLightVisibility(
-          buildingRoot.getObjectByName(FP_FLOOR_19_CORRIDOR_DECOR_ROOT_NAME),
+          floor19CorridorCeilingLights?.decorRoot,
           {
             insideResidentialUnit: isInsideResidentialUnit(),
             insideApartmentInteriorLightingZone: isInsideApartmentInteriorLightingZone(),

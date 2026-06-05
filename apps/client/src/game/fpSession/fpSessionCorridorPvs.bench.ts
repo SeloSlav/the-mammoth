@@ -43,6 +43,10 @@ function buildTowerFixture(): {
         level,
         centerX: side * 8,
         centerZ: along,
+        minX: side < 0 ? -12 : 4,
+        maxX: side < 0 ? -4 : 12,
+        minZ: along - 2,
+        maxZ: along + 2,
       });
     }
   }

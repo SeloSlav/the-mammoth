@@ -918,6 +918,18 @@ describe("fpPointNearStairShaftForPlateBand", () => {
       fpPointNearStairShaftForPlateBand(0, 1.5, 0, [SAMPLE_SHAFT]),
     ).toBe(false);
   });
+
+  it("applies the authored building world origin to shaft probes", () => {
+    expect(
+      fpPointNearStairShaftForPlateBand(
+        SAMPLE_SHAFT.px + 100,
+        11.5,
+        SAMPLE_SHAFT.pz - 50,
+        [SAMPLE_SHAFT],
+        [100, 10, -50],
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("fpMergeStairShaftPlateBandWithElevator", () => {

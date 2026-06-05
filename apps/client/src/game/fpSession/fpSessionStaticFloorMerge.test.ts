@@ -53,4 +53,49 @@ describe("fpSessionStaticFloorMerge", () => {
     expect(mergedGlass).toBeTruthy();
     expect(mergedGlass!.frustumCulled).toBe(false);
   });
+
+  it("merges static stair shaft fragments within each visibility segment", async () => {
+    const mat = new THREE.MeshBasicMaterial({ color: 0x777777 });
+    const stairColumn = new THREE.Group();
+    stairColumn.userData.mammothStairColumnRoot = true;
+    const segment = new THREE.Group();
+    segment.userData.mammothPlateLevelIndex = 8;
+    stairColumn.add(segment);
+
+    for (const name of ["shaft_wall_e_left", "shaft_wall_e_right", "shaft_ceiling"]) {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+      mesh.name = name;
+      mesh.userData.mammothSkipFloorGeometryMerge = true;
+      segment.add(mesh);
+    }
+    for (const name of ["shaft_wall_e_exterior_left", "shaft_wall_e_exterior_right"]) {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.02), mat);
+      mesh.name = name;
+      mesh.userData.mammothSkipFloorGeometryMerge = true;
+      segment.add(mesh);
+    }
+    const preservedSign = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.02), mat);
+    preservedSign.name = "stairwell_corridor_sign";
+    preservedSign.userData.mammothSkipFloorGeometryMerge = true;
+    segment.add(preservedSign);
+
+    await mergeMegablockStaticDirectChildYielding(stairColumn, async () => {});
+
+    const meshes: THREE.Mesh[] = [];
+    segment.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) meshes.push(obj);
+    });
+    expect(meshes).toHaveLength(3);
+    expect(
+      meshes.filter(
+        (mesh) => mesh !== preservedSign && mesh.userData.mammothUnitInterior === true,
+      ),
+    ).toHaveLength(1);
+    expect(
+      meshes.filter(
+        (mesh) => mesh !== preservedSign && mesh.userData.mammothUnitInterior !== true,
+      ),
+    ).toHaveLength(1);
+    expect(preservedSign.parent).toBe(segment);
+  });
 });

@@ -55,6 +55,7 @@ export type FpBalconyGrowDecorBridge = {
     playerPos: THREE.Vector3,
     identity: Identity | undefined,
     dst: THREE.Mesh[],
+    ownedUnitKey?: string | null,
   ) => void;
   getGrowTrayPickMeshes: () => readonly THREE.Mesh[];
   getGrowSlotPickMeshes: () => readonly THREE.Mesh[];
@@ -175,7 +176,7 @@ export function createFpBalconyGrowDecorBridge(opts: {
     syncVisibility(feet, unitKey) {
       syncBalconyGrowTrayDecorVisibility(feet, unitKey, growSlotVisualsByTrayId);
     },
-    collectPickMeshesForPlayer(playerPos, identity, dst) {
+    collectPickMeshesForPlayer(playerPos, identity, dst, ownedUnitKey) {
       collectOwnedBalconyGrowPickMeshes(
         opts.conn,
         identity,
@@ -185,6 +186,7 @@ export function createFpBalconyGrowDecorBridge(opts: {
         dst,
         growPlantPickMeshes,
         growTrayCenterPickMeshes,
+        ownedUnitKey,
       );
     },
     getGrowTrayPickMeshes: () => growTrayPickMeshes,

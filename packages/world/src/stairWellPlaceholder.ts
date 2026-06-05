@@ -210,6 +210,175 @@ function stairWellPartTransformEntry(
   return undefined;
 }
 
+const STAIR_RAIL_HEIGHT_M = 0.92;
+const STAIR_RAIL_BAR_THICKNESS_M = 0.055;
+const STAIR_RAIL_POST_SPACING_TREADS = 4;
+const STAIR_LANDING_RAIL_POST_SPACING_M = 1.15;
+
+function tagStairRailing(mesh: THREE.Mesh, name: string): void {
+  mesh.name = name;
+  mesh.userData.mammothStairRailing = true;
+}
+
+function addStairRailingBeamBetween(
+  parent: THREE.Object3D,
+  start: THREE.Vector3,
+  end: THREE.Vector3,
+  material: THREE.Material,
+  name: string,
+): void {
+  const delta = end.clone().sub(start);
+  const length = delta.length();
+  if (length < 0.04) return;
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(length, STAIR_RAIL_BAR_THICKNESS_M, STAIR_RAIL_BAR_THICKNESS_M),
+    material,
+  );
+  tagStairRailing(mesh, name);
+  mesh.position.copy(start).add(end).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(
+    new THREE.Vector3(1, 0, 0),
+    delta.multiplyScalar(1 / length),
+  );
+  parent.add(mesh);
+}
+
+function addStairRailingPost(
+  parent: THREE.Object3D,
+  x: number,
+  surfaceY: number,
+  z: number,
+  material: THREE.Material,
+  name: string,
+): void {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(
+      STAIR_RAIL_BAR_THICKNESS_M,
+      STAIR_RAIL_HEIGHT_M,
+      STAIR_RAIL_BAR_THICKNESS_M,
+    ),
+    material,
+  );
+  tagStairRailing(mesh, name);
+  mesh.position.set(x, surfaceY + STAIR_RAIL_HEIGHT_M * 0.5, z);
+  parent.add(mesh);
+}
+
+function addStairFlightRailings(
+  L: ReturnType<typeof computeSwitchbackStairLayout>,
+  lowerFlight: THREE.Group,
+  upperFlight: THREE.Group,
+  boundary: number,
+  material: THREE.Material,
+): void {
+  let treadOffset = 0;
+  let railIndex = 0;
+  for (let lap = 0; lap < L.numLaps; lap++) {
+    for (let legIndex = 0; legIndex < L.legTreadCounts.length; legIndex++) {
+      const count = L.legTreadCounts[legIndex] ?? 0;
+      const legTreads = L.treads.slice(treadOffset, treadOffset + count);
+      treadOffset += count;
+      if (legTreads.length < 2) continue;
+
+      const target = legIndex < boundary ? lowerFlight : upperFlight;
+      const first = legTreads[0]!;
+      const last = legTreads[legTreads.length - 1]!;
+      const dirX = Math.cos(first.yaw);
+      const dirZ = Math.sin(first.yaw);
+      let sideX = -dirZ;
+      let sideZ = dirX;
+      const midX = (first.x + last.x) * 0.5;
+      const midZ = (first.z + last.z) * 0.5;
+      if (sideX * -midX + sideZ * -midZ < 0) {
+        sideX *= -1;
+        sideZ *= -1;
+      }
+      const sideOffset = Math.max(0.04, first.halfAcross - STAIR_RAIL_BAR_THICKNESS_M * 0.5);
+      const railPoint = (tr: (typeof legTreads)[number]): THREE.Vector3 =>
+        new THREE.Vector3(
+          tr.x + sideX * sideOffset,
+          tr.y + tr.riseHalf + STAIR_RAIL_HEIGHT_M,
+          tr.z + sideZ * sideOffset,
+        );
+
+      addStairRailingBeamBetween(
+        target,
+        railPoint(first),
+        railPoint(last),
+        material,
+        `stair_handrail_flight_${railIndex}`,
+      );
+      for (let local = 0; local < legTreads.length; local += STAIR_RAIL_POST_SPACING_TREADS) {
+        const tr = legTreads[local]!;
+        addStairRailingPost(
+          target,
+          tr.x + sideX * sideOffset,
+          tr.y + tr.riseHalf,
+          tr.z + sideZ * sideOffset,
+          material,
+          `stair_rail_post_flight_${railIndex}_${local}`,
+        );
+      }
+      const lastPostIndex = legTreads.length - 1;
+      if (lastPostIndex % STAIR_RAIL_POST_SPACING_TREADS !== 0) {
+        addStairRailingPost(
+          target,
+          last.x + sideX * sideOffset,
+          last.y + last.riseHalf,
+          last.z + sideZ * sideOffset,
+          material,
+          `stair_rail_post_flight_${railIndex}_${lastPostIndex}`,
+        );
+      }
+      railIndex += 1;
+    }
+  }
+}
+
+function addStairLandingInnerGuard(
+  landingMesh: THREE.Mesh,
+  cl: ReturnType<typeof computeSwitchbackStairLayout>["cornerLandings"][number],
+  material: THREE.Material,
+  railIndex: number,
+): void {
+  const alongX = cl.halfW >= cl.halfD;
+  const halfLength = Math.max(0.08, (alongX ? cl.halfW : cl.halfD) - 0.07);
+  const edgeX = alongX ? 0 : cl.x >= 0 ? -cl.halfW : cl.halfW;
+  const edgeZ = alongX ? (cl.z >= 0 ? -cl.halfD : cl.halfD) : 0;
+  const railY = cl.thicknessHalf + STAIR_RAIL_HEIGHT_M;
+  const start = new THREE.Vector3(
+    alongX ? -halfLength : edgeX,
+    railY,
+    alongX ? edgeZ : -halfLength,
+  );
+  const end = new THREE.Vector3(
+    alongX ? halfLength : edgeX,
+    railY,
+    alongX ? edgeZ : halfLength,
+  );
+  addStairRailingBeamBetween(
+    landingMesh,
+    start,
+    end,
+    material,
+    `stair_handrail_landing_${railIndex}`,
+  );
+
+  const length = halfLength * 2;
+  const postCount = Math.max(2, Math.ceil(length / STAIR_LANDING_RAIL_POST_SPACING_M) + 1);
+  for (let i = 0; i < postCount; i++) {
+    const t = postCount <= 1 ? 0 : i / (postCount - 1);
+    addStairRailingPost(
+      landingMesh,
+      start.x + (end.x - start.x) * t,
+      cl.thicknessHalf,
+      start.z + (end.z - start.z) * t,
+      material,
+      `stair_rail_post_landing_${railIndex}_${i}`,
+    );
+  }
+}
+
 export function applyStairWellPartTransforms(
   root: THREE.Object3D,
   def: StairWellDef | undefined,
@@ -409,6 +578,9 @@ export function addStairWellPlaceholder(
       }
     }
   }
+  if (opts?.omitTreads !== true) {
+    addStairFlightRailings(L, lowerFlight, upperFlight, boundary, mats.railing);
+  }
 
   const climbFull = opts?.climbFullShaft ?? false;
   const omitGroundPads = omitGroundStoreyCornerLandings === true;
@@ -467,6 +639,9 @@ export function addStairWellPlaceholder(
     mesh.userData.mammothAxisAlignedCollisionBox = true;
     /** Stable ref for {@link attachStairWellLandingProps} (same object as layout `cornerLandings`). */
     mesh.userData.mammothStairCornerLandingRef = cl;
+    if (opts?.omitTreads !== true) {
+      addStairLandingInnerGuard(mesh, cl, mats.railing, landingIndex);
+    }
     group.add(mesh);
   }
 
