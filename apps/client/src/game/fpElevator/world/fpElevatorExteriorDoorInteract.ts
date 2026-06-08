@@ -203,7 +203,15 @@ export function createFpElevatorExteriorDoorInteract(
             phaseMoving,
             dockYTolM: LANDING_PASSAGE_DOCK_Y_TOL_M,
           });
-        if (!nearDoor && !inCabDocked) {
+        const cabDockedHere =
+          Number.isFinite(cabY) &&
+          !phaseMoving &&
+          Math.abs(cabY - fy) <= LANDING_PASSAGE_DOCK_Y_TOL_M;
+        const rowKey = landingExteriorDoorRowKey(shaftKey, level);
+        const landingRow = landingByRowKey.get(rowKey);
+        const landingDesiredOpen = (landingRow?.desiredOpen ?? 0) !== 0;
+        const nearDoorAllowed = nearDoor && (cabDockedHere || landingDesiredOpen);
+        if (!nearDoorAllowed && !inCabDocked) {
           continue;
         }
         const aimY = fy + 1.1;

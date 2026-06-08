@@ -114,7 +114,6 @@ pub(crate) fn landing_door_row_key(shaft_key: &str, level: u32) -> String {
 /// While `PH_MOVING`, cab Y passes intermediate floors so we only suppress on non-moving phases.
 fn landing_hail_redundant_for_cab_pose(row: &ElevatorCar, lv: u32) -> bool {
     row.phase != PH_MOVING
-        && row.door_open_01 >= 0.92
         && (row.cab_floor_y - support_y(lv)).abs() < LANDING_HAIL_SUPPRESS_CAB_Y_TOL_M
 }
 
@@ -341,6 +340,15 @@ fn tick_landing_exterior_doors(ctx: &ReducerContext, dt: f32) {
         let Some(mut row) = ctx.db.elevator_landing_door().row_key().find(&rk) else {
             continue;
         };
+        let car_docked_here = ctx
+            .db
+            .elevator_car()
+            .shaft_key()
+            .find(&row.shaft_key)
+            .is_some_and(|car| landing_exterior_door_open_allowed(&car, row.level));
+        if row.desired_open != 0 && !car_docked_here {
+            row.desired_open = 0;
+        }
         let goal = if row.desired_open != 0 {
             1.0_f32
         } else {
@@ -949,6 +957,12 @@ fn in_cab_docked_at_landing_for_spec(
 }
 
 #[inline]
+fn landing_exterior_door_open_allowed(car: &ElevatorCar, level: u32) -> bool {
+    car.phase != PH_MOVING
+        && (car.cab_floor_y - support_y(level)).abs() <= LANDING_PASSAGE_DOCK_Y_TOL_M
+}
+
+#[inline]
 fn pose_client_feet_hint_plausible(auth: &PlayerPose, hx: f32, hy: f32, hz: f32) -> bool {
     let dx = auth.x - hx;
     let dy = auth.y - hy;
@@ -1118,6 +1132,16 @@ fn set_landing_exterior_door_desired_open(
         );
         return;
     }
+    if desired_open != 0 && !landing_exterior_door_open_allowed(&car, lv) {
+        log::info!(
+            "elevator_landing_exterior_door: reject open_cab_not_docked_here shaft_key={target_shaft_key:?} level={lv} identity={} cab_floor_y={:.3} support_y={:.3} phase={}",
+            ctx.sender(),
+            car.cab_floor_y,
+            support_y(lv),
+            car.phase,
+        );
+        return;
+    }
     let rk = landing_door_row_key(&target_shaft_key, lv);
     let mut row = ctx
         .db
@@ -1212,9 +1236,7 @@ pub(crate) fn landing_front_passage_open(
     }
     let docked_here = (car.cab_floor_y - landing_feet_y).abs() <= LANDING_PASSAGE_DOCK_Y_TOL_M;
     if !docked_here {
-        // Corridor door is clear and the car is not at this landing — no interior cab door to
-        // interlock; allow walking into the hoistway column (empty shaft / car elsewhere).
-        return true;
+        return false;
     }
     car.door_open_01 >= DOOR_EXIT_CLAMP_MIN_OPEN
 }
@@ -1294,17 +1316,25 @@ mod landing_hail_redundant_tests {
             1
         ));
     }
+
+    #[test]
+    fn redundant_when_idle_and_docked_even_if_inner_doors_are_shut() {
+        let y1 = support_y(1);
+        let mut row = sample_row(PH_IDLE, y1 + 0.1);
+        row.door_open_01 = 0.0;
+        assert!(landing_hail_redundant_for_cab_pose(&row, 1));
+    }
 }
 
 #[cfg(test)]
 mod exterior_interact_tests {
     use super::{
         exterior_collision_plate_local_ok, exterior_interact_plate_local_ok,
-        in_closed_cab_outside_door_slab, landing_front_door_lane_local_ok,
-        landing_front_face_local_ok, landing_front_passage_open, near_exterior_door_toggle_pose,
-        support_y, ElevatorCar, ElevatorLandingDoor, EXT_DOOR_COLLISION_OPEN_THRESH,
-        EXT_DOOR_SOLID_SLAB_MAX_SWING, EXT_INTERACT_L0, EXT_INTERACT_L1, MAMUTH_ELEVATOR_SPECS,
-        PH_IDLE,
+        in_closed_cab_outside_door_slab, landing_exterior_door_open_allowed,
+        landing_front_door_lane_local_ok, landing_front_face_local_ok, landing_front_passage_open,
+        near_exterior_door_toggle_pose, support_y, ElevatorCar, ElevatorLandingDoor,
+        EXT_DOOR_COLLISION_OPEN_THRESH, EXT_DOOR_SOLID_SLAB_MAX_SWING, EXT_INTERACT_L0,
+        EXT_INTERACT_L1, MAMUTH_ELEVATOR_SPECS, PH_IDLE, PH_MOVING,
     };
     use crate::elevator_layout::ElevShaftSpec;
     use crate::elevator_layout::{inner_half_xz, DoorFace};
@@ -1475,7 +1505,7 @@ mod exterior_interact_tests {
     }
 
     #[test]
-    fn landing_front_passage_opens_with_exterior_only_when_car_not_docked_at_that_landing() {
+    fn landing_front_passage_stays_closed_when_car_not_docked_at_that_landing() {
         let fy1 = support_y(1);
         let fy2 = support_y(2);
         let landing = ElevatorLandingDoor {
@@ -1500,7 +1530,7 @@ mod exterior_interact_tests {
             plate_x: 0.0,
             plate_z: 0.0,
         };
-        assert!(landing_front_passage_open(&landing, &car, fy2));
+        assert!(!landing_front_passage_open(&landing, &car, fy2));
     }
 
     #[test]
@@ -1529,6 +1559,32 @@ mod exterior_interact_tests {
             plate_z: 0.0,
         };
         assert!(!landing_front_passage_open(&landing, &car, fy));
+    }
+
+    #[test]
+    fn exterior_door_open_allowed_only_when_cab_reached_landing() {
+        let fy1 = support_y(1);
+        let fy2 = support_y(2);
+        let mut car = ElevatorCar {
+            shaft_key: "shaft".into(),
+            current_level: 1,
+            door_open_01: 1.0,
+            phase: PH_IDLE,
+            move_from_level: 1,
+            move_to_level: 1,
+            move_u: 0.0,
+            dest_queue: Vec::new(),
+            cab_floor_y: fy1,
+            sample_server_micros: 0,
+            door_face: DoorFace::E as u8,
+            plate_x: 0.0,
+            plate_z: 0.0,
+        };
+        assert!(landing_exterior_door_open_allowed(&car, 1));
+        assert!(!landing_exterior_door_open_allowed(&car, 2));
+        car.phase = PH_MOVING;
+        car.cab_floor_y = fy2;
+        assert!(!landing_exterior_door_open_allowed(&car, 2));
     }
 }
 

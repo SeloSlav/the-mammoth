@@ -335,8 +335,8 @@ function landingFrontDoorLaneLocal(
 }
 
 /**
- * Hoistway front “passage” for collision: when the corridor swing is clear, allow entry unless the
- * car is **docked at this landing** with interior doors still shut. Matches server
+ * Hoistway front passage for collision: the corridor swing only opens a usable passage when the
+ * car is docked at this landing and its interior doors have started opening. Matches server
  * `elevator::landing_front_passage_open`.
  */
 export function landingFrontPassageOpen(opts: {
@@ -348,7 +348,7 @@ export function landingFrontPassageOpen(opts: {
   if (fpElevExteriorDoorBlocksPassage(opts.swingOpen01)) return false;
   const dockedHere =
     Math.abs(opts.cabFloorY - opts.landingFeetY) <= LANDING_PASSAGE_DOCK_Y_TOL_M;
-  if (!dockedHere) return true;
+  if (!dockedHere) return false;
   return opts.cabDoorOpen01 >= ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN;
 }
 

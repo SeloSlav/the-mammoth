@@ -178,7 +178,6 @@ export function createFpElevatorHailAndFloorPickRaycasts(
     const landingSupportY = feetYForLayout(layout, pick.level);
     return (
       row.phase !== ELEVATOR_PHASE_MOVING &&
-      getDoor(pick.shaftKey, performance.now()) >= 0.92 &&
       fpElevSuppressLandingHailBecauseCabAtLandingSupport(cabY, landingSupportY)
     );
   };

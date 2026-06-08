@@ -179,11 +179,11 @@ describe("closed elevator frontage clamps", () => {
     expect(vel.x).toBe(-1);
   });
 
-  it("allows the doorway lane when exterior opens and the cab is docked on another storey", () => {
+  it("blocks the doorway lane when exterior opens but the cab is docked on another storey", () => {
     const feetStory1 = 10;
     const feetStory2 = feetStory1 + DEFAULT_BUILDING_FLOOR_SPACING_M;
     const innerH = Math.max(1.8, shaftLayout.sy - 2 * 0.11 - 0.14);
-    const pos = { x: 1.24, y: feetStory2 + innerH * 0.35, z: 0 };
+    const pos = { x: 1.18, y: feetStory2 + innerH * 0.35, z: 0 };
     const vel = new Vector3(-1, 0, 0);
     fpElevApplyLandingHoistwayFrontWallClamp(pos, vel, {
       ox: 0,
@@ -205,8 +205,8 @@ describe("closed elevator frontage clamps", () => {
       feetYForLayout: (_layout, level) =>
         level === 1 ? feetStory1 : level === 2 ? feetStory2 : 0,
     });
-    expect(pos.x).toBe(1.24);
-    expect(vel.x).toBe(-1);
+    expect(pos.x).toBeGreaterThan(1.18);
+    expect(vel.x).toBe(0);
   });
 });
 
@@ -214,7 +214,7 @@ describe("landingFrontPassageOpen", () => {
   const fy1 = 5.2;
   const fy2 = fy1 + DEFAULT_BUILDING_FLOOR_SPACING_M;
 
-  it("is true when the swing is clear and the car is not vertically docked at this landing", () => {
+  it("is false when the swing is clear but the car is not vertically docked at this landing", () => {
     expect(
       landingFrontPassageOpen({
         swingOpen01: 0.9,
@@ -222,7 +222,7 @@ describe("landingFrontPassageOpen", () => {
         landingFeetY: fy2,
         cabDoorOpen01: 0,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("is false when docked and interior doors are still shut", () => {
